@@ -18,7 +18,7 @@ No test suite exists yet.
 
 ## Environment
 
-Copy `.env.example` to `.env.local`. Required variables: `DATABASE_URL` (PostgreSQL, Neon-compatible), `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and optionally `APP_USER_ID` (fallback user ID when session lacks one).
+Copy `.env.example` to `.env.local`. Required variables: `POSTGRES_PRISMA_URL` (pooled, pgbouncer — Supabase-Vercel integration), `POSTGRES_URL_NON_POOLING` (direct, for migrations), `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and optionally `APP_USER_ID` (fallback user ID when session lacks one).
 
 ## Architecture
 
