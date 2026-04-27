@@ -1,0 +1,108 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.75rem;
+  }
+
+  * {
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100 font-sans antialiased;
+    min-height: 100dvh;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-slate-900;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-600 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-500;
+  }
+}
+
+@layer components {
+  .fab {
+    @apply fixed z-40 flex items-center justify-center
+           w-14 h-14 rounded-full bg-indigo-600 text-white text-2xl
+           shadow-lg shadow-indigo-500/30 active:scale-95 transition-transform;
+    bottom: 72px;
+  }
+
+  .bottom-sheet-overlay {
+    @apply fixed inset-0 bg-black/60 z-40 backdrop-blur-sm;
+  }
+
+  .bottom-sheet {
+    @apply fixed bottom-0 left-0 right-0 z-50 bg-slate-900
+           border-t border-slate-800 rounded-t-2xl
+           transition-transform duration-300;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .bottom-sheet-handle {
+    @apply w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-2;
+  }
+
+  .card {
+    @apply bg-slate-900 rounded-xl border border-slate-800 p-4;
+  }
+
+  .btn-primary {
+    @apply bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-4 py-2 rounded-lg transition-colors;
+  }
+
+  .btn-ghost {
+    @apply hover:bg-slate-800 text-slate-400 hover:text-slate-100 px-3 py-2 rounded-lg transition-colors;
+  }
+
+  .input-base {
+    @apply bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-100
+           placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500
+           focus:border-transparent transition-all;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-income {
+    @apply bg-emerald-500/20 text-emerald-400;
+  }
+
+  .badge-expense {
+    @apply bg-rose-500/20 text-rose-400;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}

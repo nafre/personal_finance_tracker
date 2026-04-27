@@ -1,0 +1,291 @@
+"use client";
+
+import { useState, useRef, useTransition } from "react";
+import { parseExpenseInput } from "@/lib/parser";
+import { addTransaction } from "@/lib/actions";
+import { putTransaction } from "@/lib/idb";
+import { applyLocalMutation } from "@/lib/sync";
+import { useSyncContext } from "@/context/SyncProvider";
+import { cn, formatCurrency } from "@/lib/utils";
+
+interface ExpenseInputProps {
+  onAdd?: (tx: {
+    id: string;
+    category: string;
+    amount: number;
+    type: "income" | "expense";
+    note?: string;
+    labels: string[];
+    date: Date | string;
+    isPending?: boolean;
+  }) => void;
+  recentCategories?: string[];
+  autoFocus?: boolean;
+}
+
+export function ExpenseInput({ onAdd, recentCategories, autoFocus }: ExpenseInputProps) {
+  const [value, setValue] = useState("");
+  const [preview, setPreview] = useState<ReturnType<typeof parseExpenseInput>>(null);
+  const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const [manualTypeOverride, setManualTypeOverride] = useState<"income" | "expense" | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { isOnline, userId, refreshPendingCount } = useSyncContext();
+
+  const effectiveType = manualTypeOverride ?? preview?.type ?? "expense";
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value;
+    setValue(v);
+    setError("");
+    if (v === "") {
+      setManualTypeOverride(null);
+      setPreview(null);
+    } else {
+      setPreview(parseExpenseInput(v));
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSubmit();
+    }
+  }
+
+  function handleSubmit() {
+    const parsed = parseExpenseInput(value);
+    if (!parsed) {
+      setError('Try: "food 20" or "salary 5000"');
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        if (!isOnline) {
+          // Offline path — write to IDB and queue
+          const { committed } = await applyLocalMutation("add", {
+            userId,
+            category: parsed.category,
+            amount: parsed.amount,
+            type: effectiveType,
+            note: parsed.note,
+            labels: parsed.labels,
+          });
+
+          if (committed) {
+            onAdd?.({
+              id: committed.id,
+              category: committed.category,
+              amount: committed.amount,
+              type: committed.type,
+              note: committed.note,
+              labels: committed.labels,
+              date: committed.date,
+              isPending: true,
+            });
+          }
+
+          await refreshPendingCount();
+        } else {
+          // Online path — call server action
+          const tx = await addTransaction({
+            category: parsed.category,
+            amount: parsed.amount,
+            type: effectiveType,
+            note: parsed.note,
+            labels: parsed.labels,
+          });
+
+          // Write-through to IDB so the local cache is always warm
+          void putTransaction({
+            id: tx.id,
+            userId,
+            category: tx.category,
+            amount: tx.amount,
+            type: tx.type as "income" | "expense",
+            note: tx.note ?? undefined,
+            labels: tx.labels ?? [],
+            date: new Date(tx.date).toISOString(),
+            syncStatus: "synced",
+            createdAt: new Date(tx.createdAt).toISOString(),
+          });
+
+          onAdd?.({
+            id: tx.id,
+            category: tx.category,
+            amount: tx.amount,
+            type: tx.type as "income" | "expense",
+            note: tx.note ?? undefined,
+            labels: tx.labels ?? [],
+            date: tx.date,
+          });
+        }
+
+        setValue("");
+        setPreview(null);
+        setError("");
+        setManualTypeOverride(null);
+        inputRef.current?.focus();
+      } catch {
+        setError("Failed to save. Please try again.");
+      }
+    });
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-slate-400 text-sm font-medium">Quick add</span>
+        <span className="text-xs text-slate-600">• Type and press Enter</span>
+      </div>
+
+      <div className="flex gap-2">
+        <TypeToggle value={effectiveType} onChange={setManualTypeOverride} />
+
+        <div className="flex-1 relative">
+          <input
+            ref={inputRef}
+            type="text"
+            value={value}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            className={cn(
+              "input-base w-full text-base font-mono",
+              error && "border-rose-500 focus:ring-rose-500"
+            )}
+            placeholder="food 20  •  salary 5000  •  coffee 4.5 latte"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            disabled={isPending}
+            autoFocus={autoFocus}
+          />
+
+          {/* Live preview badge */}
+          {preview && !error && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+              <span
+                className={cn(
+                  "badge text-xs",
+                  effectiveType === "income" ? "badge-income" : "badge-expense"
+                )}
+              >
+                {effectiveType === "income" ? "+" : "-"}{formatCurrency(preview.amount)}
+              </span>
+              <span className="text-xs text-slate-500 max-w-[80px] truncate">
+                {preview.category}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={handleSubmit}
+          disabled={isPending || !value.trim()}
+          className="btn-primary px-4 flex items-center gap-1.5 shrink-0 disabled:opacity-50"
+        >
+          {isPending ? (
+            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : (
+            <>
+              <span>Add</span>
+              <kbd className="hidden sm:inline text-[10px] bg-indigo-500 px-1 rounded opacity-60">↵</kbd>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <p className="text-rose-400 text-xs mt-2">{error}</p>
+      )}
+
+      {/* Recent category chips */}
+      {recentCategories && recentCategories.length > 0 && (
+        <div className="flex gap-2 mt-2 overflow-x-auto pb-1 scrollbar-none">
+          {recentCategories.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => {
+                const next = cat + " ";
+                setValue(next);
+                setPreview(parseExpenseInput(next));
+                inputRef.current?.focus();
+              }}
+              className="shrink-0 text-xs py-1 px-2.5 bg-slate-800 border border-slate-700
+                         hover:border-indigo-500 text-slate-300 rounded-full transition-colors"
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Hint row */}
+      <div className="flex gap-2 mt-2 flex-wrap items-center">
+        {[
+          { example: "food 20", hint: "expense" },
+          { example: "grab rm15", hint: "with currency" },
+          { example: "salary 5000", hint: "income" },
+          { example: "coffee 4.5 latte", hint: "with note" },
+        ].map((item) => (
+          <button
+            key={item.example}
+            onClick={() => {
+              setValue(item.example);
+              setPreview(parseExpenseInput(item.example));
+              inputRef.current?.focus();
+            }}
+            className="text-xs text-slate-600 hover:text-indigo-400 transition-colors font-mono
+                       py-2 px-3 min-h-[44px] rounded-lg hover:bg-slate-800 flex items-center"
+          >
+            {item.example}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TypeToggle({
+  value,
+  onChange,
+}: {
+  value: "income" | "expense";
+  onChange: (t: "income" | "expense") => void;
+}) {
+  return (
+    <div className="flex rounded-lg overflow-hidden border border-slate-700 shrink-0 text-xs font-medium self-start mt-0.5">
+      <button
+        type="button"
+        onClick={() => onChange("expense")}
+        className={cn(
+          "px-3 py-2 transition-colors",
+          value === "expense"
+            ? "bg-rose-600 text-white"
+            : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+        )}
+      >
+        Exp
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("income")}
+        className={cn(
+          "px-3 py-2 transition-colors",
+          value === "income"
+            ? "bg-emerald-600 text-white"
+            : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+        )}
+      >
+        Inc
+      </button>
+    </div>
+  );
+}

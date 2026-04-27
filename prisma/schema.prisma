@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Neon / Vercel Postgres use connection pooling — use directUrl if needed:
+  // directUrl = env("DIRECT_URL")
+}
+
+model Transaction {
+  id        String   @id @default(cuid())
+  userId    String
+  amount    Float    // always positive — direction determined by `type`
+  category  String
+  note      String?
+  date      DateTime @default(now())
+  type      String   // "income" | "expense"
+  labels    String[] @default([])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, date])
+  @@map("transactions")
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  icon      String   @default("📦")
+  color     String   @default("#6366f1")
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("categories")
+}
+
+model RecurringTransaction {
+  id        String    @id @default(cuid())
+  userId    String
+  name      String
+  category  String
+  amount    Float
+  type      String    // "income" | "expense"
+  frequency String    // "daily" | "weekly" | "monthly" | "yearly"
+  startDate DateTime
+  endDate   DateTime?
+  lastRun   DateTime?
+  isActive  Boolean   @default(true)
+  note      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([userId, isActive])
+  @@map("recurring_transactions")
+}
