@@ -35,7 +35,7 @@ A personal finance tracker built with Next.js 15, Prisma, and PostgreSQL. Track 
 ### 1. Clone and install
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/nafre/personal_finance_tracker.git
 cd expense-tracker
 npm install
 ```
