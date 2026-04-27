@@ -35,15 +35,19 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-slate-950 px-4">
+    <div className="min-h-dvh flex items-center justify-center px-4"
+         style={{ background: "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(99,102,241,0.14) 0%, #0f172a 60%)" }}>
       <div className="w-full max-w-sm">
         {/* Logo / title */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 mb-4 text-3xl shadow-lg shadow-indigo-900/40">
+          <div
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 text-3xl"
+            style={{ background: "linear-gradient(135deg, #4f46e5, #7c3aed)", boxShadow: "0 8px 28px rgba(99,102,241,0.5)" }}
+          >
             💸
           </div>
           <h1 className="text-2xl font-bold text-slate-100">Expense Tracker</h1>
-          <p className="text-slate-400 text-sm mt-1">Your private finance dashboard</p>
+          <p className="text-slate-400 text-sm mt-1">Track smarter, spend better</p>
         </div>
 
         {/* Card */}
@@ -100,7 +104,7 @@ function LoginForm() {
                   Signing in…
                 </>
               ) : (
-                "Sign in"
+                "Sign in →"
               )}
             </button>
           </form>

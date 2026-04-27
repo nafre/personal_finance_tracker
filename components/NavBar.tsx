@@ -18,9 +18,17 @@ export function NavBar() {
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-56 min-h-dvh bg-slate-900 border-r border-slate-800 p-4 fixed left-0 top-0">
         {/* Brand */}
-        <div className="flex items-center gap-2.5 mb-8 px-2 pt-2">
-          <span className="text-2xl">💸</span>
-          <span className="font-bold text-slate-100 text-lg">Expense</span>
+        <div className="flex items-center gap-3 mb-8 px-2 pt-2">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0"
+            style={{ background: "linear-gradient(135deg, #4f46e5, #7c3aed)", boxShadow: "0 4px 12px rgba(99,102,241,0.4)" }}
+          >
+            💸
+          </div>
+          <div>
+            <p className="font-bold text-slate-100 text-base leading-tight">Expenses</p>
+            <p className="text-xs text-slate-500 leading-tight">Personal tracker</p>
+          </div>
         </div>
 
         {/* Nav links */}
@@ -32,8 +40,8 @@ export function NavBar() {
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                 pathname === item.href
-                  ? "bg-indigo-600 text-white"
-                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                  ? "bg-indigo-500/15 text-indigo-300 border-l-2 border-indigo-500"
+                  : "text-slate-400 hover:bg-slate-800/80 hover:text-slate-100"
               )}
             >
               <span>{item.icon}</span>

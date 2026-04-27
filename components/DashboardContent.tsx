@@ -88,37 +88,81 @@ function StatCard({
   momDelta?: number | null;
 }) {
   const isNegative = variant === "balance" && amount < 0;
+  const effectiveKey: "income" | "expense" | "balance" =
+    variant === "balance" && isNegative ? "expense" : variant;
 
   const colorMap = {
     income: "text-emerald-400",
     expense: "text-rose-400",
-    balance: isNegative ? "text-rose-400" : "text-indigo-400",
+    balance: "text-indigo-300",
   };
 
-  const bgMap = {
-    income: "bg-emerald-500/10 border-emerald-500/20",
-    expense: "bg-rose-500/10 border-rose-500/20",
-    balance: isNegative
-      ? "bg-rose-500/10 border-rose-500/20"
-      : "bg-indigo-500/10 border-indigo-500/20",
+  const gradientMap = {
+    income: "linear-gradient(135deg, #052e16, #14532d)",
+    expense: "linear-gradient(135deg, #2d0a14, #4c0519)",
+    balance: "linear-gradient(135deg, #1e1b4b, #2e1065)",
+  };
+
+  const borderMap = {
+    income: "rgba(16,185,129,0.25)",
+    expense: "rgba(244,63,94,0.25)",
+    balance: "rgba(99,102,241,0.25)",
+  };
+
+  const glowMap = {
+    income: "0 1px 3px rgba(0,0,0,0.5), 0 4px 20px rgba(16,185,129,0.15)",
+    expense: "0 1px 3px rgba(0,0,0,0.5), 0 4px 20px rgba(244,63,94,0.15)",
+    balance: "0 1px 3px rgba(0,0,0,0.5), 0 4px 20px rgba(99,102,241,0.15)",
+  };
+
+  const decorMap = {
+    income: "#10b981",
+    expense: "#f43f5e",
+    balance: "#818cf8",
+  };
+
+  const iconBgMap = {
+    income: "rgba(16,185,129,0.15)",
+    expense: "rgba(244,63,94,0.15)",
+    balance: "rgba(129,140,248,0.15)",
   };
 
   return (
-    <div className={cn("rounded-xl border p-4", bgMap[variant])}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+    <div
+      className="rounded-2xl border p-5 relative overflow-hidden"
+      style={{
+        background: gradientMap[effectiveKey],
+        borderColor: borderMap[effectiveKey],
+        boxShadow: glowMap[effectiveKey],
+      }}
+    >
+      {/* Decorative circle */}
+      <div
+        className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-10 pointer-events-none"
+        style={{ background: decorMap[effectiveKey] }}
+      />
+
+      <div className="flex items-center justify-between mb-3 relative">
+        <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">
           {label}
         </span>
-        <span className="text-lg">{icon}</span>
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-sm"
+          style={{ background: iconBgMap[effectiveKey] }}
+        >
+          {icon}
+        </div>
       </div>
-      <p className={cn("text-2xl font-bold tabular-nums", colorMap[variant])}>
+
+      <p className={cn("text-3xl font-bold tabular-nums relative", colorMap[effectiveKey])}>
         {variant === "expense" ? "-" : variant === "balance" && amount < 0 ? "-" : ""}
         {formatCurrency(Math.abs(amount))}
       </p>
+
       {momDelta != null && isFinite(momDelta) && (
         <span
           className={cn(
-            "text-xs font-medium mt-1 block",
+            "text-xs font-medium mt-2 block relative",
             variant === "expense"
               ? momDelta > 0 ? "text-rose-400" : "text-emerald-400"
               : momDelta > 0 ? "text-emerald-400" : "text-rose-400"
@@ -341,7 +385,8 @@ export function DashboardContent({
           className="w-full flex items-center justify-between group"
         >
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-slate-300">Recurring</span>
+            <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
+            <span className="text-sm font-semibold text-slate-200">Recurring</span>
             {dueCount > 0 && (
               <span className="text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded-full">
                 {dueCount} due
@@ -384,9 +429,10 @@ export function DashboardContent({
 
         {/* Daily trend */}
         <div className="card">
-          <h3 className="text-sm font-semibold text-slate-300 mb-3">
-            Daily Trend
-          </h3>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
+            <h3 className="text-sm font-semibold text-slate-200">Daily Trend</h3>
+          </div>
           <Suspense fallback={<div className="h-[200px] rounded-xl bg-slate-800 animate-pulse" />}>
             <TrendChart data={dailyData} />
           </Suspense>
@@ -407,9 +453,10 @@ export function DashboardContent({
       {/* Recent transactions */}
       <div className="card">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-300">
-            Recent Transactions
-          </h3>
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
+            <h3 className="text-sm font-semibold text-slate-200">Recent Transactions</h3>
+          </div>
           <a
             href="/transactions"
             className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
