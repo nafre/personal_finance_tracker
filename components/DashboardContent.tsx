@@ -155,7 +155,7 @@ function StatCard({
       </div>
 
       <p className={cn("text-3xl font-bold tabular-nums relative", colorMap[effectiveKey])}>
-        {variant === "expense" ? "-" : variant === "balance" && amount < 0 ? "-" : ""}
+        {variant === "balance" && amount < 0 ? "-" : ""}
         {formatCurrency(Math.abs(amount))}
       </p>
 
@@ -343,6 +343,80 @@ export function DashboardContent({
     }
   }, [transactions, pendingTransactions]);
 
+  const handleUpdate = useCallback(
+    (id: string, data: Partial<Transaction>) => {
+      const old =
+        transactions.find((t) => t.id === id) ??
+        pendingTransactions.find((t) => t.id === id);
+      if (!old) return;
+
+      const newAmount   = data.amount   ?? old.amount;
+      const newType     = data.type     ?? old.type;
+      const newCategory = data.category ?? old.category;
+
+      // Remove old contribution from totals, add new
+      if (old.type === "income") {
+        setTotalIncome((p) => p - old.amount);
+        setNetBalance((p)  => p - old.amount);
+      } else {
+        setTotalExpenses((p) => p - old.amount);
+        setNetBalance((p)    => p + old.amount);
+      }
+      if (newType === "income") {
+        setTotalIncome((p) => p + newAmount);
+        setNetBalance((p)  => p + newAmount);
+      } else {
+        setTotalExpenses((p) => p + newAmount);
+        setNetBalance((p)    => p - newAmount);
+      }
+
+      setTransactions((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...data } : t))
+      );
+      setPendingTransactions((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...data } : t))
+      );
+
+      setCategoryData((prev) => {
+        let updated = [...prev];
+
+        // Remove old category contribution (expenses only)
+        if (old.type === "expense") {
+          updated = updated
+            .map((c) =>
+              c.name === old.category
+                ? { ...c, value: Math.round((c.value - old.amount) * 100) / 100 }
+                : c
+            )
+            .filter((c) => c.value > 0)
+            .sort((a, b) => b.value - a.value);
+        }
+
+        // Add new category contribution (expenses only)
+        if (newType === "expense") {
+          const existing = updated.find((c) => c.name === newCategory);
+          if (existing) {
+            updated = updated
+              .map((c) =>
+                c.name === newCategory
+                  ? { ...c, value: Math.round((c.value + newAmount) * 100) / 100 }
+                  : c
+              )
+              .sort((a, b) => b.value - a.value);
+          } else {
+            updated = [
+              ...updated,
+              { name: newCategory, value: Math.round(newAmount * 100) / 100 },
+            ].sort((a, b) => b.value - a.value);
+          }
+        }
+
+        return updated;
+      });
+    },
+    [transactions, pendingTransactions]
+  );
+
   const recentTransactions = mergedTransactions.slice(0, 6);
 
   return (
@@ -404,7 +478,17 @@ export function DashboardContent({
 
         {showRecurring && (
           <div className="mt-3">
-            <RecurringList initialRecurring={initialRecurring} />
+            <RecurringList
+              initialRecurring={initialRecurring}
+              onTransactionPosted={(tx) =>
+                handleAdd({
+                  ...tx,
+                  type: tx.type as "income" | "expense",
+                  note: tx.note ?? undefined,
+                  labels: tx.labels ?? [],
+                })
+              }
+            />
           </div>
         )}
       </div>
@@ -467,6 +551,7 @@ export function DashboardContent({
         <TransactionList
           transactions={recentTransactions}
           onDelete={handleDelete}
+          onUpdate={handleUpdate}
           compact
         />
       </div>

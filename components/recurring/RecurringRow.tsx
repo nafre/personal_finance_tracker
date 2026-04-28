@@ -22,11 +22,22 @@ interface RecurringTransaction {
   updatedAt: Date;
 }
 
+interface PostedTransaction {
+  id: string;
+  category: string;
+  amount: number;
+  type: string;
+  note: string | null;
+  date: Date | string;
+  labels: string[];
+}
+
 interface RecurringRowProps {
   rec: RecurringTransaction;
   onPosted: (postedId: string, updatedRec: RecurringTransaction) => void;
   onDeleted: (id: string) => void;
   onUpdated: (rec: RecurringTransaction) => void;
+  onTransactionPosted?: (tx: PostedTransaction) => void;
 }
 
 const FREQ_LABELS: Record<string, string> = {
@@ -49,9 +60,9 @@ function formatRelativeDate(date: Date): string {
   return `${Math.abs(diff)}d ago`;
 }
 
-export function RecurringRow({ rec, onPosted, onDeleted, onUpdated }: RecurringRowProps) {
+export function RecurringRow({ rec, onPosted, onDeleted, onUpdated, onTransactionPosted }: RecurringRowProps) {
   const [editing, setEditing] = useState(false);
-  const [isPosting, setIsPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const nextDue = getNextDueDate(
@@ -61,14 +72,19 @@ export function RecurringRow({ rec, onPosted, onDeleted, onUpdated }: RecurringR
   );
   const status = getRecurringStatus(nextDue, rec.endDate ? new Date(rec.endDate) : null);
 
-  async function handlePost() {
-    setIsPosting(true);
-    try {
-      await postRecurringTransaction(rec.id);
-      onPosted(rec.id, { ...rec, lastRun: new Date() });
-    } finally {
-      setIsPosting(false);
-    }
+  function handlePost() {
+    setPostError(null);
+    const originalRec = rec;
+
+    // Optimistic: update the row's status immediately
+    onPosted(rec.id, { ...rec, lastRun: new Date() });
+
+    postRecurringTransaction(rec.id)
+      .then((tx) => onTransactionPosted?.(tx))
+      .catch(() => {
+        onUpdated(originalRec);
+        setPostError("Post failed — please try again.");
+      });
   }
 
   async function handleDelete() {
@@ -116,6 +132,7 @@ export function RecurringRow({ rec, onPosted, onDeleted, onUpdated }: RecurringR
   const canPost = status === "due" || status === "overdue";
 
   return (
+    <>
     <div className={cn(
       "flex items-center gap-3 py-3 px-3 rounded-xl border transition-colors",
       status === "ended"
@@ -163,16 +180,15 @@ export function RecurringRow({ rec, onPosted, onDeleted, onUpdated }: RecurringR
         {canPost && (
           <button
             onClick={handlePost}
-            disabled={isPosting}
             title="Post now"
             className={cn(
-              "text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50",
+              "text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors",
               status === "overdue"
                 ? "bg-rose-600 hover:bg-rose-500 text-white"
                 : "bg-amber-600 hover:bg-amber-500 text-white"
             )}
           >
-            {isPosting ? "…" : "Post"}
+            Post
           </button>
         )}
         <button
@@ -196,5 +212,9 @@ export function RecurringRow({ rec, onPosted, onDeleted, onUpdated }: RecurringR
         </button>
       </div>
     </div>
+    {postError && (
+      <p className="text-xs text-rose-400 px-3 pb-1">{postError}</p>
+    )}
+    </>
   );
 }

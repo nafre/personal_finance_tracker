@@ -21,11 +21,22 @@ interface RecurringTransaction {
   updatedAt: Date;
 }
 
-interface RecurringListProps {
-  initialRecurring: RecurringTransaction[];
+interface PostedTransaction {
+  id: string;
+  category: string;
+  amount: number;
+  type: string;
+  note: string | null;
+  date: Date | string;
+  labels: string[];
 }
 
-export function RecurringList({ initialRecurring }: RecurringListProps) {
+interface RecurringListProps {
+  initialRecurring: RecurringTransaction[];
+  onTransactionPosted?: (tx: PostedTransaction) => void;
+}
+
+export function RecurringList({ initialRecurring, onTransactionPosted }: RecurringListProps) {
   const [items, setItems] = useState<RecurringTransaction[]>(initialRecurring);
   const [showForm, setShowForm] = useState(false);
 
@@ -74,6 +85,7 @@ export function RecurringList({ initialRecurring }: RecurringListProps) {
           onPosted={handlePosted}
           onDeleted={handleDeleted}
           onUpdated={handleUpdated}
+          onTransactionPosted={onTransactionPosted}
         />
       ))}
 

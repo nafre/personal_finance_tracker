@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { updateTransaction, deleteTransaction } from "@/lib/actions";
 import { applyLocalMutation } from "@/lib/sync";
 import { useSyncContext } from "@/context/SyncProvider";
@@ -121,7 +121,7 @@ function TransactionRow({
     tx.type as "income" | "expense"
   );
   const [rowError, setRowError] = useState("");
-  const [isPending, startTransition] = useTransition();
+  const [isSaving, setIsSaving] = useState(false);
   const { isOnline, userId, refreshPendingCount } = useSyncContext();
 
   function handleSave() {
@@ -129,35 +129,54 @@ function TransactionRow({
     if (isNaN(amount) || amount <= 0) return;
     setRowError("");
 
-    startTransition(async () => {
-      try {
-        const updateData = {
-          category: editCategory,
-          amount,
-          type: editType,
-          note: editNote || undefined,
-          labels: editLabels,
-        };
+    const updateData = {
+      category: editCategory,
+      amount,
+      type: editType,
+      note: editNote || undefined,
+      labels: editLabels,
+    };
 
-        if (!isOnline) {
-          await applyLocalMutation("update", { id: tx.id, userId, ...updateData });
-          await refreshPendingCount();
-        } else {
-          await updateTransaction(tx.id, updateData);
-        }
+    if (!isOnline) {
+      setIsSaving(true);
+      applyLocalMutation("update", { id: tx.id, userId, ...updateData })
+        .then(() => refreshPendingCount())
+        .then(() => {
+          onUpdate(tx.id, { ...updateData, isPending: true });
+          setEditing(false);
+        })
+        .catch(() => setRowError("Failed to save. Please try again."))
+        .finally(() => setIsSaving(false));
+      return;
+    }
 
-        onUpdate(tx.id, { ...updateData, isPending: !isOnline || tx.isPending });
-        setEditing(false);
-      } catch {
-        setRowError("Failed to save. Please try again.");
-      }
+    // Snapshot current values so we can roll back if the server call fails
+    const snapshot: Partial<Transaction> = {
+      category: tx.category,
+      amount: tx.amount,
+      type: tx.type as "income" | "expense",
+      note: tx.note,
+      labels: tx.labels ?? [],
+      isPending: tx.isPending ?? false,
+    };
+
+    // Optimistic: update UI instantly and close the form
+    onUpdate(tx.id, { ...updateData, isPending: false });
+    setEditing(false);
+
+    // Background server sync — on failure revert state and re-open the form
+    // so the user can see the error and retry with their values still filled in
+    updateTransaction(tx.id, updateData).catch(() => {
+      onUpdate(tx.id, snapshot);
+      setEditing(true);
+      setRowError("Update failed — please try again.");
     });
   }
 
   function handleDelete() {
     if (!confirm("Delete this transaction?")) return;
     setRowError("");
-    startTransition(async () => {
+    (async () => {
       try {
         if (!isOnline) {
           await applyLocalMutation("delete", { id: tx.id, userId });
@@ -169,7 +188,7 @@ function TransactionRow({
       } catch {
         setRowError("Failed to delete. Please try again.");
       }
-    });
+    })();
   }
 
   const isIncome = tx.type === "income";
@@ -246,10 +265,10 @@ function TransactionRow({
           </button>
           <button
             onClick={handleSave}
-            disabled={isPending}
+            disabled={isSaving}
             className="btn-primary text-sm px-4 py-1.5 disabled:opacity-50"
           >
-            {isPending ? "Saving…" : "Save"}
+            {isSaving ? "Saving…" : "Save"}
           </button>
         </div>
       </div>
@@ -316,7 +335,6 @@ function TransactionRow({
         </button>
         <button
           onClick={handleDelete}
-          disabled={isPending}
           className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition-colors text-xs"
           title="Delete"
         >
