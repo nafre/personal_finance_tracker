@@ -16,7 +16,7 @@ export function NavBar() {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-56 min-h-dvh bg-slate-900 border-r border-slate-800 p-4 fixed left-0 top-0">
+      <aside data-testid="sidebar" className="hidden md:flex flex-col w-56 min-h-dvh bg-slate-900 border-r border-slate-800 p-4 fixed left-0 top-0">
         {/* Brand */}
         <div className="flex items-center gap-3 mb-8 px-2 pt-2">
           <div
@@ -61,7 +61,7 @@ export function NavBar() {
       </aside>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 flex">
+      <nav data-testid="bottom-nav" className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 flex">
         {NAV_ITEMS.map((item) => (
           <Link
             key={item.href}

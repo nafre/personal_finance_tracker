@@ -134,7 +134,7 @@ export function ExpenseInput({ onAdd, recentCategories, autoFocus }: ExpenseInpu
   }
 
   return (
-    <div className="card">
+    <div data-testid="expense-input" className="card">
       <div className="flex items-center gap-2 mb-1">
         <span className="text-slate-400 text-sm font-medium">Quick add</span>
         <span className="text-xs text-slate-600">• Type and press Enter</span>

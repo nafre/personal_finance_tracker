@@ -97,7 +97,7 @@ export default function TransactionsPage() {
       <ExpenseInput onAdd={handleAdd} />
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
+      <div data-testid="filter-bar" className="flex flex-wrap gap-3 items-center">
         <MonthSelector month={month} year={year} />
 
         <div className="flex-1 min-w-[140px]">
@@ -161,17 +161,17 @@ export default function TransactionsPage() {
       )}
 
       {/* Summary strip */}
-      <div className="flex gap-4 text-sm">
-        <span className="text-slate-400">
+      <div data-testid="summary-strip" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <span className="text-slate-400 whitespace-nowrap">
           {transactions.length} transaction{transactions.length !== 1 ? "s" : ""}
         </span>
-        <span className="text-emerald-400 font-medium">
+        <span className="text-emerald-400 font-medium tabular-nums whitespace-nowrap">
           +{formatCurrency(totalIncome)}
         </span>
-        <span className="text-rose-400 font-medium">
-          -{formatCurrency(totalExpenses)}
+        <span className="text-rose-400 font-medium tabular-nums whitespace-nowrap">
+          −{formatCurrency(totalExpenses)}
         </span>
-        <span className={`font-semibold ${totalIncome - totalExpenses >= 0 ? "text-indigo-400" : "text-rose-400"}`}>
+        <span className={`font-semibold tabular-nums whitespace-nowrap ${totalIncome - totalExpenses >= 0 ? "text-indigo-400" : "text-rose-400"}`}>
           Net {formatCurrency(Math.abs(totalIncome - totalExpenses))}
         </span>
       </div>

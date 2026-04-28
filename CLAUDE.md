@@ -12,7 +12,52 @@ npm run db:push      # Push Prisma schema to DB (no migration history)
 npm run db:migrate   # Deploy pending migrations
 npm run db:studio    # Open Prisma Studio
 npm run db:seed      # Seed with tsx prisma/seed.ts
+npm run test:ui      # Run visual regression tests (Playwright)
+npm run test:ui:update  # Regenerate snapshot baselines after intentional design changes
+npm run test:ui:report  # Open the HTML test report
 ```
+
+## UI Testing — MANDATORY WORKFLOW
+
+**After every UI change, Claude MUST:**
+
+1. Run `npm run test:ui` to verify no layout regressions.
+2. If tests fail because the change was *intentional*, run `npm run test:ui:update` to regenerate baselines, then commit the updated snapshots alongside the code change.
+3. If tests fail because of an *unintended* regression, fix the code before reporting the task complete.
+
+**When adding a new component or page, Claude MUST:**
+
+- Add a visual regression test to the relevant spec file in `e2e/`.
+- Screenshot the component at its natural size with `toHaveScreenshot`.
+- Add a `data-testid` attribute to the root element of any new significant layout container (card, section, page-level wrapper) so tests can target it precisely.
+- Use `amountMasks(page)` (from `e2e/helpers.ts`) whenever the component displays currency values.
+
+### Test structure
+
+| File | What it covers |
+|------|----------------|
+| `e2e/login.spec.ts` | Login layout, error state |
+| `e2e/dashboard.spec.ts` | Full page, stat cards, quick-add, transaction list, recurring section, navigation |
+| `e2e/transactions.spec.ts` | Full page, filter bar, summary strip, transaction list, category filter |
+
+Tests run at three viewports: **mobile (390px)**, **tablet (768px)**, **desktop (1280px)**.
+
+### Snapshot stability
+
+Snapshots live in `e2e/snapshots/<project>/<spec>/<test>.png` and are committed to git.
+
+- **Currency amounts** are masked via `.tabular-nums` — they never break the snapshot.
+- **Dates and category names** appear in snapshots. Update baselines with `npm run test:ui:update` if data changes substantially.
+
+### One-time setup required
+
+Add to `.env.local` (same credentials used to log in to the app):
+```
+TEST_EMAIL=<same value as ADMIN_EMAIL>
+TEST_PASSWORD=<your plaintext login password>
+```
+
+Then generate initial snapshots: `npm run test:ui:update`
 
 No test suite exists yet.
 

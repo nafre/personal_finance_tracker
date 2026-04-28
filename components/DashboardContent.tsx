@@ -453,7 +453,7 @@ export function DashboardContent({
       </button>
 
       {/* Recurring transactions */}
-      <div className="card">
+      <div data-testid="recurring-section" className="card">
         <button
           onClick={() => setShowRecurring((v) => !v)}
           className="w-full flex items-center justify-between group"
@@ -494,7 +494,7 @@ export function DashboardContent({
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div data-testid="stat-cards" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatCard label="Income" amount={displayIncome} variant="income" icon="📈" momDelta={incomeDelta} />
         <StatCard label="Expenses" amount={displayExpenses} variant="expense" icon="📉" momDelta={expenseDelta} />
         <StatCard label="Net" amount={displayBalance} variant="balance" icon="⚖️" />

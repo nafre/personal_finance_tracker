@@ -34,3 +34,8 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Playwright
+playwright-report/
+test-results/
+e2e/.auth/

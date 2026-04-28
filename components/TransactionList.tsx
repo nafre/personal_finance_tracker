@@ -279,67 +279,71 @@ function TransactionRow({
     <>
     <div
       className={cn(
-        "flex items-center gap-3 px-3 rounded-xl hover:bg-slate-800/60 transition-colors group",
+        "flex items-start gap-3 px-3 rounded-xl hover:bg-slate-800/60 transition-colors group",
         compact ? "py-2" : "py-3",
         tx.isPending && "opacity-75"
       )}
     >
-      {/* Icon / colour dot */}
+      {/* Icon */}
       <div
         className={cn(
-          "w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0",
+          "w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 mt-0.5",
           isIncome ? "bg-emerald-500/15" : "bg-indigo-500/15"
         )}
       >
         {isIncome ? "💰" : getCategoryEmoji(tx.category)}
       </div>
 
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 flex-wrap">
+      {/* Info — grows, truncates, labels on their own line */}
+      <div className="flex-1 min-w-0 space-y-0.5">
+        <div className="flex items-center gap-1.5 min-w-0">
           <p className="text-sm font-medium text-slate-100 truncate">
             {tx.category}
           </p>
-          {labels.map((l) => <LabelBadge key={l} label={l} />)}
           {tx.isPending && (
-            <span className="text-[10px] text-amber-400 border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 rounded-full shrink-0">
+            <span className="text-[10px] text-amber-400 border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap">
               Pending
             </span>
           )}
         </div>
         <p className="text-xs text-slate-500 truncate">
-          {tx.note ? `${tx.note} • ` : ""}
+          {tx.note ? `${tx.note} · ` : ""}
           {formatDate(tx.date)}
         </p>
+        {labels.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-0.5">
+            {labels.map((l) => <LabelBadge key={l} label={l} />)}
+          </div>
+        )}
       </div>
 
-      {/* Amount */}
-      <span
-        className={cn(
-          "font-semibold text-sm tabular-nums shrink-0",
-          isIncome ? "text-emerald-400" : "text-rose-400"
-        )}
-      >
-        {isIncome ? "+" : "-"}
-        {formatCurrency(tx.amount)}
-      </span>
-
-      {/* Actions — appear on hover (always visible on touch devices) */}
-      <div className="flex gap-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0">
-        <button
-          onClick={() => setEditing(true)}
-          className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-500 hover:text-slate-300 transition-colors text-xs"
-          title="Edit"
+      {/* Right column: amount above, actions below — always aligned to top-right */}
+      <div className="flex flex-col items-end gap-1.5 shrink-0">
+        <span
+          className={cn(
+            "font-semibold text-sm tabular-nums leading-[1.35]",
+            isIncome ? "text-emerald-400" : "text-rose-400"
+          )}
         >
-          ✏️
-        </button>
-        <button
-          onClick={handleDelete}
-          className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition-colors text-xs"
-          title="Delete"
-        >
-          🗑️
-        </button>
+          {isIncome ? "+" : "−"}
+          {formatCurrency(tx.amount)}
+        </span>
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
+          <button
+            onClick={() => setEditing(true)}
+            className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-500 hover:text-slate-300 transition-colors text-xs"
+            title="Edit"
+          >
+            ✏️
+          </button>
+          <button
+            onClick={handleDelete}
+            className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition-colors text-xs"
+            title="Delete"
+          >
+            🗑️
+          </button>
+        </div>
       </div>
     </div>
     {rowError && (
@@ -381,7 +385,7 @@ export function TransactionList({
   }
 
   return (
-    <div className="space-y-0.5">
+    <div data-testid="transaction-list" className="space-y-0.5">
       {txs.map((tx) => (
         <TransactionRow
           key={tx.id}
