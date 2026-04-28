@@ -39,3 +39,4 @@ Thumbs.db
 playwright-report/
 test-results/
 e2e/.auth/
+.playwright-mcp

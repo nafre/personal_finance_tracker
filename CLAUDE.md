@@ -17,6 +17,24 @@ npm run test:ui:update  # Regenerate snapshot baselines after intentional design
 npm run test:ui:report  # Open the HTML test report
 ```
 
+## Playwright MCP — Live Browser Debugging
+
+The project ships a `.mcp.json` that registers the `@playwright/mcp` server. When the MCP is active, Claude can control a real browser directly to debug UI issues without writing a test first:
+
+- **Navigate** to any page (`browser_navigate`)
+- **Screenshot** the current state (`browser_screenshot`)
+- **Click / fill / hover** on elements (`browser_click`, `browser_fill`, `browser_hover`)
+- **Evaluate JS** in the page context (`browser_evaluate`)
+
+The dev server must be running (`npm run dev`) before using these tools. The MCP opens its own browser instance separate from the Playwright test runner.
+
+**When to use MCP vs test runner:**
+| Situation | Tool |
+|-----------|------|
+| Diagnosing an existing visual bug | MCP (fast, interactive) |
+| Verifying a fix didn't regress anything | `npm run test:ui` |
+| Recording a new baseline after a design change | `npm run test:ui:update` |
+
 ## UI Testing — MANDATORY WORKFLOW
 
 **After every UI change, Claude MUST:**

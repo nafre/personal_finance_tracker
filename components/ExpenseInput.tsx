@@ -140,32 +140,52 @@ export function ExpenseInput({ onAdd, recentCategories, autoFocus }: ExpenseInpu
         <span className="text-xs text-slate-600">• Type and press Enter</span>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-start">
         <TypeToggle value={effectiveType} onChange={setManualTypeOverride} />
 
-        <div className="flex-1 relative">
-          <input
-            ref={inputRef}
-            type="text"
-            value={value}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            className={cn(
-              "input-base w-full text-base font-mono",
-              error && "border-rose-500 focus:ring-rose-500"
-            )}
-            placeholder="food 20  •  salary 5000  •  coffee 4.5 latte"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            disabled={isPending}
-            autoFocus={autoFocus}
-          />
+        <div className="flex-1 flex flex-col">
+          <div className="relative">
+            <input
+              ref={inputRef}
+              type="text"
+              value={value}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              className={cn(
+                "input-base w-full text-base font-mono",
+                preview && !error && "sm:pr-48",
+                error && "border-rose-500 focus:ring-rose-500"
+              )}
+              placeholder="food 20  •  salary 5000  •  coffee 4.5 latte"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              disabled={isPending}
+              autoFocus={autoFocus}
+            />
 
-          {/* Live preview badge */}
+            {/* Desktop-only: preview badge floats inside the input */}
+            {preview && !error && (
+              <div className="hidden sm:flex absolute right-3 top-1/2 -translate-y-1/2 items-center gap-2 pointer-events-none">
+                <span
+                  className={cn(
+                    "badge text-xs",
+                    effectiveType === "income" ? "badge-income" : "badge-expense"
+                  )}
+                >
+                  {effectiveType === "income" ? "+" : "-"}{formatCurrency(preview.amount)}
+                </span>
+                <span className="text-xs text-slate-500 max-w-[80px] truncate">
+                  {preview.category}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Mobile-only: preview badge sits below the input so it never overlaps text */}
           {preview && !error && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+            <div className="sm:hidden flex items-center gap-2 mt-1.5 px-0.5">
               <span
                 className={cn(
                   "badge text-xs",
@@ -174,7 +194,7 @@ export function ExpenseInput({ onAdd, recentCategories, autoFocus }: ExpenseInpu
               >
                 {effectiveType === "income" ? "+" : "-"}{formatCurrency(preview.amount)}
               </span>
-              <span className="text-xs text-slate-500 max-w-[80px] truncate">
+              <span className="text-xs text-slate-500 truncate">
                 {preview.category}
               </span>
             </div>
@@ -184,7 +204,7 @@ export function ExpenseInput({ onAdd, recentCategories, autoFocus }: ExpenseInpu
         <button
           onClick={handleSubmit}
           disabled={isPending || !value.trim()}
-          className="btn-primary px-4 flex items-center gap-1.5 shrink-0 disabled:opacity-50"
+          className="btn-primary px-4 flex items-center gap-1.5 shrink-0 disabled:opacity-50 self-start"
         >
           {isPending ? (
             <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
