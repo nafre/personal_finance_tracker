@@ -327,6 +327,15 @@ export function DashboardContent({
     [month, year]
   );
 
+  const handleReplace = useCallback((tempId: string, realTx: Transaction) => {
+    setTransactions((prev) =>
+      prev.map((t) => (t.id === tempId ? { ...t, ...realTx } : t))
+    );
+    setPendingTransactions((prev) =>
+      prev.map((t) => (t.id === tempId ? { ...t, ...realTx } : t))
+    );
+  }, []);
+
   const handleDelete = useCallback((id: string) => {
     const tx = transactions.find((t) => t.id === id) ?? pendingTransactions.find((t) => t.id === id);
     if (!tx) return;
@@ -440,7 +449,7 @@ export function DashboardContent({
 
       {/* Quick input — desktop only; mobile uses FAB below */}
       <div className="hidden md:block">
-        <ExpenseInput onAdd={handleAdd} recentCategories={recentCategories} />
+        <ExpenseInput onAdd={handleAdd} onReplace={handleReplace} onRemove={handleDelete} recentCategories={recentCategories} />
       </div>
 
       {/* Mobile FAB */}
@@ -562,6 +571,8 @@ export function DashboardContent({
         onClose={() => setSheetOpen(false)}
         recentCategories={recentCategories}
         onAdd={handleAdd}
+        onReplace={handleReplace}
+        onRemove={handleDelete}
       />
     </div>
   );

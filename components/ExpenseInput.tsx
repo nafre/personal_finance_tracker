@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useState, useRef } from "react";
 import { parseExpenseInput } from "@/lib/parser";
 import { addTransaction } from "@/lib/actions";
 import { putTransaction } from "@/lib/idb";
@@ -8,26 +8,30 @@ import { applyLocalMutation } from "@/lib/sync";
 import { useSyncContext } from "@/context/SyncProvider";
 import { cn, formatCurrency } from "@/lib/utils";
 
+export interface AddedTx {
+  id: string;
+  category: string;
+  amount: number;
+  type: "income" | "expense";
+  note?: string;
+  labels: string[];
+  date: Date | string;
+  isPending?: boolean;
+}
+
 interface ExpenseInputProps {
-  onAdd?: (tx: {
-    id: string;
-    category: string;
-    amount: number;
-    type: "income" | "expense";
-    note?: string;
-    labels: string[];
-    date: Date | string;
-    isPending?: boolean;
-  }) => void;
+  onAdd?: (tx: AddedTx) => void;
+  onReplace?: (tempId: string, realTx: AddedTx) => void;
+  onRemove?: (tempId: string) => void;
   recentCategories?: string[];
   autoFocus?: boolean;
 }
 
-export function ExpenseInput({ onAdd, recentCategories, autoFocus }: ExpenseInputProps) {
+export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, autoFocus }: ExpenseInputProps) {
   const [value, setValue] = useState("");
   const [preview, setPreview] = useState<ReturnType<typeof parseExpenseInput>>(null);
   const [error, setError] = useState("");
-  const [isPending, startTransition] = useTransition();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [manualTypeOverride, setManualTypeOverride] = useState<"income" | "expense" | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { isOnline, userId, refreshPendingCount } = useSyncContext();
@@ -53,6 +57,14 @@ export function ExpenseInput({ onAdd, recentCategories, autoFocus }: ExpenseInpu
     }
   }
 
+  function clearInput() {
+    setValue("");
+    setPreview(null);
+    setError("");
+    setManualTypeOverride(null);
+    inputRef.current?.focus();
+  }
+
   function handleSubmit() {
     const parsed = parseExpenseInput(value);
     if (!parsed) {
@@ -60,19 +72,18 @@ export function ExpenseInput({ onAdd, recentCategories, autoFocus }: ExpenseInpu
       return;
     }
 
-    startTransition(async () => {
-      try {
-        if (!isOnline) {
-          // Offline path — write to IDB and queue
-          const { committed } = await applyLocalMutation("add", {
-            userId,
-            category: parsed.category,
-            amount: parsed.amount,
-            type: effectiveType,
-            note: parsed.note,
-            labels: parsed.labels,
-          });
-
+    if (!isOnline) {
+      // Offline path — write to IDB and queue, then update UI
+      setIsSubmitting(true);
+      applyLocalMutation("add", {
+        userId,
+        category: parsed.category,
+        amount: parsed.amount,
+        type: effectiveType,
+        note: parsed.note,
+        labels: parsed.labels,
+      })
+        .then(({ committed }) => {
           if (committed) {
             onAdd?.({
               id: committed.id,
@@ -85,52 +96,57 @@ export function ExpenseInput({ onAdd, recentCategories, autoFocus }: ExpenseInpu
               isPending: true,
             });
           }
+          return refreshPendingCount();
+        })
+        .then(clearInput)
+        .catch(() => setError("Failed to save. Please try again."))
+        .finally(() => setIsSubmitting(false));
+      return;
+    }
 
-          await refreshPendingCount();
-        } else {
-          // Online path — call server action
-          const tx = await addTransaction({
-            category: parsed.category,
-            amount: parsed.amount,
-            type: effectiveType,
-            note: parsed.note,
-            labels: parsed.labels,
-          });
+    // Online path — optimistic: add to UI immediately with a temp ID, then
+    // fire the server call in the background and swap in the real ID on success
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const txData = {
+      category: parsed.category,
+      amount: parsed.amount,
+      type: effectiveType,
+      note: parsed.note,
+      labels: parsed.labels,
+    };
 
-          // Write-through to IDB so the local cache is always warm
-          void putTransaction({
-            id: tx.id,
-            userId,
-            category: tx.category,
-            amount: tx.amount,
-            type: tx.type as "income" | "expense",
-            note: tx.note ?? undefined,
-            labels: tx.labels ?? [],
-            date: new Date(tx.date).toISOString(),
-            syncStatus: "synced",
-            createdAt: new Date(tx.createdAt).toISOString(),
-          });
+    onAdd?.({ id: tempId, ...txData, date: new Date().toISOString(), isPending: true });
+    clearInput();
 
-          onAdd?.({
-            id: tx.id,
-            category: tx.category,
-            amount: tx.amount,
-            type: tx.type as "income" | "expense",
-            note: tx.note ?? undefined,
-            labels: tx.labels ?? [],
-            date: tx.date,
-          });
-        }
-
-        setValue("");
-        setPreview(null);
-        setError("");
-        setManualTypeOverride(null);
-        inputRef.current?.focus();
-      } catch {
+    addTransaction(txData)
+      .then((tx) => {
+        onReplace?.(tempId, {
+          id: tx.id,
+          category: tx.category,
+          amount: tx.amount,
+          type: tx.type as "income" | "expense",
+          note: tx.note ?? undefined,
+          labels: tx.labels ?? [],
+          date: tx.date,
+          isPending: false,
+        });
+        void putTransaction({
+          id: tx.id,
+          userId,
+          category: tx.category,
+          amount: tx.amount,
+          type: tx.type as "income" | "expense",
+          note: tx.note ?? undefined,
+          labels: tx.labels ?? [],
+          date: new Date(tx.date).toISOString(),
+          syncStatus: "synced",
+          createdAt: new Date(tx.createdAt).toISOString(),
+        });
+      })
+      .catch(() => {
+        onRemove?.(tempId);
         setError("Failed to save. Please try again.");
-      }
-    });
+      });
   }
 
   return (
@@ -161,7 +177,7 @@ export function ExpenseInput({ onAdd, recentCategories, autoFocus }: ExpenseInpu
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
-              disabled={isPending}
+              disabled={isSubmitting}
               autoFocus={autoFocus}
             />
 
@@ -203,10 +219,10 @@ export function ExpenseInput({ onAdd, recentCategories, autoFocus }: ExpenseInpu
 
         <button
           onClick={handleSubmit}
-          disabled={isPending || !value.trim()}
+          disabled={isSubmitting || !value.trim()}
           className="btn-primary px-4 flex items-center gap-1.5 shrink-0 disabled:opacity-50 self-start"
         >
-          {isPending ? (
+          {isSubmitting ? (
             <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />

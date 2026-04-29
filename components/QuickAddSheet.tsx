@@ -1,28 +1,21 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { ExpenseInput } from "@/components/ExpenseInput";
+import { ExpenseInput, type AddedTx } from "@/components/ExpenseInput";
 
 interface QuickAddSheetProps {
   open: boolean;
   onClose: () => void;
   recentCategories: string[];
-  onAdd: (tx: {
-    id: string;
-    category: string;
-    amount: number;
-    type: "income" | "expense";
-    note?: string;
-    labels: string[];
-    date: Date | string;
-    isPending?: boolean;
-  }) => void;
+  onAdd: (tx: AddedTx) => void;
+  onReplace?: (tempId: string, realTx: AddedTx) => void;
+  onRemove?: (tempId: string) => void;
 }
 
-export function QuickAddSheet({ open, onClose, recentCategories, onAdd }: QuickAddSheetProps) {
+export function QuickAddSheet({ open, onClose, recentCategories, onAdd, onReplace, onRemove }: QuickAddSheetProps) {
   if (!open) return null;
 
-  function handleAddAndClose(tx: Parameters<QuickAddSheetProps["onAdd"]>[0]) {
+  function handleAddAndClose(tx: AddedTx) {
     onAdd(tx);
     onClose();
   }
@@ -40,6 +33,8 @@ export function QuickAddSheet({ open, onClose, recentCategories, onAdd }: QuickA
             autoFocus
             recentCategories={recentCategories}
             onAdd={handleAddAndClose}
+            onReplace={onReplace}
+            onRemove={onRemove}
           />
         </div>
       </div>
