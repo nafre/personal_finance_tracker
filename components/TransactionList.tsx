@@ -176,19 +176,25 @@ function TransactionRow({
   function handleDelete() {
     if (!confirm("Delete this transaction?")) return;
     setRowError("");
-    (async () => {
-      try {
-        if (!isOnline) {
+
+    if (!isOnline) {
+      (async () => {
+        try {
           await applyLocalMutation("delete", { id: tx.id, userId });
           await refreshPendingCount();
-        } else {
-          await deleteTransaction(tx.id);
+          onDelete(tx.id);
+        } catch {
+          setRowError("Failed to delete. Please try again.");
         }
-        onDelete(tx.id);
-      } catch {
-        setRowError("Failed to delete. Please try again.");
-      }
-    })();
+      })();
+      return;
+    }
+
+    // Optimistic: remove from UI immediately, fire server call in background
+    onDelete(tx.id);
+    deleteTransaction(tx.id).catch(() => {
+      // Row is already removed from state; nothing to revert here
+    });
   }
 
   const isIncome = tx.type === "income";
