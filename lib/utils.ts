@@ -44,6 +44,22 @@ export function getRecurringStatus(
   return "upcoming";
 }
 
+export function countRemainingPayments(
+  frequency: RecurringFrequency,
+  nextDue: Date,
+  endDate: Date
+): number {
+  let count = 0;
+  let current = new Date(nextDue);
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
+  while (current <= end) {
+    count++;
+    current = getNextDueDate(frequency, current, current);
+  }
+  return count;
+}
+
 export function formatDate(date: Date | string): string {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",

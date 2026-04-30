@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { cn, formatCurrency, getNextDueDate, getRecurringStatus, type RecurringFrequency } from "@/lib/utils";
+import { cn, formatCurrency, getNextDueDate, getRecurringStatus, countRemainingPayments, type RecurringFrequency } from "@/lib/utils";
 import { postRecurringTransaction, deleteRecurringTransaction, skipRecurringTransaction } from "@/lib/actions";
 import { RecurringForm } from "./RecurringForm";
 
@@ -71,7 +71,11 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
     new Date(rec.startDate),
     rec.lastRun ? new Date(rec.lastRun) : null
   );
-  const status = getRecurringStatus(nextDue, rec.endDate ? new Date(rec.endDate) : null);
+  const endDate = rec.endDate ? new Date(rec.endDate) : null;
+  const status = getRecurringStatus(nextDue, endDate);
+  const remaining = endDate && status !== "ended"
+    ? countRemainingPayments(rec.frequency as RecurringFrequency, nextDue, endDate)
+    : null;
 
   function handlePost() {
     setPostError(null);
@@ -176,6 +180,11 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
             {rec.type === "income" ? "+" : "-"}{formatCurrency(rec.amount)}
           </span>
           <span className="text-xs text-slate-500">{rec.category}</span>
+          {remaining !== null && (
+            <span className="text-xs text-slate-500 tabular-nums">
+              {remaining} payment{remaining !== 1 ? "s" : ""} left
+            </span>
+          )}
         </div>
       </div>
 
