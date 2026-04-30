@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev.mjs",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
@@ -11,6 +11,10 @@
     "db:migrate": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "db:dev:generate": "prisma generate --schema prisma/schema.sqlite.prisma",
+    "db:dev:push": "prisma db push --schema prisma/schema.sqlite.prisma",
+    "db:dev:studio": "prisma studio --schema prisma/schema.sqlite.prisma",
+    "db:dev:seed": "tsx prisma/seed.ts",
     "test:ui": "playwright test",
     "test:ui:update": "playwright test --update-snapshots",
     "test:ui:report": "playwright show-report"

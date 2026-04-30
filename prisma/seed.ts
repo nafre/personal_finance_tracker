@@ -1,4 +1,13 @@
-import { PrismaClient } from "@prisma/client";
+import path from "path";
+
+const IS_SQLITE = (process.env.DATABASE_URL ?? "").startsWith("file:");
+
+// Use the SQLite client when running against the local dev database,
+// otherwise fall back to the standard PostgreSQL client.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { PrismaClient } = IS_SQLITE
+  ? require(path.join(process.cwd(), "node_modules/.prisma/client-sqlite"))
+  : require("@prisma/client");
 
 const prisma = new PrismaClient();
 

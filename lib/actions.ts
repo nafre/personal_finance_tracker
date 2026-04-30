@@ -6,6 +6,24 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getNextDueDate, type RecurringFrequency } from "@/lib/utils";
 
+// SQLite stores labels as a JSON string; PostgreSQL uses a native string array.
+const IS_SQLITE = (process.env.DATABASE_URL ?? "").startsWith("file:");
+
+function parseLabels(val: string | string[]): string[] {
+  if (Array.isArray(val)) return val;
+  try { return JSON.parse(val); } catch { return []; }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function encodeLabels(labels: string[]): any {
+  return IS_SQLITE ? JSON.stringify(labels) : labels;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeTx(tx: any) {
+  return { ...tx, labels: parseLabels(tx.labels) };
+}
+
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
 async function getAuthenticatedUserId(): Promise<string> {
@@ -36,13 +54,13 @@ export async function addTransaction(data: {
       type: data.type,
       note: data.note ?? null,
       date: data.date ?? new Date(),
-      labels: data.labels ?? [],
+      labels: encodeLabels(data.labels ?? []),
     },
   });
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
-  return tx;
+  return normalizeTx(tx);
 }
 
 export async function updateTransaction(
@@ -70,13 +88,13 @@ export async function updateTransaction(
       ...(data.type !== undefined && { type: data.type }),
       ...(data.note !== undefined && { note: data.note || null }),
       ...(data.date !== undefined && { date: data.date }),
-      ...(data.labels !== undefined && { labels: data.labels }),
+      ...(data.labels !== undefined && { labels: encodeLabels(data.labels) }),
     },
   });
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
-  return tx;
+  return normalizeTx(tx);
 }
 
 export async function deleteTransaction(id: string) {
@@ -99,13 +117,15 @@ export async function getDashboardData(month: number, year: number) {
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 0, 23, 59, 59, 999); // last ms of month
 
-  const transactions = await db.transaction.findMany({
-    where: {
-      userId,
-      date: { gte: start, lte: end },
-    },
-    orderBy: { date: "desc" },
-  });
+  const transactions = (
+    await db.transaction.findMany({
+      where: {
+        userId,
+        date: { gte: start, lte: end },
+      },
+      orderBy: { date: "desc" },
+    })
+  ).map(normalizeTx);
 
   // Aggregate
   let totalIncome = 0;
@@ -185,6 +205,21 @@ export async function getTransactions(filters: {
   const start = new Date(filters.year, filters.month - 1, 1);
   const end = new Date(filters.year, filters.month, 0, 23, 59, 59, 999);
 
+  // SQLite has no native array `has` filter — fetch then filter in JS.
+  if (IS_SQLITE && filters.label) {
+    const rows = await db.transaction.findMany({
+      where: {
+        userId,
+        date: { gte: start, lte: end },
+        ...(filters.category ? { category: filters.category } : {}),
+      },
+      orderBy: { date: "desc" },
+    });
+    return rows
+      .map(normalizeTx)
+      .filter((tx) => tx.labels.includes(filters.label!));
+  }
+
   const transactions = await db.transaction.findMany({
     where: {
       userId,
@@ -195,7 +230,7 @@ export async function getTransactions(filters: {
     orderBy: { date: "desc" },
   });
 
-  return transactions;
+  return transactions.map(normalizeTx);
 }
 
 // ─── Categories ───────────────────────────────────────────────────────────────
@@ -332,7 +367,7 @@ export async function postRecurringTransaction(id: string) {
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
-  return tx;
+  return normalizeTx(tx);
 }
 
 export async function skipRecurringTransaction(id: string) {

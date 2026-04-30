@@ -18,6 +18,12 @@ build/
 # Prisma generated
 prisma/migrations/
 
+# SQLite local dev database
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
 # Vercel
 .vercel
 
