@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getNextDueDate, type RecurringFrequency } from "@/lib/utils";
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
@@ -332,4 +333,24 @@ export async function postRecurringTransaction(id: string) {
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
   return tx;
+}
+
+export async function skipRecurringTransaction(id: string) {
+  const userId = await getAuthenticatedUserId();
+  const rec = await db.recurringTransaction.findFirst({ where: { id, userId } });
+  if (!rec) throw new Error("Not found");
+
+  const nextDue = getNextDueDate(
+    rec.frequency as RecurringFrequency,
+    rec.startDate,
+    rec.lastRun ?? null
+  );
+
+  const updated = await db.recurringTransaction.update({
+    where: { id },
+    data: { lastRun: nextDue },
+  });
+
+  revalidatePath("/dashboard");
+  return updated;
 }

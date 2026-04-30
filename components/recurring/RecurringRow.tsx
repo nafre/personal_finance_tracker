@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn, formatCurrency, getNextDueDate, getRecurringStatus, type RecurringFrequency } from "@/lib/utils";
-import { postRecurringTransaction, deleteRecurringTransaction } from "@/lib/actions";
+import { postRecurringTransaction, deleteRecurringTransaction, skipRecurringTransaction } from "@/lib/actions";
 import { RecurringForm } from "./RecurringForm";
 
 interface RecurringTransaction {
@@ -35,7 +35,10 @@ interface PostedTransaction {
 interface RecurringRowProps {
   rec: RecurringTransaction;
   onPosted: (postedId: string, updatedRec: RecurringTransaction) => void;
+  onSkipped?: (updated: RecurringTransaction) => void;
   onDeleted: (id: string) => void;
+  onRestored: (rec: RecurringTransaction) => void;
+  onDeleteError: (msg: string) => void;
   onUpdated: (rec: RecurringTransaction) => void;
   onTransactionPosted?: (tx: PostedTransaction) => void;
 }
@@ -60,11 +63,9 @@ function formatRelativeDate(date: Date): string {
   return `${Math.abs(diff)}d ago`;
 }
 
-export function RecurringRow({ rec, onPosted, onDeleted, onUpdated, onTransactionPosted }: RecurringRowProps) {
+export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, onDeleteError, onUpdated, onTransactionPosted }: RecurringRowProps) {
   const [editing, setEditing] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
   const nextDue = getNextDueDate(
     rec.frequency as RecurringFrequency,
     new Date(rec.startDate),
@@ -87,15 +88,26 @@ export function RecurringRow({ rec, onPosted, onDeleted, onUpdated, onTransactio
       });
   }
 
-  async function handleDelete() {
+  function handleSkip() {
+    setPostError(null);
+    const originalRec = rec;
+    onSkipped?.({ ...rec, lastRun: nextDue });
+    skipRecurringTransaction(rec.id)
+      .then((updated) => onSkipped?.(updated as RecurringTransaction))
+      .catch(() => {
+        onSkipped?.(originalRec);
+        setPostError("Skip failed — please try again.");
+      });
+  }
+
+  function handleDelete() {
     if (!confirm(`Delete "${rec.name}"?`)) return;
-    setIsDeleting(true);
-    try {
-      await deleteRecurringTransaction(rec.id);
-      onDeleted(rec.id);
-    } finally {
-      setIsDeleting(false);
-    }
+    // Optimistic: remove from UI immediately, restore on failure
+    onDeleted(rec.id);
+    deleteRecurringTransaction(rec.id).catch(() => {
+      onRestored(rec);
+      onDeleteError("Delete failed — please try again.");
+    });
   }
 
   if (editing) {
@@ -178,18 +190,27 @@ export function RecurringRow({ rec, onPosted, onDeleted, onUpdated, onTransactio
       {/* Actions */}
       <div className="flex items-center gap-1 shrink-0">
         {canPost && (
-          <button
-            onClick={handlePost}
-            title="Post now"
-            className={cn(
-              "text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors",
-              status === "overdue"
-                ? "bg-rose-600 hover:bg-rose-500 text-white"
-                : "bg-amber-600 hover:bg-amber-500 text-white"
-            )}
-          >
-            Post
-          </button>
+          <>
+            <button
+              onClick={handleSkip}
+              title="Skip this occurrence"
+              className="text-xs px-2 py-1.5 rounded-lg font-medium transition-colors border border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-400"
+            >
+              Skip
+            </button>
+            <button
+              onClick={handlePost}
+              title="Post now"
+              className={cn(
+                "text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors",
+                status === "overdue"
+                  ? "bg-rose-600 hover:bg-rose-500 text-white"
+                  : "bg-amber-600 hover:bg-amber-500 text-white"
+              )}
+            >
+              Post
+            </button>
+          </>
         )}
         <button
           onClick={() => setEditing(true)}
@@ -202,9 +223,8 @@ export function RecurringRow({ rec, onPosted, onDeleted, onUpdated, onTransactio
         </button>
         <button
           onClick={handleDelete}
-          disabled={isDeleting}
           title="Delete"
-          className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors rounded disabled:opacity-50"
+          className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors rounded"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

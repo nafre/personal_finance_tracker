@@ -39,6 +39,7 @@ interface RecurringListProps {
 export function RecurringList({ initialRecurring, onTransactionPosted }: RecurringListProps) {
   const [items, setItems] = useState<RecurringTransaction[]>(initialRecurring);
   const [showForm, setShowForm] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Sync state when server sends fresh data (after revalidatePath)
   useEffect(() => {
@@ -51,6 +52,15 @@ export function RecurringList({ initialRecurring, onTransactionPosted }: Recurri
 
   function handleDeleted(id: string) {
     setItems((prev) => prev.filter((r) => r.id !== id));
+    setDeleteError(null);
+  }
+
+  function handleRestored(rec: RecurringTransaction) {
+    setItems((prev) => [...prev, rec]);
+  }
+
+  function handleSkipped(updated: RecurringTransaction) {
+    setItems((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
   }
 
   function handleUpdated(updated: RecurringTransaction) {
@@ -78,12 +88,18 @@ export function RecurringList({ initialRecurring, onTransactionPosted }: Recurri
 
   return (
     <div className="space-y-2">
+      {deleteError && (
+        <p className="text-xs text-rose-400 px-3 pb-1">{deleteError}</p>
+      )}
       {items.map((rec) => (
         <RecurringRow
           key={rec.id}
           rec={rec}
           onPosted={handlePosted}
+          onSkipped={handleSkipped}
           onDeleted={handleDeleted}
+          onRestored={handleRestored}
+          onDeleteError={setDeleteError}
           onUpdated={handleUpdated}
           onTransactionPosted={onTransactionPosted}
         />
