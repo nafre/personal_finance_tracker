@@ -62,6 +62,7 @@ test.describe("Transactions page", () => {
       .textContent();
     await categorySelect.selectOption({ index: 1 });
     await waitForReady(page);
+    await page.mouse.move(0, 0); // move cursor off the dropdown before screenshot
 
     await expect(page).toHaveScreenshot("category-filtered.png", {
       fullPage: true,

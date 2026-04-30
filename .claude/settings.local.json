@@ -6,15 +6,16 @@
       "mcp__playwright__browser_snapshot",
       "mcp__playwright__browser_fill_form",
       "mcp__playwright__browser_click",
-      "mcp__playwright__browser_type"
+      "mcp__playwright__browser_type",
+      "Bash(npm run *)"
     ]
   },
-  "allowMCPServers": [
-      "github",
-      "playwright"
-    ],
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
+    "playwright"
+  ],
+  "allowMCPServers": [
+    "github",
     "playwright"
   ]
 }

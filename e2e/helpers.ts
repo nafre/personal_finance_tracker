@@ -12,6 +12,8 @@ export function amountMasks(page: Page): Locator[] {
 /**
  * Wait for the page to fully settle after navigation:
  * network-idle first, then any visible loading spinner must disappear.
+ * Also hides the Next.js dev build indicator (nextjs-portal) so it never
+ * leaks into screenshots.
  */
 export async function waitForReady(page: Page): Promise<void> {
   await page.waitForLoadState("networkidle");
@@ -21,4 +23,7 @@ export async function waitForReady(page: Page): Promise<void> {
   if (visible) {
     await spinner.waitFor({ state: "hidden", timeout: 10_000 });
   }
+
+  // Suppress the Next.js dev-mode route-compilation indicator ("N" badge)
+  await page.addStyleTag({ content: "nextjs-portal { display: none !important; }" });
 }
