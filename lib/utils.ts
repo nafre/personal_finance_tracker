@@ -38,10 +38,47 @@ export function getRecurringStatus(
   today.setHours(0, 0, 0, 0);
   const due = new Date(nextDue);
   due.setHours(0, 0, 0, 0);
-  if (endDate && new Date(endDate) < today) return "ended";
+  if (endDate) {
+    const end = new Date(endDate);
+    end.setHours(0, 0, 0, 0);
+    // Ended if endDate is past OR next due falls beyond endDate (no payments left)
+    if (end < today || due > end) return "ended";
+  }
   if (due < today) return "overdue";
   if (due.getTime() === today.getTime()) return "due";
   return "upcoming";
+}
+
+export function isPostedThisPeriod(
+  frequency: RecurringFrequency,
+  lastRun: Date | null
+): boolean {
+  if (!lastRun) return false;
+  const now = new Date();
+  const lr = new Date(lastRun);
+  switch (frequency) {
+    case "daily":
+      return (
+        lr.getFullYear() === now.getFullYear() &&
+        lr.getMonth() === now.getMonth() &&
+        lr.getDate() === now.getDate()
+      );
+    case "weekly":
+      return now.getTime() - lr.getTime() < 7 * 24 * 60 * 60 * 1000;
+    case "monthly":
+      return lr.getFullYear() === now.getFullYear() && lr.getMonth() === now.getMonth();
+    case "yearly":
+      return lr.getFullYear() === now.getFullYear();
+  }
+}
+
+export function toMonthlyAmount(frequency: RecurringFrequency, amount: number): number {
+  switch (frequency) {
+    case "daily":   return amount * (365 / 12);
+    case "weekly":  return amount * (52 / 12);
+    case "monthly": return amount;
+    case "yearly":  return amount / 12;
+  }
 }
 
 export function countRemainingPayments(

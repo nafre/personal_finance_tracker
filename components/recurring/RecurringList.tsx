@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { RecurringRow } from "./RecurringRow";
 import { RecurringForm } from "./RecurringForm";
+import { getNextDueDate, getRecurringStatus, type RecurringFrequency } from "@/lib/utils";
 
 interface RecurringTransaction {
   id: string;
@@ -72,7 +73,16 @@ export function RecurringList({ initialRecurring, onTransactionPosted }: Recurri
     setShowForm(false);
   }
 
-  if (items.length === 0 && !showForm) {
+  const activeItems = items.filter((rec) => {
+    const nextDue = getNextDueDate(
+      rec.frequency as RecurringFrequency,
+      new Date(rec.startDate),
+      rec.lastRun ? new Date(rec.lastRun) : null
+    );
+    return getRecurringStatus(nextDue, rec.endDate ? new Date(rec.endDate) : null) !== "ended";
+  });
+
+  if (activeItems.length === 0 && !showForm) {
     return (
       <div className="text-center py-4">
         <p className="text-sm text-slate-500 mb-3">No recurring transactions yet.</p>
@@ -91,7 +101,7 @@ export function RecurringList({ initialRecurring, onTransactionPosted }: Recurri
       {deleteError && (
         <p className="text-xs text-rose-400 px-3 pb-1">{deleteError}</p>
       )}
-      {items.map((rec) => (
+      {activeItems.map((rec) => (
         <RecurringRow
           key={rec.id}
           rec={rec}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { cn, formatCurrency, getNextDueDate, getRecurringStatus, countRemainingPayments, type RecurringFrequency } from "@/lib/utils";
+import { cn, formatCurrency, getNextDueDate, getRecurringStatus, countRemainingPayments, isPostedThisPeriod, type RecurringFrequency } from "@/lib/utils";
 import { postRecurringTransaction, deleteRecurringTransaction, skipRecurringTransaction } from "@/lib/actions";
 import { RecurringForm } from "./RecurringForm";
 
@@ -77,6 +77,10 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
   const remaining = endDate && status !== "ended"
     ? countRemainingPayments(rec.frequency as RecurringFrequency, nextDue, endDate)
     : null;
+  const postedThisPeriod = isPostedThisPeriod(
+    rec.frequency as RecurringFrequency,
+    rec.lastRun ? new Date(rec.lastRun) : null
+  );
 
   function handlePost() {
     setPostError(null);
@@ -147,7 +151,7 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
   };
 
   const { label: statusLabel, cls: statusCls } = statusConfig[status];
-  const canPost = status === "due" || status === "overdue" || status === "upcoming";
+  const canPost = !postedThisPeriod && (status === "due" || status === "overdue" || status === "upcoming");
   const canSkip = status === "due" || status === "overdue";
 
   return (
@@ -201,6 +205,11 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
 
       {/* Actions */}
       <div className="flex items-center gap-1 shrink-0">
+        {postedThisPeriod && status !== "ended" && (
+          <span className="text-xs px-2 py-1 rounded-lg border border-emerald-700/40 bg-emerald-900/20 text-emerald-500 shrink-0">
+            Posted ✓
+          </span>
+        )}
         {canSkip && (
           <button
             onClick={handleSkip}

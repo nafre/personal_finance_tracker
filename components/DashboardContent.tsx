@@ -11,7 +11,7 @@ import { RecurringList } from "@/components/recurring/RecurringList";
 import { SyncStatusBar } from "@/components/SyncStatusBar";
 import { useSyncContext } from "@/context/SyncProvider";
 import { seedIDBFromServer, getTransactionsByMonth } from "@/lib/idb";
-import { formatCurrency, cn, getNextDueDate, getRecurringStatus, type RecurringFrequency } from "@/lib/utils";
+import { formatCurrency, cn, getNextDueDate, getRecurringStatus, toMonthlyAmount, type RecurringFrequency } from "@/lib/utils";
 
 const TrendChart = dynamic(
   () => import("@/components/charts/TrendChart").then((m) => ({ default: m.TrendChart })),
@@ -207,6 +207,14 @@ export function DashboardContent({
     const status = getRecurringStatus(nextDue, r.endDate ? new Date(r.endDate) : null);
     return status === "due" || status === "overdue";
   }).length;
+
+  const fixedAvailableCash = initialRecurring.reduce((sum, r) => {
+    const nextDue = getNextDueDate(r.frequency as RecurringFrequency, new Date(r.startDate), r.lastRun ? new Date(r.lastRun) : null);
+    if (getRecurringStatus(nextDue, r.endDate ? new Date(r.endDate) : null) === "ended") return sum;
+    const monthly = toMonthlyAmount(r.frequency as RecurringFrequency, r.amount);
+    return r.type === "income" ? sum + monthly : sum - monthly;
+  }, 0);
+
   const [showRecurring, setShowRecurring] = useState(dueCount > 0);
 
   // Seed IDB with fresh server data on mount / when server data updates
@@ -510,10 +518,11 @@ export function DashboardContent({
       </div>
 
       {/* Summary stats */}
-      <div data-testid="stat-cards" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div data-testid="stat-cards" className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Income" amount={displayIncome} variant="income" icon="📈" momDelta={incomeDelta} />
         <StatCard label="Expenses" amount={displayExpenses} variant="expense" icon="📉" momDelta={expenseDelta} />
         <StatCard label="Net" amount={displayBalance} variant="balance" icon="⚖️" />
+        <StatCard label="Fixed Cash" amount={fixedAvailableCash} variant="balance" icon="🏦" />
       </div>
 
       {/* Charts row */}
