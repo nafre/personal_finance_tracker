@@ -67,6 +67,9 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
   const [editing, setEditing] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   const [confirmingPost, setConfirmingPost] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
+  const [isSkipping, setIsSkipping] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const nextDue = getNextDueDate(
     rec.frequency as RecurringFrequency,
     new Date(rec.startDate),
@@ -85,6 +88,7 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
   function handlePost() {
     setPostError(null);
     setConfirmingPost(false);
+    setIsPosting(true);
     const originalRec = rec;
 
     // Optimistic: update the row's status immediately
@@ -95,11 +99,13 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
       .catch(() => {
         onUpdated(originalRec);
         setPostError("Post failed — please try again.");
-      });
+      })
+      .finally(() => setIsPosting(false));
   }
 
   function handleSkip() {
     setPostError(null);
+    setIsSkipping(true);
     const originalRec = rec;
     onSkipped?.({ ...rec, lastRun: nextDue });
     skipRecurringTransaction(rec.id)
@@ -107,16 +113,19 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
       .catch(() => {
         onSkipped?.(originalRec);
         setPostError("Skip failed — please try again.");
-      });
+      })
+      .finally(() => setIsSkipping(false));
   }
 
   function handleDelete() {
     if (!confirm(`Delete "${rec.name}"?`)) return;
+    setIsDeleting(true);
     // Optimistic: remove from UI immediately, restore on failure
     onDeleted(rec.id);
     deleteRecurringTransaction(rec.id).catch(() => {
       onRestored(rec);
       onDeleteError("Delete failed — please try again.");
+      setIsDeleting(false);
     });
   }
 
@@ -213,10 +222,11 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
         {canSkip && (
           <button
             onClick={handleSkip}
+            disabled={isSkipping || isPosting}
             title="Skip this occurrence"
-            className="text-xs px-2 py-1.5 rounded-lg font-medium transition-colors border border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-400"
+            className="text-xs px-2 py-1.5 rounded-lg font-medium transition-colors border border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-400 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Skip
+            {isSkipping ? "Skipping…" : "Skip"}
           </button>
         )}
         {canPost && (
@@ -224,9 +234,10 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
             <>
               <button
                 onClick={handlePost}
+                disabled={isPosting}
                 title="Confirm post"
                 className={cn(
-                  "text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors",
+                  "text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
                   status === "overdue"
                     ? "bg-rose-600 hover:bg-rose-500 text-white"
                     : status === "due"
@@ -234,11 +245,12 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
                     : "border border-zinc-600 text-zinc-300 hover:bg-zinc-700"
                 )}
               >
-                Confirm?
+                {isPosting ? "Posting…" : "Confirm?"}
               </button>
               <button
                 onClick={() => setConfirmingPost(false)}
-                className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                disabled={isPosting}
+                className="text-xs text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -246,9 +258,10 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
           ) : (
             <button
               onClick={() => setConfirmingPost(true)}
+              disabled={isPosting || isSkipping}
               title="Post now"
               className={cn(
-                "text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors",
+                "text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
                 status === "overdue"
                   ? "bg-rose-600 hover:bg-rose-500 text-white"
                   : status === "due"
@@ -262,8 +275,9 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
         )}
         <button
           onClick={() => setEditing(true)}
+          disabled={isPosting || isSkipping || isDeleting}
           title="Edit"
-          className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors rounded"
+          className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors rounded disabled:opacity-50"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -271,12 +285,20 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
         </button>
         <button
           onClick={handleDelete}
-          title="Delete"
-          className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors rounded"
+          disabled={isDeleting || isPosting || isSkipping}
+          title={isDeleting ? "Deleting…" : "Delete"}
+          className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors rounded disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
+          {isDeleting ? (
+            <svg className="animate-spin h-3.5 w-3.5 text-rose-400" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          )}
         </button>
       </div>
     </div>

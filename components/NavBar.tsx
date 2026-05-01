@@ -27,6 +27,12 @@ function ChevronRightIcon() {
   );
 }
 
+function dispatchNavStart(href: string, currentPathname: string) {
+  if (currentPathname !== href) {
+    window.dispatchEvent(new Event("nav-start"));
+  }
+}
+
 export function NavBar() {
   const pathname = usePathname();
   const { collapsed, toggle } = useSidebar();
@@ -81,6 +87,7 @@ export function NavBar() {
                 key={item.href}
                 href={item.href}
                 title={collapsed ? item.label : undefined}
+                onClick={() => dispatchNavStart(item.href, pathname)}
                 className={cn(
                   "flex items-center rounded-lg text-sm font-medium transition-colors w-full",
                   collapsed ? "justify-center py-3" : "gap-3 px-3 py-2.5",
@@ -122,6 +129,7 @@ export function NavBar() {
           <Link
             key={item.href}
             href={item.href}
+            onClick={() => dispatchNavStart(item.href, pathname)}
             className={cn(
               "flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors",
               pathname === item.href ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"

@@ -120,4 +120,13 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
+
+  @keyframes nav-progress {
+    0%   { width: 0%;   opacity: 1; }
+    70%  { width: 80%;  opacity: 1; }
+    100% { width: 100%; opacity: 0; }
+  }
+  .animate-nav-progress {
+    animation: nav-progress 500ms ease-out forwards;
+  }
 }
