@@ -384,8 +384,8 @@ export function TransactionList({
 
   if (!txs.length) {
     return (
-      <div className="text-center py-10 text-slate-500 text-sm">
-        No transactions yet — add one above!
+      <div className="text-center py-8 text-slate-500 text-sm">
+        {compact ? "No transactions this month." : "No transactions yet — add one above!"}
       </div>
     );
   }

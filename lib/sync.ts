@@ -92,6 +92,7 @@ export async function drainQueue(): Promise<{ synced: number; failed: number }> 
       await deleteQueuedOp(queueId);
       synced++;
     } catch (error) {
+      console.error("[sync] Failed to sync op", { op: op.op, resolvedId, error });
       await patchTransaction(resolvedId, { syncError: String(error) });
       failed++;
       break; // Stop draining to preserve causal order

@@ -22,6 +22,8 @@ model Transaction {
 
   @@index([userId])
   @@index([userId, date])
+  @@index([userId, category])
+  @@index([userId, type, date])
   @@map("transactions")
 }
 
@@ -37,6 +39,20 @@ model Category {
   @@unique([userId, name])
   @@index([userId])
   @@map("categories")
+}
+
+model Budget {
+  id        String   @id @default(cuid())
+  userId    String
+  category  String   // "_overall_" for the global monthly budget
+  amount    Float
+  period    String   @default("monthly")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, category])
+  @@index([userId])
+  @@map("budgets")
 }
 
 model RecurringTransaction {
@@ -57,5 +73,6 @@ model RecurringTransaction {
 
   @@index([userId])
   @@index([userId, isActive])
+  @@index([userId, frequency])
   @@map("recurring_transactions")
 }

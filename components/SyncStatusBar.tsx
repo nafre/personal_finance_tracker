@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSyncContext } from "@/context/SyncProvider";
 
 export function SyncStatusBar() {
-  const { isOnline, pendingCount, isSyncing, syncNow } = useSyncContext();
+  const { isOnline, pendingCount, failedCount, isSyncing, syncNow } = useSyncContext();
   const [showSynced, setShowSynced] = useState(false);
   const prevPendingRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -40,6 +40,27 @@ export function SyncStatusBar() {
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
         <span>Syncing changes…</span>
+      </div>
+    );
+  }
+
+  if (failedCount > 0) {
+    return (
+      <div data-testid="sync-status-error" className="flex items-center gap-2.5 text-xs bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2 text-rose-400">
+        <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15.75h.007v.008H12v-.008z" />
+        </svg>
+        <span>
+          <span className="font-semibold tabular-nums">{failedCount}</span>{" "}
+          {failedCount === 1 ? "change" : "changes"} failed to sync
+        </span>
+        <button
+          onClick={syncNow}
+          className="ml-auto font-medium text-rose-300 hover:text-rose-100 underline underline-offset-2 transition-colors cursor-pointer"
+        >
+          Retry
+        </button>
       </div>
     );
   }

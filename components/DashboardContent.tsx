@@ -12,6 +12,12 @@ import { SyncStatusBar } from "@/components/SyncStatusBar";
 import { useSyncContext } from "@/context/SyncProvider";
 import { seedIDBFromServer, getTransactionsByMonth } from "@/lib/idb";
 import { formatCurrency, cn, getNextDueDate, getRecurringStatus, toMonthlyAmount, type RecurringFrequency } from "@/lib/utils";
+import { BudgetProgress } from "@/components/budgets/BudgetProgress";
+
+const BudgetManager = dynamic(
+  () => import("@/components/budgets/BudgetManager").then((m) => ({ default: m.BudgetManager })),
+  { ssr: false }
+);
 
 const TrendChart = dynamic(
   () => import("@/components/charts/TrendChart").then((m) => ({ default: m.TrendChart })),
@@ -58,6 +64,12 @@ interface RecurringTransaction {
   updatedAt: Date;
 }
 
+interface Budget {
+  id: string;
+  category: string;
+  amount: number;
+}
+
 interface DashboardContentProps {
   initialTransactions: Transaction[];
   initialTotalIncome: number;
@@ -67,6 +79,7 @@ interface DashboardContentProps {
   initialDailyData: DailyData[];
   initialTopCategory: CategoryData | null;
   initialRecurring: RecurringTransaction[];
+  initialBudgets: Budget[];
   month: number;
   year: number;
   prevTotalExpenses: number;
@@ -184,6 +197,7 @@ export function DashboardContent({
   initialDailyData,
   initialTopCategory,
   initialRecurring,
+  initialBudgets,
   month,
   year,
   prevTotalExpenses,
@@ -201,6 +215,8 @@ export function DashboardContent({
   const [topCategory] = useState(initialTopCategory);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
+  const [budgets] = useState<Budget[]>(initialBudgets);
+  const [showBudgetManager, setShowBudgetManager] = useState(false);
 
   const dueCount = initialRecurring.filter((r) => {
     const nextDue = getNextDueDate(r.frequency as RecurringFrequency, new Date(r.startDate), r.lastRun ? new Date(r.lastRun) : null);
@@ -559,6 +575,56 @@ export function DashboardContent({
         </div>
       </div>
 
+      {/* Budget overview */}
+      {budgets.length > 0 && (
+        <div data-testid="budget-overview" className="card space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
+              <h3 className="text-sm font-semibold text-slate-200">Budget</h3>
+            </div>
+            <button
+              onClick={() => setShowBudgetManager(true)}
+              className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+            >
+              Manage →
+            </button>
+          </div>
+          <div className="space-y-3">
+            {budgets.map((b) => {
+              const spent =
+                b.category === "_overall_"
+                  ? displayExpenses
+                  : (categoryData.find((c) => c.name === b.category)?.value ?? 0);
+              return (
+                <BudgetProgress
+                  key={b.id}
+                  category={b.category}
+                  budget={b.amount}
+                  spent={spent}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Set up budgets CTA — shown when no budgets exist */}
+      {budgets.length === 0 && (
+        <div className="card flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-300">No budgets set</p>
+            <p className="text-xs text-slate-500">Track spending against monthly limits</p>
+          </div>
+          <button
+            onClick={() => setShowBudgetManager(true)}
+            className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors font-medium shrink-0 ml-4"
+          >
+            Set up →
+          </button>
+        </div>
+      )}
+
       {/* Recent transactions */}
       <div className="card">
         <div className="flex items-center justify-between mb-3">
@@ -580,6 +646,9 @@ export function DashboardContent({
           compact
         />
       </div>
+
+      {/* Budget manager modal */}
+      {showBudgetManager && <BudgetManager onClose={() => setShowBudgetManager(false)} />}
 
       {/* Mobile bottom sheet for quick add */}
       <QuickAddSheet

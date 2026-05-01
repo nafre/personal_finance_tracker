@@ -125,65 +125,86 @@ export async function getDashboardData(month: number, year: number) {
 
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 0, 23, 59, 59, 999); // last ms of month
+  const dateFilter = { gte: start, lte: end };
 
-  const transactions = (
-    await db.transaction.findMany({
-      where: {
-        userId,
-        date: { gte: start, lte: end },
-      },
+  // Run aggregation queries + a bounded recent-transactions query in parallel.
+  const [transactionsRaw, totalsByType, categoryBreakdown, dailyRows] = await Promise.all([
+    db.transaction.findMany({
+      where: { userId, date: dateFilter },
       orderBy: { date: "desc" },
-    })
-  ).map(normalizeTx);
+      take: 500,
+    }),
+    db.transaction.groupBy({
+      by: ["type"],
+      where: { userId, date: dateFilter },
+      _sum: { amount: true },
+    }),
+    db.transaction.groupBy({
+      by: ["category"],
+      where: { userId, type: "expense", date: dateFilter },
+      _sum: { amount: true },
+      orderBy: { _sum: { amount: "desc" } },
+    }),
+    IS_SQLITE
+      ? db.$queryRaw<Array<{ day: string; type: string; total: number }>>`
+          SELECT strftime('%Y-%m-%d', date) AS day, type, SUM(amount) AS total
+          FROM transactions
+          WHERE userId = ${userId} AND date >= ${start} AND date <= ${end}
+          GROUP BY day, type
+        `
+      : db.$queryRaw<Array<{ day: Date; type: string; total: number | bigint }>>`
+          SELECT date_trunc('day', date) AS day, type, SUM(amount) AS total
+          FROM transactions
+          WHERE "userId" = ${userId} AND date >= ${start} AND date <= ${end}
+          GROUP BY day, type
+        `,
+  ]);
 
-  // Aggregate
+  const transactions = transactionsRaw.map(normalizeTx);
+
+  // Totals
   let totalIncome = 0;
   let totalExpenses = 0;
-  const categoryMap = new Map<string, number>();
-  const dailyMap = new Map<string, { income: number; expense: number }>();
-
-  for (const tx of transactions) {
-    if (tx.type === "income") {
-      totalIncome += tx.amount;
-    } else {
-      totalExpenses += tx.amount;
-
-      // Category breakdown (expenses only)
-      categoryMap.set(
-        tx.category,
-        (categoryMap.get(tx.category) ?? 0) + tx.amount
-      );
-    }
-
-    // Daily trend
-    const day = new Date(tx.date).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-    const existing = dailyMap.get(day) ?? { income: 0, expense: 0 };
-    if (tx.type === "income") {
-      existing.income += tx.amount;
-    } else {
-      existing.expense += tx.amount;
-    }
-    dailyMap.set(day, existing);
+  for (const row of totalsByType) {
+    const sum = row._sum.amount ?? 0;
+    if (row.type === "income") totalIncome = sum;
+    else if (row.type === "expense") totalExpenses = sum;
   }
 
-  // Sort daily data chronologically
+  // Category breakdown (already sorted desc by query)
+  const categoryData = categoryBreakdown.map((row) => ({
+    name: row.category,
+    value: Math.round((row._sum.amount ?? 0) * 100) / 100,
+  }));
+
+  // Daily aggregation — group by ISO YYYY-MM-DD then format for display
+  const dailyMap = new Map<string, { income: number; expense: number }>();
+  for (const row of dailyRows) {
+    const key =
+      typeof row.day === "string"
+        ? row.day // SQLite: already YYYY-MM-DD
+        : (() => {
+            // Postgres: Date object — format in UTC to avoid TZ drift
+            const d = new Date(row.day);
+            return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+          })();
+    const existing = dailyMap.get(key) ?? { income: 0, expense: 0 };
+    const total = Number(row.total);
+    if (row.type === "income") existing.income += total;
+    else existing.expense += total;
+    dailyMap.set(key, existing);
+  }
+
   const allDays = getDaysInMonth(year, month);
   const dailyData = allDays.map((day) => {
-    const key = new Date(year, month - 1, day).toLocaleDateString("en-US", {
+    const isoKey = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const val = dailyMap.get(isoKey) ?? { income: 0, expense: 0 };
+    const dateLabel = new Date(year, month - 1, day).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
     });
-    const val = dailyMap.get(key) ?? { income: 0, expense: 0 };
-    return { date: key, day, ...val };
+    return { date: dateLabel, day, ...val };
   });
-
-  // Category breakdown sorted by amount desc
-  const categoryData = Array.from(categoryMap.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 }));
 
   return {
     transactions,
@@ -208,38 +229,81 @@ export async function getTransactions(filters: {
   year: number;
   category?: string;
   label?: string;
-}) {
+  q?: string;
+  from?: Date;
+  to?: Date;
+  cursor?: string;
+  limit?: number;
+}): Promise<{
+  transactions: ReturnType<typeof normalizeTx>[];
+  nextCursor: string | null;
+  totalCount: number;
+  totalIncome: number;
+  totalExpenses: number;
+}> {
   const userId = await getAuthenticatedUserId();
+  const limit = filters.limit ?? 50;
 
-  const start = new Date(filters.year, filters.month - 1, 1);
-  const end = new Date(filters.year, filters.month, 0, 23, 59, 59, 999);
+  // Date range: prefer explicit from/to, else fall back to month/year window
+  const start = filters.from ?? new Date(filters.year, filters.month - 1, 1);
+  const end = filters.to ?? new Date(filters.year, filters.month, 0, 23, 59, 59, 999);
 
-  // SQLite has no native array `has` filter — fetch then filter in JS.
+  const baseWhere = {
+    userId,
+    date: { gte: start, lte: end },
+    ...(filters.category ? { category: filters.category } : {}),
+    ...(filters.q ? { note: { contains: filters.q } } : {}),
+  };
+
+  // SQLite: no native array `has` — fetch all matching then apply label filter + cursor in JS
   if (IS_SQLITE && filters.label) {
-    const rows = await db.transaction.findMany({
-      where: {
-        userId,
-        date: { gte: start, lte: end },
-        ...(filters.category ? { category: filters.category } : {}),
-      },
-      orderBy: { date: "desc" },
-    });
-    return rows
-      .map(normalizeTx)
-      .filter((tx) => tx.labels.includes(filters.label!));
+    const rows = (await db.transaction.findMany({
+      where: baseWhere,
+      orderBy: [{ date: "desc" }, { id: "desc" }],
+    })).map(normalizeTx).filter((tx) => tx.labels.includes(filters.label!));
+
+    const cursorIdx = filters.cursor ? rows.findIndex((r) => r.id === filters.cursor) : -1;
+    const start = cursorIdx >= 0 ? cursorIdx + 1 : 0;
+    const page = rows.slice(start, start + limit + 1);
+    const nextCursor = page.length > limit ? page[limit - 1].id : null;
+    const finalRows = page.slice(0, limit);
+    const totalIncome = rows.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+    const totalExpenses = rows.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+    return { transactions: finalRows, nextCursor, totalCount: rows.length, totalIncome, totalExpenses };
   }
 
-  const transactions = await db.transaction.findMany({
-    where: {
-      userId,
-      date: { gte: start, lte: end },
-      ...(filters.category ? { category: filters.category } : {}),
-      ...(filters.label ? { labels: { has: filters.label } } : {}),
-    },
-    orderBy: { date: "desc" },
-  });
+  const pgWhere = {
+    ...baseWhere,
+    ...(filters.label ? { labels: { has: filters.label } } : {}),
+  };
 
-  return transactions.map(normalizeTx);
+  const [rows, totals, count] = await Promise.all([
+    db.transaction.findMany({
+      where: pgWhere,
+      orderBy: [{ date: "desc" }, { id: "desc" }],
+      take: limit + 1,
+      ...(filters.cursor ? { cursor: { id: filters.cursor }, skip: 1 } : {}),
+    }),
+    db.transaction.groupBy({
+      by: ["type"],
+      where: pgWhere,
+      _sum: { amount: true },
+    }),
+    db.transaction.count({ where: pgWhere }),
+  ]);
+
+  const hasMore = rows.length > limit;
+  const page = rows.slice(0, limit).map(normalizeTx);
+  const nextCursor = hasMore ? page[page.length - 1].id : null;
+
+  let totalIncome = 0;
+  let totalExpenses = 0;
+  for (const row of totals) {
+    if (row.type === "income") totalIncome = row._sum.amount ?? 0;
+    else if (row.type === "expense") totalExpenses = row._sum.amount ?? 0;
+  }
+
+  return { transactions: page, nextCursor, totalCount: count, totalIncome, totalExpenses };
 }
 
 // ─── Categories ───────────────────────────────────────────────────────────────
@@ -377,6 +441,31 @@ export async function postRecurringTransaction(id: string) {
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
   return normalizeTx(tx);
+}
+
+// ─── Budgets ──────────────────────────────────────────────────────────────────
+
+export async function getBudgets() {
+  const userId = await getAuthenticatedUserId();
+  return db.budget.findMany({ where: { userId }, orderBy: { category: "asc" } });
+}
+
+export async function upsertBudget(data: { category: string; amount: number }) {
+  const userId = await getAuthenticatedUserId();
+  await db.budget.upsert({
+    where: { userId_category: { userId, category: data.category } },
+    create: { userId, category: data.category, amount: data.amount },
+    update: { amount: data.amount },
+  });
+  revalidatePath("/dashboard");
+}
+
+export async function deleteBudget(id: string) {
+  const userId = await getAuthenticatedUserId();
+  const existing = await db.budget.findFirst({ where: { id, userId } });
+  if (!existing) throw new Error("Budget not found");
+  await db.budget.delete({ where: { id } });
+  revalidatePath("/dashboard");
 }
 
 export async function skipRecurringTransaction(id: string) {

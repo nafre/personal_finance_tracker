@@ -168,6 +168,17 @@ export async function getPendingCount(): Promise<number> {
   return db.count("syncQueue");
 }
 
+export async function getFailedSyncCount(): Promise<number> {
+  const db = await getDB();
+  const statuses = ["pending", "pending-update", "pending-delete"] as const;
+  let count = 0;
+  for (const status of statuses) {
+    const rows = await db.getAllFromIndex("transactions", "by-syncStatus", status);
+    count += rows.filter((t) => t.syncError).length;
+  }
+  return count;
+}
+
 export async function seedIDBFromServer(
   serverTransactions: Array<{
     id: string;

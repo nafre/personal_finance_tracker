@@ -1,4 +1,4 @@
-import { getDashboardData, getRecurringTransactions } from "@/lib/actions";
+import { getDashboardData, getRecurringTransactions, getBudgets } from "@/lib/actions";
 import { getCurrentMonthYear, getPrevMonth } from "@/lib/utils";
 import { DashboardContent } from "@/components/DashboardContent";
 
@@ -19,10 +19,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   const { month: prevMonth, year: prevYear } = getPrevMonth(month, year);
 
-  const [data, prevData, recurring] = await Promise.all([
+  const [data, prevData, recurring, budgets] = await Promise.all([
     getDashboardData(month, year),
     getDashboardData(prevMonth, prevYear),
     getRecurringTransactions(),
+    getBudgets(),
   ]);
 
   return (
@@ -35,6 +36,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       initialDailyData={data.dailyData}
       initialTopCategory={data.topCategory}
       initialRecurring={recurring}
+      initialBudgets={budgets}
       month={month}
       year={year}
       prevTotalExpenses={prevData.totalExpenses}

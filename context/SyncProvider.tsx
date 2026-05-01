@@ -10,12 +10,13 @@ import {
 } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { getPendingCount } from "@/lib/idb";
+import { getPendingCount, getFailedSyncCount } from "@/lib/idb";
 import { drainQueue, reconcileAfterSync } from "@/lib/sync";
 
 interface SyncContextValue {
   isOnline: boolean;
   pendingCount: number;
+  failedCount: number;
   isSyncing: boolean;
   syncNow: () => Promise<void>;
   refreshPendingCount: () => Promise<void>;
@@ -25,6 +26,7 @@ interface SyncContextValue {
 const SyncContext = createContext<SyncContextValue>({
   isOnline: true,
   pendingCount: 0,
+  failedCount: 0,
   isSyncing: false,
   syncNow: async () => {},
   refreshPendingCount: async () => {},
@@ -44,6 +46,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
   const [pendingCount, setPendingCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Track if we went offline so we know to sync when we come back
@@ -51,8 +54,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
   const refreshPendingCount = useCallback(async () => {
     try {
-      const count = await getPendingCount();
+      const [count, failed] = await Promise.all([getPendingCount(), getFailedSyncCount()]);
       setPendingCount(count);
+      setFailedCount(failed);
 
       // Ask the SW to register a BackgroundSync tag for when the tab is closed
       if (count > 0 && typeof navigator !== "undefined" && "serviceWorker" in navigator) {
@@ -135,7 +139,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <SyncContext.Provider
-      value={{ isOnline, pendingCount, isSyncing, syncNow, refreshPendingCount, userId }}
+      value={{ isOnline, pendingCount, failedCount, isSyncing, syncNow, refreshPendingCount, userId }}
     >
       {children}
     </SyncContext.Provider>
