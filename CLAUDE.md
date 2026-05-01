@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev          # Start dev server
+npm run dev          # Start dev server (via scripts/dev.mjs)
 npm run build        # prisma generate + next build
 npm run lint         # ESLint
 npm run db:push      # Push Prisma schema to DB (no migration history)
@@ -15,6 +15,12 @@ npm run db:seed      # Seed with tsx prisma/seed.ts
 npm run test:ui      # Run visual regression tests (Playwright)
 npm run test:ui:update  # Regenerate snapshot baselines after intentional design changes
 npm run test:ui:report  # Open the HTML test report
+
+# SQLite local dev (no Supabase credentials needed — set DATABASE_URL=file:./dev.db)
+npm run db:dev:generate  # Generate Prisma client for SQLite schema
+npm run db:dev:push      # Push SQLite schema to dev.db
+npm run db:dev:studio    # Open Prisma Studio for SQLite DB
+npm run db:dev:seed      # Seed SQLite DB
 ```
 
 ## Playwright MCP — Live Browser Debugging
@@ -77,24 +83,37 @@ TEST_PASSWORD=<your plaintext login password>
 
 Then generate initial snapshots: `npm run test:ui:update`
 
-No test suite exists yet.
-
 ## Environment
 
-Copy `.env.example` to `.env.local`. Required variables: `POSTGRES_PRISMA_URL` (pooled, pgbouncer — Supabase-Vercel integration), `POSTGRES_URL_NON_POOLING` (direct, for migrations), `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and optionally `APP_USER_ID` (fallback user ID when session lacks one).
+Copy `.env.example` to `.env.local`. Required variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `POSTGRES_PRISMA_URL` | Pooled connection (pgbouncer) — Supabase-Vercel integration |
+| `POSTGRES_URL_NON_POOLING` | Direct connection — used by `db:push` / `db:migrate` |
+| `NEXTAUTH_SECRET` | Random secret for JWT signing (`openssl rand -base64 32`) |
+| `NEXTAUTH_URL` | App base URL (e.g. `http://localhost:3000`) |
+| `ADMIN_EMAIL` | Login email for the single app user |
+| `ADMIN_PASSWORD_HASH` | bcryptjs hash of the login password |
+| `APP_USER_ID` | Stable user ID written to the DB at first sign-in |
+| `DATABASE_URL` | **SQLite only** — set to `file:./dev.db` to skip Supabase entirely |
+
+When `DATABASE_URL` is set, all `POSTGRES_*` variables are ignored and the app uses SQLite via `prisma/schema.sqlite.prisma`.
 
 ## Architecture
 
-**Stack:** Next.js 15 App Router · React 18 · Prisma (PostgreSQL/Neon) · NextAuth v4 · Recharts · Tailwind CSS · IndexedDB (`idb@8`)
+**Stack:** Next.js 15 App Router · React 18 · Prisma 6 (PostgreSQL/Supabase or SQLite) · NextAuth v4 · Recharts · Tailwind CSS · IndexedDB (`idb@8`) · `bcryptjs` (password hashing) · `clsx` + `tailwind-merge` (`cn()` helper)
 
 ### Data flow
 
 All mutations go through `lib/actions.ts` (`"use server"` file). Every transaction mutation calls `revalidatePath("/dashboard")` and `revalidatePath("/transactions")` — **not** `revalidatePath("/")`, because the root page is just a redirect and revalidating it triggers an unwanted navigation cycle.
 
 The dashboard uses a **hybrid render pattern**:
-1. `app/(dashboard)/dashboard/page.tsx` is a server component — fetches all data via `getDashboardData()` and `getRecurringTransactions()` in parallel, passes results as `initial*` props.
+1. `app/(dashboard)/dashboard/page.tsx` is a server component — reads `?month=&year=` search params (defaults to current month), then fetches `getDashboardData(month, year)`, `getDashboardData(prevMonth, prevYear)`, and `getRecurringTransactions()` in parallel, passing results as `initial*` props.
 2. `DashboardContent` is a client component that holds the live state. It receives the initial data once on mount and manages optimistic updates itself.
 3. After a mutation completes, `DashboardContent.handleAdd` / `handleDelete` update all affected state slices (`transactions`, `totalIncome`, `totalExpenses`, `netBalance`, `categoryData`) so the UI reflects changes without waiting for a server re-render.
+
+Props passed to `DashboardContent`: `initialTransactions`, `initialTotalIncome`, `initialTotalExpenses`, `initialNetBalance`, `initialCategoryData`, `initialDailyData`, `initialTopCategory`, `initialRecurring`, `month`, `year`, `prevTotalExpenses`, `prevTotalIncome`, `prevCategoryData`.
 
 The transactions page (`/transactions`) is a **fully client-side** page — it fetches data via server actions inside `useEffect` on filter changes, rather than using server component rendering.
 
@@ -115,8 +134,9 @@ The app is offline-capable. Mutations made without network connectivity are queu
    - `applyLocalMutation(op, data)` — writes to IDB + enqueues when offline. For `add`, generates a `pending_${timestamp}_${random}` temp ID. For pending-adds that are subsequently edited, updates the queue entry in-place rather than adding a second UPDATE op.
    - `drainQueue()` — processes `syncQueue` in insertion order, POST-ing each op to `/api/sync`. On `add` success, calls `replaceTempId` to swap the temp ID for the real server ID (atomic IDB transaction that also remaps any subsequent queue entries referencing the old temp ID). Stops on first failure to preserve ordering.
    - `seedIDBFromServer(transactions, userId)` — upserts server data into IDB as `synced`; never overwrites pending records.
+   - `reconcileAfterSync(userId)` — calls `getTransactionIds()` (server action) then `reconcileWithServer()` (IDB) to delete any local IDB records whose IDs no longer exist on the server. Called by `SyncProvider` on first load when online.
 
-3. **`app/api/sync/route.ts`** — `POST /api/sync`. REST endpoint used by the service worker (which cannot call server actions). Accepts `{ op, id?, payload? }`, validates session cookie, applies the same ownership checks as `lib/actions.ts`. Returns `{ success: true, id? }`.
+3. **`app/api/sync/route.ts`** — `POST /api/sync`. REST endpoint used by the service worker (which cannot call server actions). Accepts `{ op, id?, payload? }`, validates session cookie, applies the same ownership checks as `lib/actions.ts`. Returns `{ success: true, id? }`. For `add` ops uses upsert on `clientId` (the temp ID) to safely deduplicate retries.
 
 4. **`context/SyncProvider.tsx`** — React context wrapping the whole app (inside `SessionProvider`). Exposes `{ isOnline, pendingCount, isSyncing, syncNow, refreshPendingCount, userId }`. Registers `/sw.js`, listens for `online`/`offline` events, auto-calls `syncNow()` on reconnect. Registers the `"expense-sync"` BackgroundSync tag whenever `pendingCount > 0`.
 
@@ -155,6 +175,10 @@ App closed during sync
 - `DashboardContent` — seeds IDB on mount (`seedIDBFromServer`), loads pending items from IDB into `pendingTransactions` state (refreshed when `pendingCount` changes), merges with server list (deduped by ID), adds pending income/expense deltas to stat cards.
 - `SyncStatusBar` — amber banner when offline, indigo spinner when syncing; rendered at the top of the dashboard.
 
+### SQLite mode
+
+When `DATABASE_URL=file:./dev.db` is set, the app targets `prisma/schema.sqlite.prisma` instead of the PostgreSQL schema. SQLite does not support native array columns, so `labels` are stored as a JSON string. `lib/actions.ts` has an `IS_SQLITE` guard that JSON-encodes on write and JS-filters on label queries (SQLite cannot use `{ has: label }` Prisma syntax).
+
 ### Currency
 
 All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib/utils.ts` outputs `RM1,234.56` using the `ms-MY` locale. The `currency` parameter was removed — everything is MYR. The parser already strips the `rm` prefix from input tokens.
@@ -163,27 +187,36 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 
 | File | Role |
 |------|------|
-| `lib/actions.ts` | All server actions (CRUD + data fetch). Single source of truth for DB access. Includes recurring transaction actions. |
-| `lib/idb.ts` | IndexedDB singleton: `transactions` and `syncQueue` stores. Typed with `idb@8`. All IDB access goes through here. |
-| `lib/sync.ts` | Offline mutation logic: `applyLocalMutation`, `drainQueue`, `seedIDBFromServer`. |
+| `lib/actions.ts` | All server actions (CRUD + data fetch). Single source of truth for DB access. Exports: `addTransaction`, `updateTransaction`, `deleteTransaction`, `getTransactionIds`, `getDashboardData`, `getTransactions`, `getCategories`, `addCategory`, `deleteCategory`, `getRecurringTransactions`, `createRecurringTransaction`, `updateRecurringTransaction`, `deleteRecurringTransaction`, `postRecurringTransaction`, `skipRecurringTransaction`. |
+| `lib/idb.ts` | IndexedDB singleton: `transactions` and `syncQueue` stores. Typed with `idb@8`. Key exports: `putTransaction`, `patchTransaction`, `getTransactionsByMonth`, `getTransactionFromIDB`, `deleteTransactionFromIDB`, `replaceTempId`, `enqueueOp`, `getAllQueuedOps`, `deleteQueuedOp`, `updateQueuedOp`, `getPendingCount`, `seedIDBFromServer`, `reconcileWithServer`. |
+| `lib/sync.ts` | Offline mutation logic: `applyLocalMutation`, `drainQueue`, `seedIDBFromServer`, `reconcileAfterSync`. |
 | `lib/parser.ts` | Parses natural-language input into `{category, amount, type, note, labels}`. Type inferred from `INCOME_KEYWORDS`. Labels parsed from `#tag` tokens (e.g. `food 20 #date`). |
-| `lib/utils.ts` | Utilities: `formatCurrency` (RM), `getNextDueDate`, `getRecurringStatus`, `stringToColor`. |
-| `context/SyncProvider.tsx` | React context: online state, pending count, sync trigger, SW registration. Must be inside `SessionProvider`. |
+| `lib/utils.ts` | `cn`, `formatCurrency`, `formatDate`, `formatDateShort`, `getMonthName`, `getCurrentMonthYear`, `getPrevMonth`, `getNextMonth`, `getNextDueDate`, `getRecurringStatus`, `isPostedThisPeriod`, `toMonthlyAmount`, `countRemainingPayments`, `stringToColor`. |
+| `context/SyncProvider.tsx` | React context: online state, pending count, sync trigger, SW registration. Exposes `{ isOnline, pendingCount, isSyncing, syncNow, refreshPendingCount, userId }`. Runs `reconcileAfterSync` on first load while online. Must be inside `SessionProvider`. |
 | `hooks/useOnlineStatus.ts` | Thin hook: `navigator.onLine` + `online`/`offline` events. |
-| `app/api/sync/route.ts` | REST endpoint for SW background sync. Mirrors `lib/actions.ts` ownership checks. |
+| `app/api/sync/route.ts` | REST endpoint for SW background sync. Mirrors `lib/actions.ts` ownership checks. Uses upsert on `clientId` for add-op deduplication. |
 | `public/sw.js` | Service worker: static caching + BackgroundSync drain. Plain JS, raw IDB cursor API. |
 | `components/DashboardContent.tsx` | Central client component. Owns optimistic state. Seeds IDB, merges pending transactions, renders `SyncStatusBar`. |
 | `components/ExpenseInput.tsx` | Quick-add input with Exp/Inc type toggle pill. Offline-aware: routes to `applyLocalMutation` when offline. |
 | `components/TransactionList.tsx` | Renders rows with label badges and amber "Pending" badge for unsynced items; inline edit/delete are offline-aware. |
 | `components/SyncStatusBar.tsx` | Offline/syncing status indicator. |
+| `components/MonthSelector.tsx` | Month/year navigation control used on the dashboard. |
+| `components/SpendingInsights.tsx` | Spending pace/burn-rate analysis card. |
+| `components/QuickAddSheet.tsx` | Bottom-sheet wrapper for `ExpenseInput` on mobile. |
+| `components/NavBar.tsx` | Top navigation bar. |
+| `components/Providers.tsx` | Composes `SessionProvider` + `SyncProvider` at the app root. |
+| `components/charts/SpendingPieChart.tsx` | Category spending pie chart (Recharts). |
+| `components/charts/TrendChart.tsx` | Daily income/expense area chart (Recharts). |
 | `components/recurring/RecurringList.tsx` | Client component owning recurring state. Syncs from `initialRecurring` via `useEffect`. |
-| `components/recurring/RecurringRow.tsx` | Individual recurring row: status badge, Post/Edit/Delete. Uses plain async/await (not startTransition). |
+| `components/recurring/RecurringRow.tsx` | Individual recurring row: status badge, Post/Skip/Edit/Delete. Uses plain async/await (not startTransition). |
 | `components/recurring/RecurringForm.tsx` | Create/edit form for recurring rules. |
 | `prisma/schema.prisma` | Three models: `Transaction`, `Category`, `RecurringTransaction`. |
+| `prisma/schema.sqlite.prisma` | SQLite-compatible variant of the schema (used when `DATABASE_URL` is set). |
 
 ### Schema overview
 
-**Transaction** — `id, userId, amount Float, category, note?, date, type String ("income"\|"expense"), labels String[] @default([]), createdAt, updatedAt`
+**Transaction** — `id, clientId String? @unique, userId, amount Float, category, note?, date, type String ("income"\|"expense"), labels String[] @default([]), createdAt, updatedAt`
+- `clientId` stores the offline temp ID (`pending_…`) and is used by `/api/sync` to upsert offline-add ops idempotently, preventing duplicates on retry.
 
 **RecurringTransaction** — `id, userId, name, category, amount, type, frequency ("daily"\|"weekly"\|"monthly"\|"yearly"), startDate, endDate?, lastRun?, isActive, note?, createdAt, updatedAt`
 
@@ -194,6 +227,10 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 **IndexedDB `syncQueue` store** — `queueId` (autoIncrement), `op`, `tempId`, `payload`, `createdAt`. Key: `queueId`.
 
 ### Features
+
+#### Month navigation
+
+The dashboard supports historical month browsing via `?month=&year=` search params (e.g. `?month=3&year=2025`). `MonthSelector` renders prev/next arrows and updates the URL. The server component fetches both the selected month and the previous month (for MoM comparisons on stat cards).
 
 #### Income/Expense toggle
 `ExpenseInput` has an **Exp / Inc** pill toggle left of the text field. State: `manualTypeOverride` (`null` = follow parser). Resets to `null` when input is cleared.
@@ -211,6 +248,7 @@ Rules stored in `RecurringTransaction` table. Displayed in a collapsible card on
 
 - **Status logic** in `lib/utils.ts`: `getNextDueDate(frequency, startDate, lastRun)` + `getRecurringStatus(nextDue, endDate)` → `"upcoming" | "due" | "overdue" | "ended"`
 - **Posting**: `postRecurringTransaction(id)` atomically creates a `Transaction` and updates `lastRun` via `db.$transaction([...])`. Both pages are revalidated.
+- **Skipping**: `skipRecurringTransaction(id)` advances `lastRun` to the next due date without creating a transaction (marks the period as handled without recording a charge).
 - **UI sync**: `RecurringList` uses a `useEffect([initialRecurring])` to sync local state when server data arrives after `revalidatePath`.
 
 #### Offline / pending transactions
@@ -219,7 +257,9 @@ Transactions created offline get a temp ID (`pending_…`) and an amber **"Pendi
 
 ### Auth
 
-NextAuth v4 with credentials provider. `middleware.ts` protects all routes except `/login`, `/api/auth/**`, and static assets. The user ID is resolved from the session token via `getAuthenticatedUserId()` — it throws `"Unauthorized"` if the session or userId is absent (no fallback). `APP_USER_ID` in `.env` is only used in `lib/auth.ts` when constructing the initial user record at sign-in.
+NextAuth v4 with credentials provider. Single-user app — credentials are hardcoded in env (`ADMIN_EMAIL` + `ADMIN_PASSWORD_HASH`, a bcryptjs hash). No DB-backed user table. Session strategy is JWT (maxAge 30 days); user ID is stored in the token and read back via `session.user.userId`.
+
+`middleware.ts` protects all routes except `/login`, `/api/auth/**`, and static assets. The user ID is resolved from the session token via `getAuthenticatedUserId()` — it throws `"Unauthorized"` if the session or userId is absent (no fallback). `APP_USER_ID` in `.env` is used in `lib/auth.ts` when constructing the initial user record at sign-in.
 
 ### Styling
 
