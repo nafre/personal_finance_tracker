@@ -215,13 +215,20 @@ export function DashboardContent({
     void seedIDBFromServer(initialTransactions, userId);
   }, [initialTransactions, userId]);
 
-  // Load pending (unsynced) transactions from IDB and merge into display
+  // Load pending (unsynced) transactions from IDB and merge into display.
+  // Also keeps recently-synced IDB items visible (isPending: false) until
+  // router.refresh() delivers the server-confirmed version, preventing a flash.
   useEffect(() => {
     if (!userId) return;
     getTransactionsByMonth(userId, month, year)
       .then((localTxs) => {
+        const serverIdSet = new Set(transactions.map((t) => t.id));
         const pending = localTxs
-          .filter((t) => t.syncStatus !== "synced" && t.syncStatus !== "pending-delete")
+          .filter((t) => {
+            if (t.syncStatus === "pending-delete") return false;
+            if (t.syncStatus === "synced") return !serverIdSet.has(t.id);
+            return true;
+          })
           .map((t): Transaction => ({
             id: t.id,
             category: t.category,
@@ -230,12 +237,12 @@ export function DashboardContent({
             note: t.note,
             labels: t.labels,
             date: t.date,
-            isPending: true,
+            isPending: t.syncStatus !== "synced",
           }));
         setPendingTransactions(pending);
       })
       .catch(() => {});
-  }, [userId, month, year, pendingCount]);
+  }, [userId, month, year, pendingCount, transactions]);
 
   // Merged list: pending items first, deduped against server list
   const mergedTransactions = useMemo(() => {

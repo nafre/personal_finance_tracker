@@ -66,6 +66,7 @@ function formatRelativeDate(date: Date): string {
 export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, onDeleteError, onUpdated, onTransactionPosted }: RecurringRowProps) {
   const [editing, setEditing] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
+  const [confirmingPost, setConfirmingPost] = useState(false);
   const nextDue = getNextDueDate(
     rec.frequency as RecurringFrequency,
     new Date(rec.startDate),
@@ -79,6 +80,7 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
 
   function handlePost() {
     setPostError(null);
+    setConfirmingPost(false);
     const originalRec = rec;
 
     // Optimistic: update the row's status immediately
@@ -145,7 +147,8 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
   };
 
   const { label: statusLabel, cls: statusCls } = statusConfig[status];
-  const canPost = status === "due" || status === "overdue";
+  const canPost = status === "due" || status === "overdue" || status === "upcoming";
+  const canSkip = status === "due" || status === "overdue";
 
   return (
     <>
@@ -198,28 +201,55 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
 
       {/* Actions */}
       <div className="flex items-center gap-1 shrink-0">
+        {canSkip && (
+          <button
+            onClick={handleSkip}
+            title="Skip this occurrence"
+            className="text-xs px-2 py-1.5 rounded-lg font-medium transition-colors border border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-400"
+          >
+            Skip
+          </button>
+        )}
         {canPost && (
-          <>
+          confirmingPost ? (
+            <>
+              <button
+                onClick={handlePost}
+                title="Confirm post"
+                className={cn(
+                  "text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors",
+                  status === "overdue"
+                    ? "bg-rose-600 hover:bg-rose-500 text-white"
+                    : status === "due"
+                    ? "bg-amber-600 hover:bg-amber-500 text-white"
+                    : "border border-zinc-600 text-zinc-300 hover:bg-zinc-700"
+                )}
+              >
+                Confirm?
+              </button>
+              <button
+                onClick={() => setConfirmingPost(false)}
+                className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
             <button
-              onClick={handleSkip}
-              title="Skip this occurrence"
-              className="text-xs px-2 py-1.5 rounded-lg font-medium transition-colors border border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-400"
-            >
-              Skip
-            </button>
-            <button
-              onClick={handlePost}
+              onClick={() => setConfirmingPost(true)}
               title="Post now"
               className={cn(
                 "text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors",
                 status === "overdue"
                   ? "bg-rose-600 hover:bg-rose-500 text-white"
-                  : "bg-amber-600 hover:bg-amber-500 text-white"
+                  : status === "due"
+                  ? "bg-amber-600 hover:bg-amber-500 text-white"
+                  : "border border-zinc-600 text-zinc-300 hover:bg-zinc-700"
               )}
             >
               Post
             </button>
-          </>
+          )
         )}
         <button
           onClick={() => setEditing(true)}

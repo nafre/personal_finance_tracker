@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useTransition, useCallback } from "react";
+import { useState, useEffect, useTransition, useCallback, useRef } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { getTransactions, getCategories } from "@/lib/actions";
+import { useSyncContext } from "@/context/SyncProvider";
 import { TransactionList } from "@/components/TransactionList";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ExpenseInput } from "@/components/ExpenseInput";
@@ -36,6 +37,9 @@ export default function TransactionsPage() {
   const categoryFilter = searchParams.get("category") ?? "";
   const labelFilter = searchParams.get("label") ?? "";
 
+  const { pendingCount } = useSyncContext();
+  const prevPendingCountRef = useRef(pendingCount);
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isPending, startTransition] = useTransition();
@@ -51,6 +55,15 @@ export default function TransactionsPage() {
       setCategories(cats as Category[]);
     });
   }, [month, year, categoryFilter, labelFilter]);
+
+  // Silent re-fetch after sync completes — clears isPending badges without showing the loading spinner
+  useEffect(() => {
+    const prev = prevPendingCountRef.current;
+    prevPendingCountRef.current = pendingCount;
+    if (pendingCount >= prev) return;
+    getTransactions({ month, year, category: categoryFilter || undefined, label: labelFilter || undefined })
+      .then((txs) => setTransactions(txs as Transaction[]));
+  }, [pendingCount, month, year, categoryFilter, labelFilter]);
 
   function setFilter(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
