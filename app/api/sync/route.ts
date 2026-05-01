@@ -25,7 +25,8 @@ export async function POST(req: NextRequest) {
 
   try {
     if (op === "add") {
-      const { category, amount, type, note, labels, date } = payload as {
+      const { clientId, category, amount, type, note, labels, date } = payload as {
+        clientId?: string;
         category: string;
         amount: number;
         type: string;
@@ -47,17 +48,35 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: "Invalid date" }, { status: 400 });
       }
 
-      const tx = await db.transaction.create({
-        data: {
-          userId,
-          category,
-          amount: Number(amount),
-          type,
-          note: note ?? null,
-          date: date ? new Date(date) : new Date(),
-          labels: labels ?? [],
-        },
-      });
+      let tx;
+      if (clientId) {
+        tx = await db.transaction.upsert({
+          where: { clientId },
+          update: {},
+          create: {
+            userId,
+            clientId,
+            category,
+            amount: Number(amount),
+            type,
+            note: note ?? null,
+            date: date ? new Date(date) : new Date(),
+            labels: labels ?? [],
+          },
+        });
+      } else {
+        tx = await db.transaction.create({
+          data: {
+            userId,
+            category,
+            amount: Number(amount),
+            type,
+            note: note ?? null,
+            date: date ? new Date(date) : new Date(),
+            labels: labels ?? [],
+          },
+        });
+      }
 
       return NextResponse.json({ success: true, id: tx.id });
     }

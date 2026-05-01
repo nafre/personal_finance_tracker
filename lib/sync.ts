@@ -9,8 +9,10 @@ import {
   getAllQueuedOps as getOps,
   updateQueuedOp,
   seedIDBFromServer,
+  reconcileWithServer,
   type LocalTransaction,
 } from "@/lib/idb";
+import { getTransactionIds } from "@/lib/actions";
 
 export { seedIDBFromServer };
 
@@ -52,6 +54,14 @@ export async function drainQueue(): Promise<{ synced: number; failed: number }> 
           body: JSON.stringify({ op: "update", id: resolvedId, payload: op.payload }),
         });
 
+        if (res.status === 404) {
+          // Server deleted this record while we were offline — discard stale local copy
+          await deleteTransactionFromIDB(resolvedId);
+          await deleteQueuedOp(queueId);
+          synced++;
+          continue;
+        }
+
         const data = await res.json();
         if (!data.success) throw new Error(data.error ?? `HTTP ${res.status}`);
 
@@ -64,6 +74,14 @@ export async function drainQueue(): Promise<{ synced: number; failed: number }> 
           credentials: "same-origin",
           body: JSON.stringify({ op: "delete", id: resolvedId }),
         });
+
+        if (res.status === 404) {
+          // Already deleted server-side — treat as success
+          await deleteTransactionFromIDB(resolvedId);
+          await deleteQueuedOp(queueId);
+          synced++;
+          continue;
+        }
 
         const data = await res.json();
         if (!data.success) throw new Error(data.error ?? `HTTP ${res.status}`);
@@ -118,6 +136,7 @@ export async function applyLocalMutation(
       op: "add",
       tempId,
       payload: {
+        clientId: tempId,
         category: localTx.category,
         amount: localTx.amount,
         type: localTx.type,
@@ -212,4 +231,13 @@ export async function applyLocalMutation(
   }
 
   return { committed: null, wasQueued: false };
+}
+
+export async function reconcileAfterSync(userId: string): Promise<number> {
+  try {
+    const serverIds = await getTransactionIds();
+    return await reconcileWithServer(new Set(serverIds), userId);
+  } catch {
+    return 0;
+  }
 }

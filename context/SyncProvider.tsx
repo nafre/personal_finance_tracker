@@ -11,7 +11,7 @@ import {
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { getPendingCount } from "@/lib/idb";
-import { drainQueue } from "@/lib/sync";
+import { drainQueue, reconcileAfterSync } from "@/lib/sync";
 
 interface SyncContextValue {
   isOnline: boolean;
@@ -76,14 +76,18 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     setIsSyncing(true);
     try {
       const { synced } = await drainQueue();
-      if (synced > 0) {
+      let reconciled = 0;
+      if (userId) {
+        reconciled = await reconcileAfterSync(userId);
+      }
+      if (synced > 0 || reconciled > 0) {
         router.refresh();
       }
     } finally {
       setIsSyncing(false);
       await refreshPendingCount();
     }
-  }, [isSyncing, router, refreshPendingCount]);
+  }, [isSyncing, router, refreshPendingCount, userId]);
 
   // Online / offline listeners
   useEffect(() => {
@@ -120,6 +124,14 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshPendingCount();
   }, [refreshPendingCount]);
+
+  // On first load while online: reconcile IDB to catch deletions from other devices/sessions
+  useEffect(() => {
+    if (!userId) return;
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      void reconcileAfterSync(userId);
+    }
+  }, [userId]);
 
   return (
     <SyncContext.Provider

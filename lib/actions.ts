@@ -109,6 +109,15 @@ export async function deleteTransaction(id: string) {
   revalidatePath("/transactions");
 }
 
+export async function getTransactionIds(): Promise<string[]> {
+  const userId = await getAuthenticatedUserId();
+  const rows = await db.transaction.findMany({
+    where: { userId },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
 // ─── Dashboard data ───────────────────────────────────────────────────────────
 
 export async function getDashboardData(month: number, year: number) {

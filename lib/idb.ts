@@ -207,3 +207,22 @@ export async function seedIDBFromServer(
 
   await txn.done;
 }
+
+export async function reconcileWithServer(
+  serverIds: Set<string>,
+  userId: string
+): Promise<number> {
+  if (typeof window === "undefined") return 0;
+  const db = await getDB();
+  const txn = db.transaction("transactions", "readwrite");
+  const all = await txn.store.index("by-userId").getAll(IDBKeyRange.only(userId));
+  let deleted = 0;
+  for (const record of all) {
+    if (record.syncStatus === "synced" && !serverIds.has(record.id)) {
+      await txn.store.delete(record.id);
+      deleted++;
+    }
+  }
+  await txn.done;
+  return deleted;
+}

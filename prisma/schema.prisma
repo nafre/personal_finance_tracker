@@ -10,6 +10,7 @@ datasource db {
 
 model Transaction {
   id        String   @id @default(cuid())
+  clientId  String?  @unique
   userId    String
   amount    Float    // always positive — direction determined by `type`
   category  String
