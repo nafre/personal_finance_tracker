@@ -173,6 +173,25 @@ export default function TransactionsPage() {
     });
   }, []);
 
+  const handleUpdate = useCallback((id: string, data: Partial<Transaction>) => {
+    setTransactions((prev) => {
+      const old = prev.find((t) => t.id === id);
+      if (old && (data.amount !== undefined || data.type !== undefined)) {
+        const oldAmount = old.amount;
+        const newAmount = data.amount ?? old.amount;
+        const oldType = old.type;
+        const newType = data.type ?? old.type;
+        // Remove old contribution
+        if (oldType === "income") setTotalIncome((s) => s - oldAmount);
+        else setTotalExpenses((s) => s - oldAmount);
+        // Add new contribution
+        if (newType === "income") setTotalIncome((s) => s + newAmount);
+        else setTotalExpenses((s) => s + newAmount);
+      }
+      return prev.map((t) => (t.id === id ? { ...t, ...data } : t));
+    });
+  }, []);
+
   // Unique categories and labels for filter dropdowns (from all loaded transactions)
   const usedCategories = Array.from(new Set(transactions.map((t) => t.category))).sort();
   const usedLabels = Array.from(
@@ -337,6 +356,7 @@ export default function TransactionsPage() {
             <TransactionList
               transactions={transactions}
               onDelete={handleDelete}
+              onUpdate={handleUpdate}
             />
             {/* Load More */}
             {nextCursor && (

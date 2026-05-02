@@ -49,6 +49,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const [failedCount, setFailedCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // useRef mutex so rapid calls (e.g. two "online" events) can't start parallel drains
+  const isSyncingRef = useRef(false);
   // Track if we went offline so we know to sync when we come back
   const wentOfflineRef = useRef(false);
 
@@ -76,7 +78,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const syncNow = useCallback(async () => {
-    if (isSyncing) return;
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
     setIsSyncing(true);
     try {
       const { synced } = await drainQueue();
@@ -88,10 +91,11 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         router.refresh();
       }
     } finally {
+      isSyncingRef.current = false;
       setIsSyncing(false);
       await refreshPendingCount();
     }
-  }, [isSyncing, router, refreshPendingCount, userId]);
+  }, [router, refreshPendingCount, userId]);
 
   // Online / offline listeners
   useEffect(() => {

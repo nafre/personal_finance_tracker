@@ -333,7 +333,8 @@ export async function addCategory(data: {
     },
   });
 
-  revalidatePath("/");
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
   return category;
 }
 
@@ -345,7 +346,8 @@ export async function deleteCategory(id: string) {
   if (existing.isDefault) throw new Error("Cannot delete default categories");
 
   await db.category.delete({ where: { id } });
-  revalidatePath("/");
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
 }
 
 // ─── Recurring Transactions ───────────────────────────────────────────────────
@@ -392,8 +394,8 @@ export async function updateRecurringTransaction(
     name: string;
     category: string;
     amount: number;
-    type: string;
-    frequency: string;
+    type: "income" | "expense";
+    frequency: "daily" | "weekly" | "monthly" | "yearly";
     endDate: Date | null;
     isActive: boolean;
     note: string | null;

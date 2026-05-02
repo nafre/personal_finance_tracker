@@ -3,6 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 
+const IS_SQLITE = (process.env.DATABASE_URL ?? "").startsWith("file:");
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function encodeLabels(labels: string[]): any {
+  return IS_SQLITE ? JSON.stringify(labels) : labels;
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
@@ -61,7 +67,7 @@ export async function POST(req: NextRequest) {
             type,
             note: note ?? null,
             date: date ? new Date(date) : new Date(),
-            labels: labels ?? [],
+            labels: encodeLabels(labels ?? []),
           },
         });
       } else {
@@ -73,7 +79,7 @@ export async function POST(req: NextRequest) {
             type,
             note: note ?? null,
             date: date ? new Date(date) : new Date(),
-            labels: labels ?? [],
+            labels: encodeLabels(labels ?? []),
           },
         });
       }
@@ -102,7 +108,7 @@ export async function POST(req: NextRequest) {
           ...(amount !== undefined && { amount: Number(amount) }),
           ...(type !== undefined && { type }),
           ...(note !== undefined && { note: note || null }),
-          ...(labels !== undefined && { labels }),
+          ...(labels !== undefined && { labels: encodeLabels(labels) }),
         },
       });
 

@@ -13,8 +13,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const month = monthParam
     ? Math.max(1, Math.min(12, parseInt(monthParam)))
     : currentMonth;
-  const year = yearParam
-    ? parseInt(yearParam)
+  const parsedYear = yearParam ? parseInt(yearParam) : NaN;
+  const year = !isNaN(parsedYear) && parsedYear > 1900 && parsedYear < 2200
+    ? parsedYear
     : currentYear;
 
   const { month: prevMonth, year: prevYear } = getPrevMonth(month, year);
