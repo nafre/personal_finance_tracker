@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { updateTransaction, deleteTransaction } from "@/lib/actions";
+import { updateTransaction, deleteTransaction, getCategories } from "@/lib/actions";
 import { applyLocalMutation } from "@/lib/sync";
+import { CategoryCombobox } from "@/components/CategoryCombobox";
 import { useSyncContext } from "@/context/SyncProvider";
 import { formatCurrency, formatDate, cn, stringToColor } from "@/lib/utils";
 
@@ -106,11 +107,13 @@ function TransactionRow({
   onDelete,
   onUpdate,
   compact,
+  categories,
 }: {
   tx: Transaction;
   onDelete: (id: string) => void;
   onUpdate: (id: string, data: Partial<Transaction>) => void;
   compact?: boolean;
+  categories: string[];
 }) {
   const [editing, setEditing] = useState(false);
   const [editAmount, setEditAmount] = useState(tx.amount.toString());
@@ -206,10 +209,10 @@ function TransactionRow({
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-xs text-slate-400 mb-1 block">Category</label>
-            <input
-              className="input-base w-full text-sm"
+            <CategoryCombobox
               value={editCategory}
-              onChange={(e) => setEditCategory(e.target.value)}
+              onChange={setEditCategory}
+              categories={categories}
             />
           </div>
           <div>
@@ -366,11 +369,16 @@ export function TransactionList({
   compact = false,
 }: TransactionListProps) {
   const [txs, setTxs] = useState(initial);
+  const [categories, setCategories] = useState<string[]>([]);
 
   // Sync local state when the parent swaps the list (e.g. month / filter change)
   useEffect(() => {
     setTxs(initial);
   }, [initial]);
+
+  useEffect(() => {
+    getCategories().then((cats) => setCategories(cats.map((c) => c.name)));
+  }, []);
 
   function handleDelete(id: string) {
     setTxs((prev) => prev.filter((t) => t.id !== id));
@@ -399,6 +407,7 @@ export function TransactionList({
           onDelete={handleDelete}
           onUpdate={handleUpdate}
           compact={compact}
+          categories={categories}
         />
       ))}
     </div>
