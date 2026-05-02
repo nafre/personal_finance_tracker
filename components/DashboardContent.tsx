@@ -10,7 +10,7 @@ import { MonthSelector } from "@/components/MonthSelector";
 import { RecurringList } from "@/components/recurring/RecurringList";
 import { SyncStatusBar } from "@/components/SyncStatusBar";
 import { useSyncContext } from "@/context/SyncProvider";
-import { seedIDBFromServer, getTransactionsByMonth } from "@/lib/idb";
+import { seedIDBFromServer, getTransactionsByMonth, deleteTransactionFromIDB } from "@/lib/idb";
 import { formatCurrency, cn, getNextDueDate, getRecurringStatus, toMonthlyAmount, type RecurringFrequency } from "@/lib/utils";
 import { BudgetProgress } from "@/components/budgets/BudgetProgress";
 
@@ -373,6 +373,7 @@ export function DashboardContent({
 
     setTransactions((prev) => prev.filter((t) => t.id !== id));
     setPendingTransactions((prev) => prev.filter((t) => t.id !== id));
+    void deleteTransactionFromIDB(id);
 
     if (tx.type === "income") {
       setTotalIncome((p) => p - tx.amount);
@@ -380,6 +381,16 @@ export function DashboardContent({
     } else {
       setTotalExpenses((p) => p - tx.amount);
       setNetBalance((p) => p + tx.amount);
+      setCategoryData((prev) =>
+        prev
+          .map((c) =>
+            c.name === tx.category
+              ? { ...c, value: Math.round((c.value - tx.amount) * 100) / 100 }
+              : c
+          )
+          .filter((c) => c.value > 0)
+          .sort((a, b) => b.value - a.value)
+      );
     }
   }, [transactions, pendingTransactions]);
 
