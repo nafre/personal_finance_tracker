@@ -259,7 +259,7 @@ Transactions created offline get a temp ID (`pending_…`) and an amber **"Pendi
 
 NextAuth v4 with credentials provider. Single-user app — credentials are hardcoded in env (`ADMIN_EMAIL` + `ADMIN_PASSWORD_HASH`, a bcryptjs hash). No DB-backed user table. Session strategy is JWT (maxAge 30 days); user ID is stored in the token and read back via `session.user.userId`.
 
-`middleware.ts` protects all routes except `/login`, `/api/auth/**`, and static assets. The user ID is resolved from the session token via `getAuthenticatedUserId()` — it throws `"Unauthorized"` if the session or userId is absent (no fallback). `APP_USER_ID` in `.env` is used in `lib/auth.ts` when constructing the initial user record at sign-in.
+`proxy.ts` protects all routes except `/login`, `/api/auth/**`, and static assets. The user ID is resolved from the session token via `getAuthenticatedUserId()` — it throws `"Unauthorized"` if the session or userId is absent (no fallback). `APP_USER_ID` in `.env` is used in `lib/auth.ts` when constructing the initial user record at sign-in.
 
 ### Styling
 
