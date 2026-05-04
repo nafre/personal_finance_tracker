@@ -5,10 +5,12 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/context/SidebarContext";
+import { useState, useEffect } from "react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: "📊" },
   { href: "/transactions", label: "Transactions", icon: "📋" },
+  { href: "/settings", label: "Settings", icon: "🔧" },
 ];
 
 function ChevronLeftIcon() {
@@ -36,6 +38,11 @@ function dispatchNavStart(href: string, currentPathname: string) {
 export function NavBar() {
   const pathname = usePathname();
   const { collapsed, toggle } = useSidebar();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <>
@@ -81,7 +88,7 @@ export function NavBar() {
         {/* Nav links */}
         <nav className="flex-1 space-y-1">
           {NAV_ITEMS.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = mounted && pathname === item.href;
             return (
               <Link
                 key={item.href}
@@ -132,7 +139,7 @@ export function NavBar() {
             onClick={() => dispatchNavStart(item.href, pathname)}
             className={cn(
               "flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors",
-              pathname === item.href ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
+              mounted && pathname === item.href ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
             )}
           >
             <span className="text-lg leading-none">{item.icon}</span>

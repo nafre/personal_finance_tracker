@@ -42,9 +42,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const userId = session?.user?.userId ?? "";
   const router = useRouter();
 
-  const [isOnline, setIsOnline] = useState(() =>
-    typeof navigator !== "undefined" ? navigator.onLine : true
-  );
+  const [isOnline, setIsOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -96,6 +94,11 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       await refreshPendingCount();
     }
   }, [router, refreshPendingCount, userId]);
+
+  // Sync real online status after hydration
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+  }, []);
 
   // Online / offline listeners
   useEffect(() => {

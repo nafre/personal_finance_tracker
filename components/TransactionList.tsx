@@ -102,6 +102,12 @@ function LabelEditor({
   );
 }
 
+interface CategoryMeta {
+  name: string;
+  icon: string;
+  color: string;
+}
+
 function TransactionRow({
   tx,
   onDelete,
@@ -113,7 +119,7 @@ function TransactionRow({
   onDelete: (id: string) => void;
   onUpdate: (id: string, data: Partial<Transaction>) => void;
   compact?: boolean;
-  categories: string[];
+  categories: CategoryMeta[];
 }) {
   const [editing, setEditing] = useState(false);
   const [editAmount, setEditAmount] = useState(tx.amount.toString());
@@ -212,7 +218,7 @@ function TransactionRow({
             <CategoryCombobox
               value={editCategory}
               onChange={setEditCategory}
-              categories={categories}
+              categories={categories.map((c) => c.name)}
             />
           </div>
           <div>
@@ -300,7 +306,7 @@ function TransactionRow({
           isIncome ? "bg-emerald-500/15" : "bg-indigo-500/15"
         )}
       >
-        {isIncome ? "💰" : getCategoryEmoji(tx.category)}
+        {isIncome ? "💰" : (categories.find((c) => c.name === tx.category)?.icon ?? "📦")}
       </div>
 
       {/* Info — grows, truncates, labels on their own line */}
@@ -369,7 +375,7 @@ export function TransactionList({
   compact = false,
 }: TransactionListProps) {
   const [txs, setTxs] = useState(initial);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<CategoryMeta[]>([]);
 
   // Sync local state when the parent swaps the list (e.g. month / filter change)
   useEffect(() => {
@@ -377,7 +383,9 @@ export function TransactionList({
   }, [initial]);
 
   useEffect(() => {
-    getCategories().then((cats) => setCategories(cats.map((c) => c.name)));
+    getCategories().then((cats) =>
+      setCategories(cats.map((c) => ({ name: c.name, icon: c.icon, color: c.color })))
+    );
   }, []);
 
   function handleDelete(id: string) {
@@ -414,14 +422,3 @@ export function TransactionList({
   );
 }
 
-// Category → emoji mapping (best-effort, fallback to generic)
-function getCategoryEmoji(category: string): string {
-  const map: Record<string, string> = {
-    food: "🍽️", groceries: "🛒", transport: "🚗", grab: "🚗",
-    uber: "🚗", shopping: "🛍️", entertainment: "🎬", health: "💊",
-    housing: "🏠", rent: "🏠", utilities: "⚡", education: "📚",
-    coffee: "☕", travel: "✈️", gym: "🏋️", subscription: "📱",
-    dining: "🍽️", restaurant: "🍽️", misc: "📦", other: "📦",
-  };
-  return map[category.toLowerCase()] ?? "📦";
-}
