@@ -129,6 +129,9 @@ function TransactionRow({
   const [editType, setEditType] = useState<"income" | "expense">(
     tx.type as "income" | "expense"
   );
+  const [editDate, setEditDate] = useState<string>(
+    new Date(tx.date).toISOString().split("T")[0]
+  );
   const [rowError, setRowError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const { isOnline, userId, refreshPendingCount } = useSyncContext();
@@ -144,6 +147,7 @@ function TransactionRow({
       type: editType,
       note: editNote || undefined,
       labels: editLabels,
+      date: new Date(editDate),
     };
 
     if (!isOnline) {
@@ -166,6 +170,7 @@ function TransactionRow({
       type: tx.type as "income" | "expense",
       note: tx.note,
       labels: tx.labels ?? [],
+      date: tx.date,
       isPending: tx.isPending ?? false,
     };
 
@@ -212,7 +217,7 @@ function TransactionRow({
   if (editing) {
     return (
       <div className="bg-slate-800 rounded-xl p-4 space-y-3 animate-fade-in">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <div>
             <label className="text-xs text-slate-400 mb-1 block">Category</label>
             <CategoryCombobox
@@ -230,6 +235,15 @@ function TransactionRow({
               onChange={(e) => setEditAmount(e.target.value)}
               min="0"
               step="0.01"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">Date</label>
+            <input
+              type="date"
+              className="input-base w-full text-sm"
+              value={editDate}
+              onChange={(e) => setEditDate(e.target.value)}
             />
           </div>
         </div>

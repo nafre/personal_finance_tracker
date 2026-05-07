@@ -289,6 +289,14 @@ export function DashboardContent({
   const displayExpenses = totalExpenses + pendingExpenses;
   const displayBalance = displayIncome - displayExpenses;
 
+  const dailySpend = useMemo(() => {
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    return mergedTransactions
+      .filter((t) => t.type === "expense" && String(t.date).slice(0, 10) === todayStr)
+      .reduce((s, t) => s + t.amount, 0);
+  }, [mergedTransactions]);
+
   const recentCategories = useMemo(() => {
     const seen = new Set<string>();
     const result: string[] = [];
@@ -517,6 +525,9 @@ export function DashboardContent({
                 {dueCount} due
               </span>
             )}
+            <span className="text-xs text-slate-500">
+              Fixed cash: <span className={cn("tabular-nums", fixedAvailableCash >= 0 ? "text-emerald-400" : "text-rose-400")}>{formatCurrency(fixedAvailableCash)}/mo</span>
+            </span>
           </div>
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -549,7 +560,7 @@ export function DashboardContent({
         <StatCard label="Income" amount={displayIncome} variant="income" icon="📈" momDelta={incomeDelta} />
         <StatCard label="Expenses" amount={displayExpenses} variant="expense" icon="📉" momDelta={expenseDelta} />
         <StatCard label="Net" amount={displayBalance} variant="balance" icon="⚖️" />
-        <StatCard label="Fixed Cash" amount={fixedAvailableCash} variant="balance" icon="🏦" />
+        <StatCard label="Daily Spend" amount={dailySpend} variant="expense" icon="📅" />
       </div>
 
       {/* Charts row */}
