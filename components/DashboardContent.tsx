@@ -74,7 +74,6 @@ interface DashboardContentProps {
   initialTransactions: Transaction[];
   initialTotalIncome: number;
   initialTotalExpenses: number;
-  initialNetBalance: number;
   initialCategoryData: CategoryData[];
   initialDailyData: DailyData[];
   initialTopCategory: CategoryData | null;
@@ -192,7 +191,6 @@ export function DashboardContent({
   initialTransactions,
   initialTotalIncome,
   initialTotalExpenses,
-  initialNetBalance,
   initialCategoryData,
   initialDailyData,
   initialTopCategory,
@@ -209,7 +207,6 @@ export function DashboardContent({
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
   const [totalIncome, setTotalIncome] = useState(initialTotalIncome);
   const [totalExpenses, setTotalExpenses] = useState(initialTotalExpenses);
-  const [netBalance, setNetBalance] = useState(initialNetBalance);
   const [categoryData, setCategoryData] = useState(initialCategoryData);
   const [dailyData] = useState(initialDailyData);
   const [topCategory] = useState(initialTopCategory);
@@ -293,7 +290,12 @@ export function DashboardContent({
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     return mergedTransactions
-      .filter((t) => t.type === "expense" && String(t.date).slice(0, 10) === todayStr)
+      .filter((t) => {
+        if (t.type !== "expense") return false;
+        const d = new Date(t.date);
+        const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        return dStr === todayStr;
+      })
       .reduce((s, t) => s + t.amount, 0);
   }, [mergedTransactions]);
 
@@ -340,10 +342,8 @@ export function DashboardContent({
 
       if (tx.type === "income") {
         setTotalIncome((p) => p + tx.amount);
-        setNetBalance((p) => p + tx.amount);
       } else {
         setTotalExpenses((p) => p + tx.amount);
-        setNetBalance((p) => p - tx.amount);
 
         // Update category breakdown
         setCategoryData((prev) => {
@@ -385,10 +385,8 @@ export function DashboardContent({
 
     if (tx.type === "income") {
       setTotalIncome((p) => p - tx.amount);
-      setNetBalance((p) => p - tx.amount);
     } else {
       setTotalExpenses((p) => p - tx.amount);
-      setNetBalance((p) => p + tx.amount);
       setCategoryData((prev) =>
         prev
           .map((c) =>
@@ -416,17 +414,13 @@ export function DashboardContent({
       // Remove old contribution from totals, add new
       if (old.type === "income") {
         setTotalIncome((p) => p - old.amount);
-        setNetBalance((p)  => p - old.amount);
       } else {
         setTotalExpenses((p) => p - old.amount);
-        setNetBalance((p)    => p + old.amount);
       }
       if (newType === "income") {
         setTotalIncome((p) => p + newAmount);
-        setNetBalance((p)  => p + newAmount);
       } else {
         setTotalExpenses((p) => p + newAmount);
-        setNetBalance((p)    => p - newAmount);
       }
 
       setTransactions((prev) =>

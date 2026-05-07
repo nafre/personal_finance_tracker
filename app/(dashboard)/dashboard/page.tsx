@@ -32,7 +32,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       initialTransactions={data.transactions}
       initialTotalIncome={data.totalIncome}
       initialTotalExpenses={data.totalExpenses}
-      initialNetBalance={data.netBalance}
       initialCategoryData={data.categoryData}
       initialDailyData={data.dailyData}
       initialTopCategory={data.topCategory}
