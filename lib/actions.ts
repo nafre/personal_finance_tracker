@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getNextDueDate, type RecurringFrequency } from "@/lib/utils";
+import bcrypt from "bcryptjs";
 
 // SQLite stores labels as a JSON string; PostgreSQL uses a native string array.
 const IS_SQLITE = (process.env.DATABASE_URL ?? "").startsWith("file:");
@@ -488,4 +489,33 @@ export async function skipRecurringTransaction(id: string) {
 
   revalidatePath("/dashboard");
   return updated;
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<{ success: true }> {
+  const userId = await getAuthenticatedUserId();
+
+  const envHash = process.env.ADMIN_PASSWORD_HASH;
+  if (!envHash) throw new Error("Server configuration error: password hash not set");
+
+  const settings = await db.userSettings.findUnique({ where: { userId } });
+  const currentHash = settings?.passwordHash ?? envHash;
+
+  const isValid = await bcrypt.compare(currentPassword, currentHash);
+  if (!isValid) throw new Error("Current password is incorrect");
+
+  if (newPassword.length < 8) throw new Error("New password must be at least 8 characters");
+  if (newPassword === currentPassword) throw new Error("New password must differ from your current password");
+
+  const newHash = await bcrypt.hash(newPassword, 12);
+
+  await db.userSettings.upsert({
+    where: { userId },
+    create: { userId, passwordHash: newHash },
+    update: { passwordHash: newHash },
+  });
+
+  return { success: true };
 }

@@ -94,7 +94,7 @@ Copy `.env.example` to `.env.local`. Required variables:
 | `NEXTAUTH_SECRET` | Random secret for JWT signing (`openssl rand -base64 32`) |
 | `NEXTAUTH_URL` | App base URL (e.g. `http://localhost:3000`) |
 | `ADMIN_EMAIL` | Login email for the single app user |
-| `ADMIN_PASSWORD_HASH` | bcryptjs hash of the login password |
+| `ADMIN_PASSWORD_HASH` | Initial bcryptjs password hash (bootstrap only — overridden by DB once changed via Settings → Account) |
 | `APP_USER_ID` | Stable user ID written to the DB at first sign-in |
 | `DATABASE_URL` | **SQLite only** — set to `file:./dev.db` to skip Supabase entirely |
 
@@ -257,7 +257,7 @@ Transactions created offline get a temp ID (`pending_…`) and an amber **"Pendi
 
 ### Auth
 
-NextAuth v4 with credentials provider. Single-user app — credentials are hardcoded in env (`ADMIN_EMAIL` + `ADMIN_PASSWORD_HASH`, a bcryptjs hash). No DB-backed user table. Session strategy is JWT (maxAge 30 days); user ID is stored in the token and read back via `session.user.userId`.
+NextAuth v4 with credentials provider. Single-user app. `ADMIN_EMAIL` and `ADMIN_PASSWORD_HASH` (env vars) are the bootstrap credentials used on first login. Once the user changes their password via Settings → Account, the hash is stored in the `user_settings` DB table (`UserSettings` model) and takes precedence; the env var acts as a fallback for fresh deployments. No DB-backed user table beyond `UserSettings`. Session strategy is JWT (maxAge 30 days); user ID is stored in the token and read back via `session.user.userId`.
 
 `proxy.ts` protects all routes except `/login`, `/api/auth/**`, and static assets. The user ID is resolved from the session token via `getAuthenticatedUserId()` — it throws `"Unauthorized"` if the session or userId is absent (no fallback). `APP_USER_ID` in `.env` is used in `lib/auth.ts` when constructing the initial user record at sign-in.
 

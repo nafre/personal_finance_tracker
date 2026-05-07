@@ -77,3 +77,11 @@ model RecurringTransaction {
   @@index([userId, frequency])
   @@map("recurring_transactions")
 }
+
+model UserSettings {
+  userId       String   @id
+  passwordHash String
+  updatedAt    DateTime @updatedAt
+
+  @@map("user_settings")
+}

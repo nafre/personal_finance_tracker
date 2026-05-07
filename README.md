@@ -58,7 +58,8 @@ NEXTAUTH_URL="http://localhost:3000"
 
 # Your login credentials
 ADMIN_EMAIL="you@example.com"
-# Generate hash: node -e "const b=require('bcryptjs');b.hash('yourpassword',12).then(h=>console.log(h))"
+# Bootstrap hash (used on first login — change password later via Settings → Account)
+# Generate: node -e "const b=require('bcryptjs');b.hash('yourpassword',12).then(h=>console.log(h))"
 ADMIN_PASSWORD_HASH="$2a$12$..."
 
 # Stable identifier used as userId in the database — do not change after first run
@@ -153,7 +154,7 @@ In **Vercel → Settings → Environment Variables**:
 | `NEXTAUTH_SECRET` | Generated secret |
 | `NEXTAUTH_URL` | `https://your-app.vercel.app` |
 | `ADMIN_EMAIL` | Your email |
-| `ADMIN_PASSWORD_HASH` | bcrypt hash |
+| `ADMIN_PASSWORD_HASH` | Initial bcrypt hash (bootstrap only) |
 | `APP_USER_ID` | `default-user` |
 
 **5. Run migrations on first deploy**

@@ -1,6 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import { db } from "@/lib/db";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -25,10 +26,11 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const isValid = await bcrypt.compare(
-          credentials.password,
-          adminPasswordHash
-        );
+        const userId = process.env.APP_USER_ID ?? "default-user";
+        const settings = await db.userSettings.findUnique({ where: { userId } });
+        const hash = settings?.passwordHash ?? adminPasswordHash;
+
+        const isValid = await bcrypt.compare(credentials.password, hash);
 
         if (!isValid) return null;
 

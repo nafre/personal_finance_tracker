@@ -24,6 +24,8 @@ node -e "const b=require('bcryptjs'); b.hash('YOUR_PASSWORD_HERE', 12).then(h =>
 
 Copy the output (it starts with `$2a$12$...`). This is your `ADMIN_PASSWORD_HASH`.
 
+> After your first login you can change your password at any time via **Settings → Account**. The new hash is stored in the database, so you do not need to update `ADMIN_PASSWORD_HASH` in your platform environment variables.
+
 ---
 
 ## 3. Generate a NextAuth secret
