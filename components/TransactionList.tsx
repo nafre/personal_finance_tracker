@@ -147,7 +147,7 @@ function TransactionRow({
       type: editType,
       note: editNote || undefined,
       labels: editLabels,
-      date: new Date(editDate),
+      date: editDate,
     };
 
     if (!isOnline) {
@@ -180,7 +180,7 @@ function TransactionRow({
 
     // Background server sync — on failure revert state and re-open the form
     // so the user can see the error and retry with their values still filled in
-    updateTransaction(tx.id, updateData).catch(() => {
+    updateTransaction(tx.id, { ...updateData, date: new Date(editDate) }).catch(() => {
       onUpdate(tx.id, snapshot);
       setEditing(true);
       setRowError("Update failed — please try again.");
