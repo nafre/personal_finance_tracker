@@ -42,9 +42,16 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
     if (!parsed || parsed <= 0) return;
     setIsSaving(true);
     try {
-      await upsertBudget({ category: selectedCategory, amount: parsed });
-      const fresh = await getBudgets();
-      setBudgets(fresh as Budget[]);
+      const saved = await upsertBudget({ category: selectedCategory, amount: parsed });
+      setBudgets((prev) => {
+        const idx = prev.findIndex((b) => b.category === saved.category);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = saved;
+          return next;
+        }
+        return [...prev, saved].sort((a, b) => a.category.localeCompare(b.category));
+      });
       setAmount("");
       setSelectedCategory("_overall_");
     } finally {

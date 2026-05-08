@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
@@ -129,22 +130,16 @@ export async function getDashboardData(month: number, year: number) {
   const dateFilter = { gte: start, lte: end };
 
   // Run aggregation queries + a bounded recent-transactions query in parallel.
-  const [transactionsRaw, totalsByType, categoryBreakdown, dailyRows] = await Promise.all([
+  const [transactionsRaw, typeCategoryBreakdown, dailyRows] = await Promise.all([
     db.transaction.findMany({
       where: { userId, date: dateFilter },
       orderBy: { date: "desc" },
       take: 500,
     }),
     db.transaction.groupBy({
-      by: ["type"],
+      by: ["type", "category"],
       where: { userId, date: dateFilter },
       _sum: { amount: true },
-    }),
-    db.transaction.groupBy({
-      by: ["category"],
-      where: { userId, type: "expense", date: dateFilter },
-      _sum: { amount: true },
-      orderBy: { _sum: { amount: "desc" } },
     }),
     IS_SQLITE
       ? db.$queryRaw<Array<{ day: string; type: string; total: number }>>`
@@ -163,20 +158,22 @@ export async function getDashboardData(month: number, year: number) {
 
   const transactions = transactionsRaw.map(normalizeTx);
 
-  // Totals
+  // Derive totals and category breakdown from a single grouped result
   let totalIncome = 0;
   let totalExpenses = 0;
-  for (const row of totalsByType) {
+  const catMap = new Map<string, number>();
+  for (const row of typeCategoryBreakdown) {
     const sum = row._sum.amount ?? 0;
-    if (row.type === "income") totalIncome = sum;
-    else if (row.type === "expense") totalExpenses = sum;
+    if (row.type === "income") totalIncome += sum;
+    else if (row.type === "expense") {
+      totalExpenses += sum;
+      catMap.set(row.category, (catMap.get(row.category) ?? 0) + sum);
+    }
   }
 
-  // Category breakdown (already sorted desc by query)
-  const categoryData = categoryBreakdown.map((row) => ({
-    name: row.category,
-    value: Math.round((row._sum.amount ?? 0) * 100) / 100,
-  }));
+  const categoryData = Array.from(catMap.entries())
+    .map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 }))
+    .sort((a, b) => b.value - a.value);
 
   // Daily aggregation — group by ISO YYYY-MM-DD then format for display
   const dailyMap = new Map<string, { income: number; expense: number }>();
@@ -309,13 +306,13 @@ export async function getTransactions(filters: {
 
 // ─── Categories ───────────────────────────────────────────────────────────────
 
-export async function getCategories() {
+export const getCategories = cache(async function getCategories() {
   const userId = await getAuthenticatedUserId();
   return db.category.findMany({
     where: { userId },
     orderBy: [{ isDefault: "desc" }, { name: "asc" }],
   });
-}
+});
 
 export async function addCategory(data: {
   name: string;
@@ -455,12 +452,13 @@ export async function getBudgets() {
 
 export async function upsertBudget(data: { category: string; amount: number }) {
   const userId = await getAuthenticatedUserId();
-  await db.budget.upsert({
+  const budget = await db.budget.upsert({
     where: { userId_category: { userId, category: data.category } },
     create: { userId, category: data.category, amount: data.amount },
     update: { amount: data.amount },
   });
   revalidatePath("/dashboard");
+  return budget;
 }
 
 export async function deleteBudget(id: string) {

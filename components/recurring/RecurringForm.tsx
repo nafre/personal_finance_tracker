@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { cn } from "@/lib/utils";
-import { createRecurringTransaction, updateRecurringTransaction } from "@/lib/actions";
+import { createRecurringTransaction, updateRecurringTransaction, getCategories } from "@/lib/actions";
+import { CategoryCombobox } from "@/components/CategoryCombobox";
 
 type Frequency = "daily" | "weekly" | "monthly" | "yearly";
 type TxType = "income" | "expense";
@@ -51,8 +52,13 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
   const [startDate, setStartDate] = useState(initial?.startDate ?? today);
   const [endDate, setEndDate] = useState(initial?.endDate ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
+  const [categories, setCategories] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    getCategories().then((cats) => setCategories(cats.map((c) => c.name)));
+  }, []);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -110,11 +116,11 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
 
         <div>
           <label className="text-xs text-slate-400 mb-1 block">Category</label>
-          <input
-            className="input-base w-full text-sm"
-            placeholder="Salary"
+          <CategoryCombobox
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={setCategory}
+            categories={categories}
+            placeholder="Salary"
           />
         </div>
 

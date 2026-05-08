@@ -96,24 +96,24 @@ export default function TransactionsPage() {
     to: toFilter ? new Date(toFilter + "T23:59:59") : undefined,
   }), [month, year, categoryFilter, labelFilter, qFilter, fromFilter, toFilter]);
 
+  // Fetch categories once on mount — they don't change within a session
+  useEffect(() => {
+    getCategories().then((cats) => setCategories(cats as Category[]));
+  }, []);
+
   // Initial / filter-change fetch
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
     setNextCursor(null);
 
-    const filters = buildFilters();
-    Promise.all([
-      getTransactions(filters),
-      getCategories(),
-    ]).then(([result, cats]) => {
+    getTransactions(buildFilters()).then((result) => {
       if (cancelled) return;
       setTransactions(result.transactions as Transaction[]);
       setNextCursor(result.nextCursor);
       setTotalCount(result.totalCount);
       setTotalIncome(result.totalIncome);
       setTotalExpenses(result.totalExpenses);
-      setCategories(cats as Category[]);
     }).finally(() => {
       if (!cancelled) setIsLoading(false);
     });
