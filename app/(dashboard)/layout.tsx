@@ -2,6 +2,7 @@ import { NavBar } from "@/components/NavBar";
 import { MainWrapper } from "@/components/MainWrapper";
 import { SidebarProvider } from "@/context/SidebarContext";
 import { TopLoadingBar } from "@/components/TopLoadingBar";
+import { DemoBanner } from "@/components/DemoBanner";
 
 export default function DashboardLayout({
   children,
@@ -10,10 +11,13 @@ export default function DashboardLayout({
 }) {
   return (
     <SidebarProvider>
-      <div className="flex min-h-dvh">
+      <div className="flex flex-col min-h-dvh">
         <TopLoadingBar />
-        <NavBar />
-        <MainWrapper>{children}</MainWrapper>
+        <DemoBanner />
+        <div className="flex flex-1">
+          <NavBar />
+          <MainWrapper>{children}</MainWrapper>
+        </div>
       </div>
     </SidebarProvider>
   );

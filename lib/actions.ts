@@ -496,26 +496,51 @@ export async function changePassword(
   newPassword: string
 ): Promise<{ success: true }> {
   const userId = await getAuthenticatedUserId();
+  const session = await getServerSession(authOptions);
+  if (session?.user?.role === "demo") throw new Error("Demo accounts cannot change their password");
 
-  const envHash = process.env.ADMIN_PASSWORD_HASH;
-  if (!envHash) throw new Error("Server configuration error: password hash not set");
+  const user = await db.user.findUnique({ where: { id: userId } });
+  if (!user) throw new Error("User not found");
 
-  const settings = await db.userSettings.findUnique({ where: { userId } });
-  const currentHash = settings?.passwordHash ?? envHash;
-
-  const isValid = await bcrypt.compare(currentPassword, currentHash);
+  const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
   if (!isValid) throw new Error("Current password is incorrect");
 
   if (newPassword.length < 8) throw new Error("New password must be at least 8 characters");
   if (newPassword === currentPassword) throw new Error("New password must differ from your current password");
 
   const newHash = await bcrypt.hash(newPassword, 12);
-
-  await db.userSettings.upsert({
-    where: { userId },
-    create: { userId, passwordHash: newHash },
-    update: { passwordHash: newHash },
-  });
+  await db.user.update({ where: { id: userId }, data: { passwordHash: newHash } });
 
   return { success: true };
+}
+
+export async function createUser(data: {
+  email: string;
+  password: string;
+  name?: string;
+  role?: "user" | "admin" | "demo";
+}): Promise<{ id: string; email: string }> {
+  const session = await getServerSession(authOptions);
+  if (session?.user?.role !== "admin") throw new Error("Forbidden: admin only");
+  if (!data.email || !data.password) throw new Error("Email and password are required");
+  if (data.password.length < 8) throw new Error("Password must be at least 8 characters");
+
+  const existing = await db.user.findUnique({ where: { email: data.email.toLowerCase() } });
+  if (existing) throw new Error("A user with that email already exists");
+
+  const passwordHash = await bcrypt.hash(data.password, 12);
+  const user = await db.user.create({
+    data: {
+      email: data.email.toLowerCase(),
+      name: data.name ?? "User",
+      passwordHash,
+      role: data.role ?? "user",
+    },
+  });
+  return { id: user.id, email: user.email };
+}
+
+export async function getSessionRole(): Promise<string> {
+  const session = await getServerSession(authOptions);
+  return session?.user?.role ?? "user";
 }

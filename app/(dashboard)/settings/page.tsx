@@ -1,11 +1,11 @@
-import { getCategories } from "@/lib/actions";
+import { getCategories, getSessionRole } from "@/lib/actions";
 import { CategoryManager } from "@/components/CategoryManager";
 import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 
 export const metadata = { title: "Settings — Expenses" };
 
 export default async function SettingsPage() {
-  const categories = await getCategories();
+  const [categories, role] = await Promise.all([getCategories(), getSessionRole()]);
 
   return (
     <div className="max-w-lg space-y-8">
@@ -27,7 +27,13 @@ export default async function SettingsPage() {
         <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
           Account
         </h2>
-        <ChangePasswordForm />
+        {role === "demo" ? (
+          <div className="card">
+            <p className="text-sm text-slate-400">Password changes are disabled for demo accounts.</p>
+          </div>
+        ) : (
+          <ChangePasswordForm />
+        )}
       </section>
     </div>
   );
