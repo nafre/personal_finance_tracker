@@ -187,7 +187,7 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 
 | File | Role |
 |------|------|
-| `lib/actions.ts` | All server actions (CRUD + data fetch). Single source of truth for DB access. Exports: `addTransaction`, `updateTransaction`, `deleteTransaction`, `getTransactionIds`, `getDashboardData`, `getTransactions`, `getCategories`, `addCategory`, `deleteCategory`, `getRecurringTransactions`, `createRecurringTransaction`, `updateRecurringTransaction`, `deleteRecurringTransaction`, `postRecurringTransaction`, `skipRecurringTransaction`. |
+| `lib/actions.ts` | All server actions (CRUD + data fetch). Single source of truth for DB access. Exports: `addTransaction`, `updateTransaction`, `deleteTransaction`, `getTransactionIds`, `getDashboardData`, `getTransactions`, `getCategories`, `addCategory`, `deleteCategory`, `getRecurringTransactions`, `createRecurringTransaction`, `updateRecurringTransaction`, `deleteRecurringTransaction`, `postRecurringTransaction`, `skipRecurringTransaction`, `changePassword`, `createUser`, `getSessionRole`, `getUsers`, `deleteUser`, `updateUser`, `adminResetPassword`. |
 | `lib/idb.ts` | IndexedDB singleton: `transactions` and `syncQueue` stores. Typed with `idb@8`. Key exports: `putTransaction`, `patchTransaction`, `getTransactionsByMonth`, `getTransactionFromIDB`, `deleteTransactionFromIDB`, `replaceTempId`, `enqueueOp`, `getAllQueuedOps`, `deleteQueuedOp`, `updateQueuedOp`, `getPendingCount`, `seedIDBFromServer`, `reconcileWithServer`. |
 | `lib/sync.ts` | Offline mutation logic: `applyLocalMutation`, `drainQueue`, `seedIDBFromServer`, `reconcileAfterSync`. |
 | `lib/parser.ts` | Parses natural-language input into `{category, amount, type, note, labels}`. Type inferred from `INCOME_KEYWORDS`. Labels parsed from `#tag` tokens (e.g. `food 20 #date`). |
@@ -210,10 +210,15 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `components/recurring/RecurringList.tsx` | Client component owning recurring state. Syncs from `initialRecurring` via `useEffect`. |
 | `components/recurring/RecurringRow.tsx` | Individual recurring row: status badge, Post/Skip/Edit/Delete. Uses plain async/await (not startTransition). |
 | `components/recurring/RecurringForm.tsx` | Create/edit form for recurring rules. |
-| `prisma/schema.prisma` | Three models: `Transaction`, `Category`, `RecurringTransaction`. |
+| `components/UserManager.tsx` | Admin-only client component: user list (avatar, role badge, inline reset-password expand) + create form. Exports `UserRecord` interface. |
+| `components/SettingsTabs.tsx` | Client component wrapping all settings sections in a tab bar (Users / Categories / Account). Admins default to Users tab; non-admins default to Categories tab. |
+| `prisma/schema.prisma` | Four models: `User`, `Transaction`, `Category`, `RecurringTransaction`. |
 | `prisma/schema.sqlite.prisma` | SQLite-compatible variant of the schema (used when `DATABASE_URL` is set). |
 
 ### Schema overview
+
+**User** — `id, email String @unique, name, passwordHash, role String ("admin"\|"user"\|"demo"), createdAt, updatedAt`
+- No FK relations to other models — cascade deletes must be done manually in `deleteUser()` using `db.$transaction`.
 
 **Transaction** — `id, clientId String? @unique, userId, amount Float, category, note?, date, type String ("income"\|"expense"), labels String[] @default([]), createdAt, updatedAt`
 - `clientId` stores the offline temp ID (`pending_…`) and is used by `/api/sync` to upsert offline-add ops idempotently, preventing duplicates on retry.
@@ -227,6 +232,15 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 **IndexedDB `syncQueue` store** — `queueId` (autoIncrement), `op`, `tempId`, `payload`, `createdAt`. Key: `queueId`.
 
 ### Features
+
+#### User management (admin only)
+
+Admin users see a **Users** tab in Settings (non-admins see only Categories and Account tabs). The tab UI is owned by `SettingsTabs.tsx`. `UserManager.tsx` renders the user list and create form.
+
+- **Create**: Admin fills name, email, password, role → calls `createUser()` → optimistic update
+- **Reset password**: Inline expand per row → calls `adminResetPassword()` — no old password required
+- **Delete**: Calls `deleteUser()` with atomic cascade; button disabled for self and last admin
+- The settings page fetches `getUsers()` sequentially after `getSessionRole()` to avoid calling it for non-admins
 
 #### Month navigation
 
@@ -257,10 +271,533 @@ Transactions created offline get a temp ID (`pending_…`) and an amber **"Pendi
 
 ### Auth
 
-NextAuth v4 with credentials provider. Single-user app. `ADMIN_EMAIL` and `ADMIN_PASSWORD_HASH` (env vars) are the bootstrap credentials used on first login. Once the user changes their password via Settings → Account, the hash is stored in the `user_settings` DB table (`UserSettings` model) and takes precedence; the env var acts as a fallback for fresh deployments. No DB-backed user table beyond `UserSettings`. Session strategy is JWT (maxAge 30 days); user ID is stored in the token and read back via `session.user.userId`.
+NextAuth v4 with credentials provider. **Multi-user app with admin-only account creation** — no public signup. Roles: `"admin"`, `"user"`, `"demo"`.
 
-`proxy.ts` protects all routes except `/login`, `/api/auth/**`, and static assets. The user ID is resolved from the session token via `getAuthenticatedUserId()` — it throws `"Unauthorized"` if the session or userId is absent (no fallback). `APP_USER_ID` in `.env` is used in `lib/auth.ts` when constructing the initial user record at sign-in.
+`ADMIN_EMAIL` and `ADMIN_PASSWORD_HASH` (env vars) are bootstrap credentials for the first login. On bootstrap, `lib/auth.ts` auto-creates the admin `User` row in the DB with `APP_USER_ID` and `role: "admin"`. Subsequent logins use the DB record. Session strategy is JWT (maxAge 30 days); `userId` and `role` are stored in the token and read back via `session.user.userId` / `session.user.role`.
+
+**User model** (`prisma/schema.prisma`): `id, email (unique), name, passwordHash, role, createdAt, updatedAt`. Passwords are bcrypt-hashed (12 rounds).
+
+**Admin user management** (Settings → Users tab, admin only):
+- `getUsers()` — lists all users, never returns `passwordHash` (Prisma `select` excludes it)
+- `deleteUser(id)` — atomic cascade delete (budgets → recurringTransactions → categories → transactions → user); guards: no self-delete, no last-admin delete
+- `updateUser(id, data)` — change name or role; guards: no last-admin demotion
+- `adminResetPassword(id, newPassword)` — bcrypt-hashes and updates without old password
+- All admin actions call `requireAdmin()` (private helper): session check + `role === "admin"` check
+
+`proxy.ts` protects all routes except `/login`, `/api/auth/**`, and static assets. The user ID is resolved from the session token via `getAuthenticatedUserId()` — it throws `"Unauthorized"` if the session or userId is absent. `APP_USER_ID` in `.env` is used in `lib/auth.ts` when constructing the initial admin record at first sign-in.
 
 ### Styling
 
 Tailwind with dark mode forced via `class="dark"` on `<html>`. Custom utility classes (`card`, `input-base`, `btn-primary`, `badge`, etc.) are defined in `app/globals.css`.
+
+
+## Auto-generated signatures
+<!-- Updated by gen-context.js -->
+# Code signatures
+
+## deps
+```
+components\recurring\RecurringList.tsx ← RecurringRow, RecurringForm
+components\recurring\RecurringRow.tsx ← RecurringForm
+```
+
+## app
+
+### app\(dashboard)\dashboard\page.tsx
+```
+component DashboardPage
+props PageProps
+```
+
+### app\(dashboard)\layout.tsx
+```
+component DashboardLayout
+```
+
+### app\(dashboard)\settings\loading.tsx
+```
+component SettingsLoading
+```
+
+### app\(dashboard)\settings\page.tsx
+```
+component SettingsPage
+```
+
+### app\(dashboard)\transactions\page.tsx
+```
+component TransactionsPage
+hook useSearchParams
+hook useRouter
+hook usePathname
+hook useSyncContext
+hook useRef
+hook useState
+hook useEffect
+hook useCallback
+handler onAdd
+handler onChange
+handler onClick
+handler onDelete
+handler onUpdate
+```
+
+### app\(auth)\login\page.tsx
+```
+component LoginForm
+component LoginPage
+hook useRouter
+hook useSearchParams
+hook useState
+hook useTransition
+handler onSubmit
+handler onChange
+```
+
+### app\(dashboard)\dashboard\loading.tsx
+```
+component DashboardLoading
+```
+
+### app\(dashboard)\error.tsx
+```
+component DashboardError
+handler onClick
+```
+
+### app\(dashboard)\transactions\loading.tsx
+```
+component TransactionsLoading
+```
+
+### app\api\sync\route.ts
+```
+export async function POST(req)
+```
+
+### app\global-error.tsx
+```
+component GlobalError
+handler onClick
+```
+
+### app\globals.css
+```
+var --radius
+```
+
+### app\layout.tsx
+```
+component RootLayout
+```
+
+### app\not-found.tsx
+```
+component NotFound
+```
+
+### app\page.tsx
+```
+component RootPage
+```
+
+## components
+
+### components\budgets\BudgetManager.tsx
+```
+component BudgetManager
+props BudgetManagerProps
+hook useState
+hook useEffect
+export BudgetManager
+handler onClick
+handler onChange
+```
+
+### components\CategoryCombobox.tsx
+```
+component CategoryCombobox
+props CategoryComboboxProps
+hook useState
+hook useRef
+hook useEffect
+hook useDown
+export CategoryCombobox
+handler onChange
+handler onKeyDown
+handler onMouseDown
+```
+
+### components\CategoryManager.tsx
+```
+component CategoryManager
+component CategoryRow
+hook useState
+export CategoryManager
+handler onDelete
+handler onSubmit
+handler onChange
+handler onBlur
+```
+
+### components\ChangePasswordForm.tsx
+```
+component ChangePasswordForm
+hook useState
+export ChangePasswordForm
+handler onSubmit
+handler onChange
+```
+
+### components\DashboardContent.tsx
+```
+component StatCard
+component DashboardContent
+props DashboardContentProps
+hook useSyncContext
+hook useState
+hook useEffect
+hook useMemo
+hook useCallback
+export DashboardContent
+handler onBgMap
+handler onAdd
+handler onReplace
+handler onRemove
+handler onTransactionPosted
+handler onDelete
+handler onUpdate
+```
+
+### components\DemoBanner.tsx
+```
+component DemoBanner
+```
+
+### components\NavBar.tsx
+```
+component ChevronLeftIcon
+component ChevronRightIcon
+component NavBar
+hook usePathname
+hook useSidebar
+hook useState
+hook useEffect
+export NavBar
+handler onClick
+```
+
+### components\recurring\RecurringForm.tsx
+```
+component RecurringForm
+props RecurringFormProps
+hook useState
+hook useTransition
+hook useEffect
+export RecurringForm
+handler onSubmit
+handler onChange
+handler onClick
+```
+
+### components\TransactionList.tsx
+```
+component LabelBadge
+component LabelEditor
+component TransactionRow
+component TransactionList
+props TransactionListProps
+hook useState
+hook useRef
+hook useSyncContext
+hook useEffect
+export TransactionList
+handler onClick
+handler onChange
+handler onKeyDown
+handler onDelete
+handler onUpdate
+```
+
+### components\budgets\BudgetProgress.tsx
+```
+component BudgetProgress
+props BudgetProgressProps
+export BudgetProgress
+```
+
+### components\charts\SpendingPieChart.tsx
+```
+component CustomTooltip
+component CustomLegend
+component SpendingPieChart
+props SpendingPieChartProps
+export SpendingPieChart
+```
+
+### components\charts\TrendChart.tsx
+```
+component CustomTooltip
+component TrendChart
+props TrendChartProps
+export TrendChart
+```
+
+### components\ExpenseInput.tsx
+```
+component ExpenseInput
+component TypeToggle
+props ExpenseInputProps
+hook useState
+hook useRef
+hook useSyncContext
+export AddedTx
+export ExpenseInput
+handler onChange
+handler onKeyDown
+handler onClick
+```
+
+### components\MainWrapper.tsx
+```
+component MainWrapper
+hook useSidebar
+export MainWrapper
+```
+
+### components\MonthSelector.tsx
+```
+component MonthSelector
+props MonthSelectorProps
+hook useRouter
+hook usePathname
+export MonthSelector
+```
+
+### components\Providers.tsx
+```
+component Providers
+export Providers
+```
+
+### components\QuickAddSheet.tsx
+```
+component QuickAddSheet
+props QuickAddSheetProps
+export QuickAddSheet
+handler onClick
+handler onAdd
+handler onReplace
+handler onRemove
+```
+
+### components\recurring\RecurringList.tsx
+```
+component RecurringList
+props RecurringListProps
+hook useState
+hook useEffect
+export RecurringList
+handler onPosted
+handler onSkipped
+handler onDeleted
+handler onRestored
+handler onDeleteError
+handler onUpdated
+handler onTransactionPosted
+handler onSave
+```
+
+### components\recurring\RecurringRow.tsx
+```
+component RecurringRow
+props RecurringRowProps
+hook useState
+export RecurringRow
+handler onSave
+handler onClick
+```
+
+### components\SpendingInsights.tsx
+```
+component SpendingInsights
+props SpendingInsightsProps
+export SpendingInsights
+```
+
+### components\SyncStatusBar.tsx
+```
+component SyncStatusBar
+hook useSyncContext
+hook useState
+hook useRef
+hook useEffect
+export SyncStatusBar
+handler onClick
+```
+
+### components\TopLoadingBar.tsx
+```
+component TopLoadingBar
+hook usePathname
+hook useState
+hook useEffect
+export TopLoadingBar
+```
+
+### components\UserManager.tsx
+```
+component UserManager
+interface UserRecord
+props UserManagerProps
+hook useState
+export UserManager
+export UserRecord
+handler handleCreate
+handler handleDelete
+handler handleResetPassword
+```
+
+### components\SettingsTabs.tsx
+```
+component SettingsTabs
+props SettingsTabsProps
+hook useState
+export SettingsTabs
+```
+
+## context
+
+### context\SyncProvider.tsx
+```
+component SyncProvider
+hook useSyncContext
+hook useContext
+hook useSession
+hook useRouter
+hook useState
+hook useRef
+hook useCallback
+hook useEffect
+export SyncProvider
+```
+
+### context\SidebarContext.tsx
+```
+component SidebarProvider
+hook useState
+hook useEffect
+hook useContext
+export SidebarProvider
+```
+
+## e2e
+
+### e2e\helpers.ts
+```
+export function amountMasks(page) → Locator[]
+export async function waitForReady(page) → Promise<void>
+```
+
+## hooks
+
+### hooks\useOnlineStatus.ts
+```
+export function useOnlineStatus() → boolean
+```
+
+## lib
+
+### lib\actions.ts
+```
+export async function addTransaction(data)
+export async function updateTransaction(id, data)
+export async function deleteTransaction(id)
+export async function getTransactionIds() → Promise<string[]>
+export async function getDashboardData(month, year)
+export async function getTransactions(filters) → Promise<
+export async function addCategory(data)
+export async function deleteCategory(id)
+export async function getRecurringTransactions()
+export async function createRecurringTransaction(data)
+export async function updateRecurringTransaction(id, data)
+export async function deleteRecurringTransaction(id)
+export async function postRecurringTransaction(id)
+export async function getBudgets()
+export async function upsertBudget(data)
+export async function deleteBudget(id)
+export async function skipRecurringTransaction(id)
+export async function changePassword(currentPassword, newPassword) → Promise<
+export async function createUser(data) → Promise<
+export async function getSessionRole() → Promise<string>
+export async function getUsers()
+export async function deleteUser(id) → Promise<void>
+export async function updateUser(id, data) → Promise<
+export async function adminResetPassword(id, newPassword) → Promise<
+```
+
+### lib\idb.ts
+```
+export interface LocalTransaction
+  id: string
+  userId: string
+  category: string
+  amount: number
+  type: "income" | "expense"
+  note?: string
+  labels: string[]
+  date: string
+export interface QueuedOp
+  queueId?: number
+  op: "add" | "update" | "delete"
+  tempId: string
+  payload: Record<string, unknown>
+  createdAt: string
+export async function putTransaction(tx) → Promise<void>
+export async function patchTransaction(id, patch) → Promise<void>
+export async function getTransactionsByMonth(userId, month, year) → Promise<LocalTransaction[]>
+export async function getTransactionFromIDB(id) → Promise<LocalTransaction | und
+export async function deleteTransactionFromIDB(id) → Promise<void>
+export async function replaceTempId(tempId, realId, serverPatch) → Promise<void>
+export async function enqueueOp(op, "queueId">) → Promise<void>
+export async function getAllQueuedOps() → Promise<QueuedOp[]>
+export async function deleteQueuedOp(queueId) → Promise<void>
+export async function updateQueuedOp(op) → Promise<void>
+```
+
+### lib\parser.ts
+```
+export interface ParsedExpense
+  category: string
+  amount: number
+  type: "income" | "expense"
+  note?: string
+  labels: string[]
+export function parseExpenseInput(input) → ParsedExpense | null
+```
+
+### lib\sync.ts
+```
+export async function drainQueue() → Promise<
+export async function applyLocalMutation(op, data) → Promise<
+export async function reconcileAfterSync(userId) → Promise<number>
+```
+
+### lib\utils.ts
+```
+export type RecurringFrequency
+export function cn(...inputs)
+export function formatCurrency(amount) → string
+export function getNextDueDate(frequency, startDate, lastRun) → Date
+export function getRecurringStatus(nextDue, endDate) → "upcoming" | "due" | "overdue"
+export function isPostedThisPeriod(frequency, lastRun) → boolean
+export function toMonthlyAmount(frequency, amount) → number
+export function countRemainingPayments(frequency, nextDue, endDate) → number
+export function formatDate(date) → string
+export function formatDateShort(date) → string
+export function getMonthName(month) → string
+export function getCurrentMonthYear()
+export function getPrevMonth(month, year)
+export function getNextMonth(month, year)
+export function stringToColor(str) → string
+```

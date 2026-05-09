@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getNextDueDate, type RecurringFrequency } from "@/lib/utils";
+import { getNextDueDate, DEFAULT_CATEGORIES, type RecurringFrequency } from "@/lib/utils";
 import bcrypt from "bcryptjs";
 
 // SQLite stores labels as a JSON string; PostgreSQL uses a native string array.
@@ -348,6 +348,27 @@ export async function deleteCategory(id: string) {
   revalidatePath("/transactions");
 }
 
+export async function addDefaultCategories() {
+  const userId = await getAuthenticatedUserId();
+
+  const existing = await db.category.findMany({
+    where: { userId, isDefault: true },
+    select: { name: true },
+  });
+  const existingNames = new Set(existing.map((c) => c.name));
+  const missing = DEFAULT_CATEGORIES.filter((c) => !existingNames.has(c.name));
+
+  if (missing.length === 0) return [];
+
+  await db.category.createMany({
+    data: missing.map((c) => ({ ...c, userId, isDefault: true })),
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  return missing;
+}
+
 // ─── Recurring Transactions ───────────────────────────────────────────────────
 
 export async function getRecurringTransactions() {
@@ -541,4 +562,86 @@ export async function createUser(data: {
 export async function getSessionRole(): Promise<string> {
   const session = await getServerSession(authOptions);
   return session?.user?.role ?? "user";
+}
+
+// ─── Admin helpers ─────────────────────────────────────────────────────────────
+
+async function requireAdmin(): Promise<string> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) throw new Error("Unauthorized");
+  if (session.user.role !== "admin") throw new Error("Forbidden");
+  const userId = session.user.userId;
+  if (!userId) throw new Error("Unauthorized");
+  return userId;
+}
+
+export async function getUsers() {
+  await requireAdmin();
+  return db.user.findMany({
+    select: { id: true, email: true, name: true, role: true, createdAt: true, updatedAt: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function deleteUser(id: string): Promise<void> {
+  const callerId = await requireAdmin();
+  if (id === callerId) throw new Error("You cannot delete your own account");
+
+  const target = await db.user.findUnique({ where: { id }, select: { id: true, role: true } });
+  if (!target) throw new Error("Not found");
+
+  if (target.role === "admin") {
+    const adminCount = await db.user.count({ where: { role: "admin" } });
+    if (adminCount <= 1) throw new Error("Cannot delete the last admin account");
+  }
+
+  // Manual cascade — schema has no @relation FKs, so Prisma won't cascade automatically.
+  await db.$transaction([
+    db.budget.deleteMany({ where: { userId: id } }),
+    db.recurringTransaction.deleteMany({ where: { userId: id } }),
+    db.category.deleteMany({ where: { userId: id } }),
+    db.transaction.deleteMany({ where: { userId: id } }),
+    db.user.delete({ where: { id } }),
+  ]);
+
+  revalidatePath("/settings");
+}
+
+export async function updateUser(
+  id: string,
+  data: { name?: string; role?: "admin" | "user" | "demo" }
+): Promise<{ id: string; email: string; name: string; role: string }> {
+  await requireAdmin();
+
+  if (data.role && data.role !== "admin") {
+    const target = await db.user.findUnique({ where: { id }, select: { role: true } });
+    if (!target) throw new Error("Not found");
+    if (target.role === "admin") {
+      const adminCount = await db.user.count({ where: { role: "admin" } });
+      if (adminCount <= 1) throw new Error("Cannot demote the last admin account");
+    }
+  }
+
+  const updated = await db.user.update({
+    where: { id },
+    data: {
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.role !== undefined && { role: data.role }),
+    },
+    select: { id: true, email: true, name: true, role: true },
+  });
+  revalidatePath("/settings");
+  return updated;
+}
+
+export async function adminResetPassword(id: string, newPassword: string): Promise<{ success: true }> {
+  await requireAdmin();
+  if (newPassword.length < 8) throw new Error("Password must be at least 8 characters");
+
+  const target = await db.user.findUnique({ where: { id }, select: { id: true } });
+  if (!target) throw new Error("Not found");
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await db.user.update({ where: { id }, data: { passwordHash } });
+  return { success: true };
 }

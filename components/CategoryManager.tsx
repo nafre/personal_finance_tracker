@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { addCategory, deleteCategory } from "@/lib/actions";
+import { addCategory, deleteCategory, addDefaultCategories } from "@/lib/actions";
+import { DEFAULT_CATEGORIES } from "@/lib/utils";
 
 interface Category {
   id: string;
@@ -22,8 +23,34 @@ export function CategoryManager({ initialCategories }: { initialCategories: Cate
   const [icon, setIcon] = useState("📦");
   const [color, setColor] = useState("#6366f1");
   const [isAdding, setIsAdding] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const existingDefaultNames = new Set(categories.filter((c) => c.isDefault).map((c) => c.name));
+  const missingDefaults = DEFAULT_CATEGORIES.filter((c) => !existingDefaultNames.has(c.name));
+
+  async function handleRestoreDefaults() {
+    setIsRestoring(true);
+    setError("");
+    try {
+      const added = await addDefaultCategories();
+      if (added.length > 0) {
+        const newCats = added.map((c) => ({
+          id: crypto.randomUUID(),
+          name: c.name,
+          icon: c.icon,
+          color: c.color,
+          isDefault: true,
+        }));
+        setCategories((prev) => [...prev, ...newCats]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to restore defaults");
+    } finally {
+      setIsRestoring(false);
+    }
+  }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -61,6 +88,21 @@ export function CategoryManager({ initialCategories }: { initialCategories: Cate
 
   return (
     <div className="space-y-6">
+      {/* Missing defaults banner */}
+      {missingDefaults.length === DEFAULT_CATEGORIES.length && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3">
+          <p className="text-sm text-indigo-300">No default categories yet.</p>
+          <button
+            type="button"
+            onClick={handleRestoreDefaults}
+            disabled={isRestoring}
+            className="shrink-0 text-xs font-medium text-indigo-300 hover:text-indigo-100 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50"
+          >
+            {isRestoring ? "Adding…" : "Add default categories"}
+          </button>
+        </div>
+      )}
+
       {/* Category list */}
       <div data-testid="category-list" className="card divide-y divide-slate-700/50">
         {categories.length === 0 ? (

@@ -1,6 +1,25 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+export const DEFAULT_CATEGORIES = [
+  { name: "Food", icon: "🍽️", color: "#f59e0b" },
+  { name: "Groceries", icon: "🛒", color: "#84cc16" },
+  { name: "Transport", icon: "🚗", color: "#6366f1" },
+  { name: "Shopping", icon: "🛍️", color: "#8b5cf6" },
+  { name: "Entertainment", icon: "🎬", color: "#ec4899" },
+  { name: "Health", icon: "💊", color: "#10b981" },
+  { name: "Housing", icon: "🏠", color: "#14b8a6" },
+  { name: "Utilities", icon: "⚡", color: "#f97316" },
+  { name: "Education", icon: "📚", color: "#0ea5e9" },
+  { name: "Coffee", icon: "☕", color: "#a16207" },
+  { name: "Travel", icon: "✈️", color: "#0891b2" },
+  { name: "Salary", icon: "💰", color: "#22c55e" },
+  { name: "Freelance", icon: "💻", color: "#4ade80" },
+  { name: "Investment", icon: "📈", color: "#eab308" },
+  { name: "Bonus", icon: "🎁", color: "#34d399" },
+  { name: "Misc", icon: "📦", color: "#94a3b8" },
+] as const;
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
