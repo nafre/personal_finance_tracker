@@ -20,6 +20,7 @@ export interface QueuedOp {
   tempId: string;
   payload: Record<string, unknown>;
   createdAt: string;
+  retryCount?: number; // incremented on each failed drain attempt; op dropped at MAX_RETRIES
 }
 
 interface ExpenseTrackerDB extends DBSchema {
@@ -42,7 +43,7 @@ interface ExpenseTrackerDB extends DBSchema {
 }
 
 const DB_NAME = "expense-tracker-v1";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let _dbPromise: Promise<IDBPDatabase<ExpenseTrackerDB>> | null = null;
 
@@ -52,17 +53,21 @@ function getDB(): Promise<IDBPDatabase<ExpenseTrackerDB>> {
   }
   if (!_dbPromise) {
     _dbPromise = openDB<ExpenseTrackerDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        const txStore = db.createObjectStore("transactions", { keyPath: "id" });
-        txStore.createIndex("by-userId", "userId");
-        txStore.createIndex("by-date", "date");
-        txStore.createIndex("by-syncStatus", "syncStatus");
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          const txStore = db.createObjectStore("transactions", { keyPath: "id" });
+          txStore.createIndex("by-userId", "userId");
+          txStore.createIndex("by-date", "date");
+          txStore.createIndex("by-syncStatus", "syncStatus");
 
-        const queueStore = db.createObjectStore("syncQueue", {
-          keyPath: "queueId",
-          autoIncrement: true,
-        });
-        queueStore.createIndex("by-tempId", "tempId");
+          const queueStore = db.createObjectStore("syncQueue", {
+            keyPath: "queueId",
+            autoIncrement: true,
+          });
+          queueStore.createIndex("by-tempId", "tempId");
+        }
+        // v2: retryCount added to QueuedOp — schema-less field, no structural change needed.
+        // Existing records without retryCount are treated as retryCount=0 in drainQueue.
       },
     });
   }

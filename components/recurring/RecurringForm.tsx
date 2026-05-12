@@ -4,6 +4,7 @@ import { useState, useEffect, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { createRecurringTransaction, updateRecurringTransaction, getCategories } from "@/lib/actions";
 import { CategoryCombobox } from "@/components/CategoryCombobox";
+import type { CategoryOption } from "@/types";
 
 type Frequency = "daily" | "weekly" | "monthly" | "yearly";
 type TxType = "income" | "expense";
@@ -52,12 +53,14 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
   const [startDate, setStartDate] = useState(initial?.startDate ?? today);
   const [endDate, setEndDate] = useState(initial?.endDate ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    getCategories().then((cats) => setCategories(cats.map((c) => c.name)));
+    getCategories().then((cats) =>
+      setCategories(cats.map((c) => ({ name: c.name, icon: c.icon, color: c.color })))
+    );
   }, []);
 
   function handleSubmit(e: React.FormEvent) {

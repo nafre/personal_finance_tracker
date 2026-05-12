@@ -2,11 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import type { CategoryOption } from "@/types";
 
 interface CategoryComboboxProps {
   value: string;
   onChange: (value: string) => void;
-  categories: string[];
+  categories: CategoryOption[];
   placeholder?: string;
 }
 
@@ -21,15 +22,15 @@ export function CategoryCombobox({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const filtered = categories.filter((c) =>
-    c.toLowerCase().includes(value.toLowerCase())
+    c.name.toLowerCase().includes(value.toLowerCase())
   );
   const hasExactMatch = categories.some(
-    (c) => c.toLowerCase() === value.toLowerCase()
+    (c) => c.name.toLowerCase() === value.toLowerCase()
   );
   const showUseOption = value.trim() !== "" && !hasExactMatch;
-  const options = [
+  const options: (CategoryOption & { isUseOption?: boolean })[] = [
     ...filtered,
-    ...(showUseOption ? [`__use__:${value.trim()}`] : []),
+    ...(showUseOption ? [{ name: value.trim(), isUseOption: true }] : []),
   ];
 
   useEffect(() => {
@@ -45,13 +46,12 @@ export function CategoryCombobox({
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, []);
 
-  // Reset highlight whenever the filtered list changes
   useEffect(() => {
     setHighlightedIndex(-1);
   }, [value]);
 
-  function select(option: string) {
-    onChange(option.startsWith("__use__:") ? option.slice(8) : option);
+  function select(option: CategoryOption & { isUseOption?: boolean }) {
+    onChange(option.name);
     setIsOpen(false);
     setHighlightedIndex(-1);
   }
@@ -97,29 +97,28 @@ export function CategoryCombobox({
       />
       {isOpen && options.length > 0 && (
         <ul className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-auto max-h-48 py-1">
-          {options.map((option, i) => {
-            const isUseOption = option.startsWith("__use__:");
-            const label = isUseOption ? `Use "${option.slice(8)}"` : option;
-            return (
-              <li
-                key={option}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  select(option);
-                }}
-                onMouseEnter={() => setHighlightedIndex(i)}
-                className={cn(
-                  "px-3 py-2 text-sm cursor-pointer",
-                  highlightedIndex === i
-                    ? "bg-slate-700"
-                    : "hover:bg-slate-700/50",
-                  isUseOption ? "text-slate-400 italic" : "text-slate-200"
-                )}
-              >
-                {label}
-              </li>
-            );
-          })}
+          {options.map((option, i) => (
+            <li
+              key={option.isUseOption ? `__use__:${option.name}` : option.name}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                select(option);
+              }}
+              onMouseEnter={() => setHighlightedIndex(i)}
+              className={cn(
+                "px-3 py-2 text-sm cursor-pointer flex items-center gap-2",
+                highlightedIndex === i
+                  ? "bg-slate-700"
+                  : "hover:bg-slate-700/50",
+                option.isUseOption ? "text-slate-400 italic" : "text-slate-200"
+              )}
+            >
+              {!option.isUseOption && option.icon && (
+                <span className="shrink-0">{option.icon}</span>
+              )}
+              {option.isUseOption ? `Use "${option.name}"` : option.name}
+            </li>
+          ))}
         </ul>
       )}
     </div>

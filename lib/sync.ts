@@ -16,6 +16,8 @@ import { getTransactionIds } from "@/lib/actions";
 
 export { seedIDBFromServer };
 
+const MAX_RETRIES = 5;
+
 export async function drainQueue(): Promise<{ synced: number; failed: number }> {
   const ops = await getOps();
   if (ops.length === 0) return { synced: 0, failed: 0 };
@@ -29,6 +31,14 @@ export async function drainQueue(): Promise<{ synced: number; failed: number }> 
     const queueId = op.queueId!;
     // Resolve the ID: if a prior ADD in this run mapped it to a real ID, use that
     const resolvedId = tempIdMap.get(op.tempId) ?? op.tempId;
+
+    // Drop permanently-failed ops to prevent queue deadlock
+    if ((op.retryCount ?? 0) >= MAX_RETRIES) {
+      console.warn("[sync] Dropping op after max retries", { op: op.op, resolvedId, retryCount: op.retryCount });
+      await deleteQueuedOp(queueId);
+      failed++;
+      continue;
+    }
 
     try {
       if (op.op === "add") {
@@ -94,6 +104,8 @@ export async function drainQueue(): Promise<{ synced: number; failed: number }> 
     } catch (error) {
       console.error("[sync] Failed to sync op", { op: op.op, resolvedId, error });
       await patchTransaction(resolvedId, { syncError: String(error) });
+      // Increment retry count before breaking to preserve causal order
+      await updateQueuedOp({ ...op, retryCount: (op.retryCount ?? 0) + 1 });
       failed++;
       break; // Stop draining to preserve causal order
     }

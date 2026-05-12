@@ -2,12 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-
-const IS_SQLITE = (process.env.DATABASE_URL ?? "").startsWith("file:");
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function encodeLabels(labels: string[]): any {
-  return IS_SQLITE ? JSON.stringify(labels) : labels;
-}
+import { encodeLabels } from "@/lib/db-adapter";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);

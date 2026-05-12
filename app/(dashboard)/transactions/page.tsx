@@ -86,6 +86,16 @@ export default function TransactionsPage() {
     router.push(`${pathname}?${params.toString()}`);
   }
 
+  function handleExport() {
+    const params = new URLSearchParams();
+    params.set("month", String(month));
+    params.set("year", String(year));
+    if (categoryFilter) params.set("category", categoryFilter);
+    if (labelFilter) params.set("label", labelFilter);
+    if (qFilter) params.set("q", qFilter);
+    window.location.href = `/api/export?${params.toString()}`;
+  }
+
   const buildFilters = useCallback(() => ({
     month,
     year,
@@ -285,6 +295,12 @@ export default function TransactionsPage() {
               Clear all
             </button>
           )}
+          <button
+            onClick={handleExport}
+            className="text-xs text-slate-400 hover:text-slate-200 transition-colors shrink-0 border border-slate-700 hover:border-slate-500 px-2.5 py-1.5 rounded-lg"
+          >
+            Export CSV ↓
+          </button>
         </div>
       </div>
 

@@ -1,0 +1,2069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Expense Tracker — Full-Stack Course</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:          #0f172a;
+    --surface:     #1e293b;
+    --surface2:    #263044;
+    --border:      #334155;
+    --text:        #e2e8f0;
+    --text-muted:  #94a3b8;
+    --text-dim:    #64748b;
+    --accent:      #6366f1;
+    --accent-soft: #6366f120;
+    --accent-glow: #6366f140;
+    --green:       #10b981;
+    --red:         #f87171;
+    --amber:       #fbbf24;
+    --blue:        #38bdf8;
+    --purple:      #a78bfa;
+    --radius:      12px;
+    --sidebar-w:   280px;
+    --transition:  0.2s ease;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 15px;
+    overflow-x: hidden;
+  }
+
+  /* ── Sidebar ── */
+  #sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    width: var(--sidebar-w);
+    height: 100vh;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+    transition: transform var(--transition);
+  }
+
+  #sidebar-header {
+    padding: 20px 18px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #sidebar-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  #sidebar-subtitle {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  #search-wrap {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #search {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 10px 7px 32px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%2364748b' viewBox='0 0 24 24'%3E%3Cpath d='M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z' stroke='%2364748b' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 10px center;
+    transition: border-color var(--transition);
+  }
+  #search:focus { border-color: var(--accent); }
+  #search::placeholder { color: var(--text-dim); }
+
+  #nav-list {
+    overflow-y: auto;
+    flex: 1;
+    padding: 8px 0 16px;
+  }
+  #nav-list::-webkit-scrollbar { width: 4px; }
+  #nav-list::-webkit-scrollbar-track { background: transparent; }
+  #nav-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    cursor: pointer;
+    border-radius: 8px;
+    margin: 1px 8px;
+    transition: background var(--transition), color var(--transition);
+    font-size: 13px;
+    color: var(--text-muted);
+    text-decoration: none;
+    position: relative;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 8px; bottom: 8px;
+    width: 3px;
+    background: var(--accent);
+    border-radius: 0 3px 3px 0;
+  }
+  .nav-num {
+    width: 20px; height: 20px;
+    border-radius: 6px;
+    background: var(--surface2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .nav-item.active .nav-num {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  #progress-bar {
+    height: 3px;
+    background: var(--border);
+    margin: 0 14px 4px;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  #progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--purple));
+    border-radius: 2px;
+    transition: width 0.4s ease;
+    width: 0%;
+  }
+  #progress-label {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    padding-bottom: 8px;
+  }
+
+  /* ── Main Content ── */
+  #main {
+    margin-left: var(--sidebar-w);
+    min-height: 100vh;
+  }
+
+  #top-bar {
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 50;
+    backdrop-filter: blur(8px);
+    background: #0f172acc;
+  }
+
+  #breadcrumb {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  #breadcrumb span { color: var(--text-muted); }
+
+  #menu-btn {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 13px;
+  }
+
+  #content {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 48px 40px 120px;
+  }
+
+  /* ── Sections ── */
+  .module-section {
+    margin-bottom: 80px;
+    scroll-margin-top: 80px;
+  }
+
+  .module-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .module-badge {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-glow);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    font-family: "JetBrains Mono", monospace;
+    flex-shrink: 0;
+  }
+
+  .module-title-wrap { flex: 1; }
+
+  .module-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .module-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.25;
+  }
+
+  /* ── Headings ── */
+  .module-section h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 36px 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .module-section h3::before {
+    content: '';
+    width: 3px; height: 18px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+
+  .module-section h4 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 24px 0 10px;
+  }
+
+  /* ── Paragraphs ── */
+  .module-section p {
+    color: var(--text-muted);
+    margin-bottom: 14px;
+    line-height: 1.75;
+  }
+
+  .module-section p strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* ── Code Blocks ── */
+  .code-wrap {
+    position: relative;
+    margin: 16px 0;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: #0a1628;
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 14px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+
+  .code-lang {
+    font-family: "JetBrains Mono", monospace;
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .copy-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+    padding: 3px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .copy-btn:hover { background: var(--surface); color: var(--text); }
+  .copy-btn.copied { color: var(--green); border-color: var(--green); }
+
+  pre {
+    margin: 0;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    line-height: 1.65;
+    color: #c9d1d9;
+  }
+  pre::-webkit-scrollbar { height: 4px; }
+  pre::-webkit-scrollbar-track { background: transparent; }
+  pre::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* Inline code */
+  :not(pre) > code {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12.5px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    color: var(--blue);
+  }
+
+  /* Syntax highlight classes */
+  .kw  { color: #ff7b72; }   /* keywords */
+  .fn  { color: #d2a8ff; }   /* functions */
+  .st  { color: #a5d6ff; }   /* strings */
+  .cm  { color: #8b949e; font-style: italic; } /* comments */
+  .nm  { color: #79c0ff; }   /* numbers */
+  .tp  { color: #ffa657; }   /* types */
+  .op  { color: #ff7b72; }   /* operators */
+  .at  { color: #e3b341; }   /* attributes/decorators */
+  .va  { color: #c9d1d9; }   /* variables */
+  .pu  { color: #94a3b8; }   /* punctuation */
+
+  /* Diagram blocks */
+  .diagram {
+    background: #070f1e;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+  .diagram pre {
+    background: transparent;
+    padding: 0;
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .diagram-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .diagram-label svg { opacity: 0.7; }
+
+  /* Tables */
+  .table-wrap {
+    overflow-x: auto;
+    margin: 16px 0;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    background: var(--surface2);
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #1e293b;
+    font-size: 13.5px;
+    color: var(--text-muted);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  td code { font-size: 12px; }
+
+  /* Callout boxes */
+  .callout {
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin: 16px 0;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    font-size: 14px;
+  }
+  .callout-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .callout-body { color: var(--text-muted); line-height: 1.65; }
+  .callout-body strong { color: var(--text); }
+  .callout.info  { background: #1e3a5f; border: 1px solid #2563eb40; }
+  .callout.tip   { background: #14532d; border: 1px solid #16a34a40; }
+  .callout.warn  { background: #451a03; border: 1px solid #d9770640; }
+
+  /* Flow diagram boxes */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 16px 0;
+  }
+  .flow-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .flow-line {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    width: 28px;
+  }
+  .flow-dot {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    border: 2px solid var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    font-family: "JetBrains Mono", monospace;
+    flex-shrink: 0;
+  }
+  .flow-connector {
+    width: 2px;
+    height: 28px;
+    background: var(--border);
+    margin: 0;
+  }
+  .flow-content {
+    padding: 4px 0 24px;
+    flex: 1;
+  }
+  .flow-content strong {
+    display: block;
+    color: var(--text);
+    font-size: 14px;
+    margin-bottom: 4px;
+    line-height: 1.4;
+  }
+  .flow-content p {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin: 0;
+  }
+
+  /* Tag pills */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    margin: 2px;
+  }
+  .pill-green  { background: #06352220; color: var(--green); border: 1px solid #10b98130; }
+  .pill-red    { background: #3f060620; color: var(--red); border: 1px solid #f8717130; }
+  .pill-amber  { background: #451a0320; color: var(--amber); border: 1px solid #fbbf2430; }
+  .pill-blue   { background: #0c233a20; color: var(--blue); border: 1px solid #38bdf830; }
+  .pill-purple { background: #2e1a5820; color: var(--purple); border: 1px solid #a78bfa30; }
+  .pill-accent { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-glow); }
+
+  /* File map grid */
+  .file-map {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 16px 0;
+  }
+  .file-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .file-card-name {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: var(--blue);
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+  .file-card-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  /* Lists */
+  .module-section ul, .module-section ol {
+    padding-left: 20px;
+    margin: 10px 0 14px;
+  }
+  .module-section li {
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    font-size: 14.5px;
+  }
+  .module-section li strong { color: var(--text); }
+
+  /* Hero / intro card */
+  #hero {
+    background: linear-gradient(135deg, #1e293b 0%, #0f1e38 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px 40px;
+    margin-bottom: 60px;
+    position: relative;
+    overflow: hidden;
+  }
+  #hero::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, #6366f115 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  #hero-eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+  #hero h1 {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #e2e8f0, #94a3b8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  #hero-desc {
+    color: var(--text-dim);
+    font-size: 15px;
+    line-height: 1.7;
+    max-width: 560px;
+    margin-bottom: 24px;
+  }
+  #hero-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* TOC */
+  #toc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 20px 0 32px;
+  }
+  .toc-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+  }
+  .toc-card:hover {
+    border-color: var(--accent);
+    background: var(--surface2);
+    transform: translateY(-1px);
+  }
+  .toc-num {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-soft);
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .toc-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.35;
+  }
+
+  /* Divider */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 48px 0;
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    :root { --sidebar-w: 0px; }
+    #sidebar {
+      transform: translateX(-280px);
+      width: 280px;
+    }
+    #sidebar.open { transform: translateX(0); }
+    #main { margin-left: 0; }
+    #menu-btn { display: flex; align-items: center; gap: 6px; }
+    #content { padding: 32px 20px 80px; }
+    #hero { padding: 24px 20px; }
+    #hero h1 { font-size: 24px; }
+    #toc-grid { grid-template-columns: 1fr; }
+    .file-map { grid-template-columns: 1fr; }
+    #overlay { display: none; position: fixed; inset: 0; background: #000a; z-index: 99; }
+    #overlay.show { display: block; }
+  }
+
+  /* Animations */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .module-section {
+    animation: fadeUp 0.4s ease both;
+  }
+
+  /* Highlight search matches */
+  .search-match { background: #fbbf2430; border-radius: 2px; }
+
+  /* Scroll progress */
+  #scroll-progress {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--purple));
+    transform-origin: left;
+    z-index: 200;
+    transform: scaleX(0);
+    transition: transform 0.1s;
+  }
+</style>
+</head>
+<body>
+
+<div id="scroll-progress"></div>
+<div id="overlay" onclick="closeSidebar()"></div>
+
+<!-- Sidebar -->
+<nav id="sidebar">
+  <div id="sidebar-header">
+    <div id="sidebar-title">Full-Stack Course</div>
+    <div id="sidebar-subtitle">Expense Tracker Codebase</div>
+  </div>
+
+  <div id="search-wrap">
+    <input id="search" type="text" placeholder="Search modules…" oninput="handleSearch(this.value)" />
+  </div>
+
+  <div id="nav-list">
+    <a class="nav-item" href="#intro" onclick="setActive(this)">
+      <span class="nav-num">★</span> Introduction
+    </a>
+    <a class="nav-item" href="#m1" onclick="setActive(this)">
+      <span class="nav-num">01</span> Project Overview
+    </a>
+    <a class="nav-item" href="#m2" onclick="setActive(this)">
+      <span class="nav-num">02</span> Next.js App Router
+    </a>
+    <a class="nav-item" href="#m3" onclick="setActive(this)">
+      <span class="nav-num">03</span> Authentication
+    </a>
+    <a class="nav-item" href="#m4" onclick="setActive(this)">
+      <span class="nav-num">04</span> Database & Prisma
+    </a>
+    <a class="nav-item" href="#m5" onclick="setActive(this)">
+      <span class="nav-num">05</span> Server Actions
+    </a>
+    <a class="nav-item" href="#m6" onclick="setActive(this)">
+      <span class="nav-num">06</span> UI & Tailwind CSS
+    </a>
+    <a class="nav-item" href="#m7" onclick="setActive(this)">
+      <span class="nav-num">07</span> State Management
+    </a>
+    <a class="nav-item" href="#m8" onclick="setActive(this)">
+      <span class="nav-num">08</span> Offline-First
+    </a>
+    <a class="nav-item" href="#m9" onclick="setActive(this)">
+      <span class="nav-num">09</span> NL Parsing
+    </a>
+    <a class="nav-item" href="#m10" onclick="setActive(this)">
+      <span class="nav-num">10</span> Recurring Transactions
+    </a>
+    <a class="nav-item" href="#m11" onclick="setActive(this)">
+      <span class="nav-num">11</span> Charts
+    </a>
+    <a class="nav-item" href="#m12" onclick="setActive(this)">
+      <span class="nav-num">12</span> Testing
+    </a>
+    <a class="nav-item" href="#m13" onclick="setActive(this)">
+      <span class="nav-num">13</span> End-to-End Flow
+    </a>
+  </div>
+
+  <div style="padding: 0 14px 8px; flex-shrink:0;">
+    <div id="progress-bar"><div id="progress-fill"></div></div>
+    <div id="progress-label">0% read</div>
+  </div>
+</nav>
+
+<!-- Main -->
+<div id="main">
+  <div id="top-bar">
+    <div id="breadcrumb">Course / <span id="current-section">Introduction</span></div>
+    <button id="menu-btn" onclick="toggleSidebar()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      Menu
+    </button>
+  </div>
+
+  <div id="content">
+
+    <!-- INTRO -->
+    <div id="intro" class="module-section">
+      <div id="hero">
+        <div id="hero-eyebrow">Full-Stack Learning Path</div>
+        <h1>Expense Tracker<br/>Codebase Course</h1>
+        <p id="hero-desc">
+          A guided tour through a real production app — from how requests hit the server to how the UI stays responsive offline. Assumes basic software engineering knowledge.
+        </p>
+        <div id="hero-tags">
+          <span class="pill pill-accent">Next.js 15</span>
+          <span class="pill pill-blue">React 18</span>
+          <span class="pill pill-purple">Prisma ORM</span>
+          <span class="pill pill-green">Tailwind CSS</span>
+          <span class="pill pill-amber">IndexedDB</span>
+          <span class="pill pill-red">Service Workers</span>
+        </div>
+      </div>
+
+      <h3>What You'll Learn</h3>
+      <p>This course walks through every layer of a modern full-stack web application, using this expense tracker as the concrete example. By the end you'll understand <strong>why</strong> each architectural decision was made, not just what the code does.</p>
+
+      <div id="toc-grid">
+        <a class="toc-card" href="#m1"><span class="toc-num">01</span><span class="toc-label">Project Overview & Mental Model</span></a>
+        <a class="toc-card" href="#m2"><span class="toc-num">02</span><span class="toc-label">Next.js App Router</span></a>
+        <a class="toc-card" href="#m3"><span class="toc-num">03</span><span class="toc-label">Authentication with NextAuth</span></a>
+        <a class="toc-card" href="#m4"><span class="toc-num">04</span><span class="toc-label">Database Layer with Prisma</span></a>
+        <a class="toc-card" href="#m5"><span class="toc-num">05</span><span class="toc-label">Server Actions</span></a>
+        <a class="toc-card" href="#m6"><span class="toc-num">06</span><span class="toc-label">UI Architecture & Tailwind CSS</span></a>
+        <a class="toc-card" href="#m7"><span class="toc-num">07</span><span class="toc-label">State Management & Optimistic UI</span></a>
+        <a class="toc-card" href="#m8"><span class="toc-num">08</span><span class="toc-label">Offline-First Architecture</span></a>
+        <a class="toc-card" href="#m9"><span class="toc-num">09</span><span class="toc-label">Natural Language Parsing</span></a>
+        <a class="toc-card" href="#m10"><span class="toc-num">10</span><span class="toc-label">Recurring Transactions</span></a>
+        <a class="toc-card" href="#m11"><span class="toc-num">11</span><span class="toc-label">Charts with Recharts</span></a>
+        <a class="toc-card" href="#m12"><span class="toc-num">12</span><span class="toc-label">Testing with Playwright</span></a>
+        <a class="toc-card" href="#m13"><span class="toc-num">13</span><span class="toc-label">Putting It All Together</span></a>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- MODULE 1 -->
+    <div id="m1" class="module-section">
+      <div class="module-header">
+        <div class="module-badge">01</div>
+        <div class="module-title-wrap">
+          <div class="module-label">Module 1</div>
+          <div class="module-title">Project Overview & Mental Model</div>
+        </div>
+      </div>
+
+      <p>An <strong>offline-capable personal expense tracker</strong>. Type <code>"food 20"</code> and it intelligently parses it into a category, amount, and type. Works without internet — changes sync when you reconnect. Supports recurring transactions like monthly rent.</p>
+
+      <h3>Technology Stack</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Concern</th><th>Technology</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>Framework</td><td><span class="pill pill-accent">Next.js 15</span></td><td>Server + client rendering, file-based routing, server actions</td></tr>
+            <tr><td>UI</td><td><span class="pill pill-blue">React 18</span></td><td>Component model, hooks, client interactivity</td></tr>
+            <tr><td>Styling</td><td><span class="pill pill-green">Tailwind CSS</span></td><td>Utility-first, consistent dark theme without a design system</td></tr>
+            <tr><td>Database</td><td><span class="pill pill-purple">Prisma + PostgreSQL</span></td><td>Typed ORM, schema migrations, strong TypeScript integration</td></tr>
+            <tr><td>Auth</td><td><span class="pill pill-blue">NextAuth v4</span></td><td>Session management, credentials login, JWT cookies</td></tr>
+            <tr><td>Charts</td><td><span class="pill pill-accent">Recharts</span></td><td>Declarative chart components built for React</td></tr>
+            <tr><td>Offline</td><td><span class="pill pill-amber">IDB + Service Worker</span></td><td>IndexedDB for local storage, SW for background sync</td></tr>
+            <tr><td>Testing</td><td><span class="pill pill-red">Playwright</span></td><td>End-to-end visual regression tests across 3 viewports</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>System Architecture</h3>
+      <div class="diagram">
+        <div class="diagram-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          Architecture Diagram
+        </div>
+        <pre>┌───────────────────────────────────────────────────────────┐
+│                         Browser                           │
+│                                                           │
+│  ┌─────────────────────┐    ┌────────────────────────┐   │
+│  │   React UI          │    │   Service Worker       │   │
+│  │   (Next.js)         │◄──►│   (public/sw.js)       │   │
+│  │                     │    │   ▪ Cache shell assets  │   │
+│  │  /dashboard         │    │   ▪ Background Sync     │   │
+│  │  /transactions      │    └──────────┬─────────────┘   │
+│  │  /login             │               │                  │
+│  └──────────┬──────────┘               │                  │
+│             │                  ┌───────▼──────────┐       │
+│             │                  │   IndexedDB      │       │
+│             │                  │   ▪ transactions │       │
+│             │                  │   ▪ syncQueue    │       │
+│             │                  └──────────────────┘       │
+└─────────────┼─────────────────────────────────────────────┘
+              │  HTTP (Server Actions / REST API)
+              ▼
+┌───────────────────────────────────────────────────────────┐
+│                    Next.js Server                         │
+│                                                           │
+│  ┌──────────────┐  ┌───────────────┐  ┌───────────────┐  │
+│  │ lib/         │  │ app/api/      │  │ middleware.ts  │  │
+│  │ actions.ts   │  │ sync/route.ts │  │ (auth guard)  │  │
+│  │ (mutations)  │  │ (SW endpoint) │  └───────────────┘  │
+│  └──────┬───────┘  └───────┬───────┘                     │
+│         └──────────┬────────┘                             │
+│                    ▼                                      │
+│            ┌──────────────┐                               │
+│            │  Prisma ORM  │                               │
+│            └──────┬───────┘                               │
+└───────────────────┼───────────────────────────────────────┘
+                    │
+                    ▼
+           ┌─────────────────┐
+           │   PostgreSQL    │
+           │   (Neon/Vercel) │
+           └─────────────────┘</pre>
+      </div>
+
+      <h3>The Two Data Paths</h3>
+      <p>Everything else in this app is a variation of these two flows:</p>
+      <div class="callout info">
+        <span class="callout-icon">🌐</span>
+        <div class="callout-body">
+          <strong>Online path:</strong> User types → parser → <code>addTransaction()</code> server action → Prisma INSERT → <code>revalidatePath()</code> → UI updates
+        </div>
+      </div>
+      <div class="callout warn">
+        <span class="callout-icon">📴</span>
+        <div class="callout-body">
+          <strong>Offline path:</strong> User types → parser → <code>applyLocalMutation()</code> → IndexedDB write + syncQueue entry → optimistic UI → [network returns] → <code>drainQueue()</code> → POST /api/sync → real ID replaces temp ID
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- MODULE 2 -->
+    <div id="m2" class="module-section">
+      <div class="module-header">
+        <div class="module-badge">02</div>
+        <div class="module-title-wrap">
+          <div class="module-label">Module 2</div>
+          <div class="module-title">Next.js App Router</div>
+        </div>
+      </div>
+
+      <p>Next.js 15 uses the <strong>App Router</strong> — a file-system-based routing system where every folder inside <code>app/</code> becomes a URL segment. Every component is a <strong>Server Component by default</strong>; you opt into client-side interactivity with <code>"use client"</code>.</p>
+
+      <h3>Directory Structure</h3>
+      <div class="diagram">
+        <div class="diagram-label">File → URL mapping</div>
+        <pre>app/
+├── page.tsx                    → /  (redirects to /dashboard or /login)
+├── layout.tsx                  → Root HTML shell
+├── globals.css                 → Global Tailwind styles
+├── (dashboard)/                → Route group (parentheses = no URL segment!)
+│   ├── layout.tsx              → Shared layout: NavBar + main wrapper
+│   ├── dashboard/
+│   │   ├── page.tsx            → /dashboard
+│   │   └── loading.tsx         → Streaming skeleton shown while fetching
+│   └── transactions/
+│       └── page.tsx            → /transactions
+├── (auth)/
+│   └── login/
+│       └── page.tsx            → /login
+└── api/
+    ├── auth/[...nextauth]/
+    │   └── route.ts            → /api/auth/* (NextAuth endpoints)
+    └── sync/
+        └── route.ts            → /api/sync  (offline sync)</pre>
+      </div>
+
+      <div class="callout tip">
+        <span class="callout-icon">💡</span>
+        <div class="callout-body"><strong>Route groups</strong> — folders in parentheses like <code>(dashboard)</code> group routes without adding to the URL. The path is <code>/dashboard</code>, not <code>/(dashboard)/dashboard</code>.</div>
+      </div>
+
+      <h3>Server vs Client Components</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Server Component</th><th>Client Component</th></tr></thead>
+          <tbody>
+            <tr><td>✅ Fetch data directly from DB</td><td>✅ <code>useState</code>, <code>useEffect</code></td></tr>
+            <tr><td>✅ Access server secrets / env vars</td><td>✅ Event handlers (<code>onClick</code>, etc.)</td></tr>
+            <tr><td>✅ Zero JS bundle cost</td><td>✅ Browser APIs (<code>window</code>, <code>navigator</code>)</td></tr>
+            <tr><td>❌ No <code>useState</code> / <code>useEffect</code></td><td>❌ Cannot access DB directly</td></tr>
+            <tr><td>❌ No event handlers</td><td>❌ Adds to client JS bundle</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>In this app, the pattern is a <strong>server-to-client handoff</strong>:</p>
+      <div class="diagram">
+        <pre>app/(dashboard)/dashboard/page.tsx   ← Server Component
+  ▪ Runs on the server
+  ▪ Fetches data from DB (no round-trip from browser)
+  ▪ Passes data as props
+        │
+        │ initialTransactions, initialTotalIncome, …
+        ▼
+components/DashboardContent.tsx      ← Client Component ("use client")
+  ▪ Receives initial data once on mount
+  ▪ Manages optimistic state updates
+  ▪ Handles user interactions</pre>
+      </div>
+
+      <h3>The Dashboard Server Component</h3>
+
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — app/(dashboard)/dashboard/page.tsx</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="cm">// Server components can be async — no useEffect needed for data fetching</span>
+<span class="kw">export default async function</span> <span class="fn">DashboardPage</span>({ searchParams }: PageProps) {
+  <span class="kw">const</span> { month, year } = <span class="fn">getCurrentMonthYear</span>();
+
+  <span class="cm">// Runs IN PARALLEL on the server (not sequentially)</span>
+  <span class="kw">const</span> [data, prevData, recurring] = <span class="kw">await</span> Promise.<span class="fn">all</span>([
+    <span class="fn">getDashboardData</span>(month, year),
+    <span class="fn">getDashboardData</span>(prevMonth, prevYear),  <span class="cm">// for month-over-month diff</span>
+    <span class="fn">getRecurringTransactions</span>(),
+  ]);
+
+  <span class="cm">// Pass to client component as props ("initial*" = server-fetched starting values)</span>
+  <span class="kw">return</span> (
+    &lt;<span class="tp">DashboardContent</span>
+      initialTransactions={data.transactions}
+      initialTotalIncome={data.totalIncome}
+      initialTotalExpenses={data.totalExpenses}
+      <span class="cm">// … more props</span>
+    /&gt;
+  );
+}</pre>
+      </div>
+
+      <div class="callout info">
+        <span class="callout-icon">📌</span>
+        <div class="callout-body">The <code>initial*</code> prefix is intentional — it signals these are starting values that the client component can diverge from as the user makes changes (optimistic updates).</div>
+      </div>
+
+      <h3>URL-Driven Month Navigation</h3>
+      <p>The URL <code>?month=3&amp;year=2025</code> controls which data loads. The server component reads <code>searchParams</code> and passes the correct month/year to the database query. In Next.js 15, <code>searchParams</code> is a Promise and requires <code>await</code>.</p>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- MODULE 3 -->
+    <div id="m3" class="module-section">
+      <div class="module-header">
+        <div class="module-badge">03</div>
+        <div class="module-title-wrap">
+          <div class="module-label">Module 3</div>
+          <div class="module-title">Authentication with NextAuth</div>
+        </div>
+      </div>
+
+      <p>NextAuth v4 handles the entire authentication lifecycle from login to session management to route protection.</p>
+
+      <h3>The Auth Flow</h3>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-line"><div class="flow-dot">1</div><div class="flow-connector"></div></div>
+          <div class="flow-content"><strong>User submits login form</strong><p>Email + password sent to <code>POST /api/auth/signin/credentials</code></p></div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-line"><div class="flow-dot">2</div><div class="flow-connector"></div></div>
+          <div class="flow-content"><strong>NextAuth credentials provider runs <code>authorize()</code></strong><p>Fetches user by email from DB, runs <code>bcryptjs.compare(password, hash)</code></p></div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-line"><div class="flow-dot">3</div><div class="flow-connector"></div></div>
+          <div class="flow-content"><strong>JWT session token created</strong><p>Stored in an <strong>HTTP-only cookie</strong> — JavaScript in the browser cannot read it (XSS-safe)</p></div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-line"><div class="flow-dot">4</div><div class="flow-connector"></div></div>
+          <div class="flow-content"><strong>Every subsequent request includes the cookie</strong><p>Browser sends it automatically; <code>middleware.ts</code> validates it before allowing access</p></div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-line"><div class="flow-dot">5</div></div>
+          <div class="flow-content"><strong>Server actions extract the user ID</strong><p><code>getAuthenticatedUserId()</code> reads the session and throws <code>"Unauthorized"</code> if missing</p></div>
+        </div>
+      </div>
+
+      <h3>Route Protection — <code>middleware.ts</code></h3>
+
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — middleware.ts</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="kw">export default</span> <span class="fn">withAuth</span>(
+  <span class="kw">function</span> <span class="fn">middleware</span>(req) {
+    <span class="kw">return</span> NextResponse.<span class="fn">next</span>();  <span class="cm">// Just proceed if authorized</span>
+  },
+  {
+    callbacks: {
+      authorized: ({ token }) =&gt; !!token,  <span class="cm">// Any valid JWT = OK</span>
+    },
+    pages: { signIn: <span class="st">"/login"</span> },
+  }
+);
+
+<span class="kw">export const</span> config = {
+  matcher: [
+    <span class="cm">// Negative lookahead: protect everything EXCEPT these paths</span>
+    <span class="st">"/((?!login|api/auth|_next/static|_next/image|favicon.ico|manifest.json|icons|sw.js).*)"</span>,
+  ],
+};</pre>
+      </div>
+
+      <div class="callout warn">
+        <span class="callout-icon">⚠️</span>
+        <div class="callout-body">The service worker file <code>sw.js</code> must be excluded from auth protection or it can't register in the browser. Same for <code>manifest.json</code> and icons — these are public PWA resources.</div>
+      </div>
+
+      <h3>The Security Boundary in Server Actions</h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — lib/actions.ts</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="kw">async function</span> <span class="fn">getAuthenticatedUserId</span>(): Promise&lt;<span class="tp">string</span>&gt; {
+  <span class="kw">const</span> session = <span class="kw">await</span> <span class="fn">getServerSession</span>(authOptions);
+  <span class="kw">if</span> (!session?.user) <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="st">"Unauthorized"</span>);
+  <span class="kw">const</span> userId = session.user.userId;
+  <span class="kw">if</span> (!userId) <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="st">"Unauthorized"</span>);
+  <span class="kw">return</span> userId;
+}
+
+<span class="cm">// Every server action calls this FIRST before touching the database</span>
+<span class="kw">export async function</span> <span class="fn">deleteTransaction</span>(id: <span class="tp">string</span>) {
+  <span class="kw">const</span> userId = <span class="kw">await</span> <span class="fn">getAuthenticatedUserId</span>();  <span class="cm">// ← throws if no session</span>
+
+  <span class="cm">// Ownership check — user A cannot delete user B's transactions</span>
+  <span class="kw">const</span> existing = <span class="kw">await</span> db.transaction.<span class="fn">findFirst</span>({ where: { id, userId } });
+  <span class="kw">if</span> (!existing) <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="st">"Transaction not found"</span>);
+
+  <span class="kw">await</span> db.transaction.<span class="fn">delete</span>({ where: { id } });
+}</pre>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- MODULE 4 -->
+    <div id="m4" class="module-section">
+      <div class="module-header">
+        <div class="module-badge">04</div>
+        <div class="module-title-wrap">
+          <div class="module-label">Module 4</div>
+          <div class="module-title">Database Layer with Prisma</div>
+        </div>
+      </div>
+
+      <p>Prisma is an ORM (Object-Relational Mapper) — it translates between TypeScript objects and SQL. Instead of writing raw SQL you write typed TypeScript that Prisma converts into queries.</p>
+
+      <div class="callout info">
+        <span class="callout-icon">🔑</span>
+        <div class="callout-body">The killer feature: <strong>Prisma generates TypeScript types from your schema</strong>. The database shape and your code stay in sync automatically. A schema change breaks TypeScript compilation, not a runtime error.</div>
+      </div>
+
+      <h3>The Schema</h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">prisma — prisma/schema.prisma</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="kw">model</span> <span class="tp">Transaction</span> {
+  id        <span class="tp">String</span>   <span class="at">@id @default(cuid())</span>  <span class="cm">// CUID: shorter than UUID, URL-safe</span>
+  userId    <span class="tp">String</span>
+  amount    <span class="tp">Float</span>                         <span class="cm">// Always positive; direction = type field</span>
+  category  <span class="tp">String</span>
+  note      <span class="tp">String?</span>                        <span class="cm">// ? = optional (nullable)</span>
+  date      <span class="tp">DateTime</span>
+  type      <span class="tp">String</span>                         <span class="cm">// "income" or "expense"</span>
+  labels    <span class="tp">String[]</span> <span class="at">@default([])</span>          <span class="cm">// Array of strings (Postgres ARRAY)</span>
+  createdAt <span class="tp">DateTime</span> <span class="at">@default(now())</span>
+  updatedAt <span class="tp">DateTime</span> <span class="at">@updatedAt</span>
+
+  <span class="at">@@index</span>([userId])
+  <span class="at">@@index</span>([userId, date])  <span class="cm">// Composite index for fast date-range queries</span>
+}
+
+<span class="kw">model</span> <span class="tp">RecurringTransaction</span> {
+  id        <span class="tp">String</span>    <span class="at">@id @default(cuid())</span>
+  userId    <span class="tp">String</span>
+  name      <span class="tp">String</span>
+  frequency <span class="tp">String</span>    <span class="cm">// "daily" | "weekly" | "monthly" | "yearly"</span>
+  startDate <span class="tp">DateTime</span>
+  endDate   <span class="tp">DateTime?</span>
+  lastRun   <span class="tp">DateTime?</span>  <span class="cm">// null = never posted</span>
+  isActive  <span class="tp">Boolean</span>   <span class="at">@default(true)</span>
+  <span class="cm">// …other fields</span>
+}</pre>
+      </div>
+
+      <h3>Common Query Patterns</h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — lib/actions.ts</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="cm">// Read — all transactions in a date range</span>
+<span class="kw">const</span> transactions = <span class="kw">await</span> db.transaction.<span class="fn">findMany</span>({
+  where: {
+    userId,
+    date: { gte: start, lte: end },  <span class="cm">// gte = >=, lte = <=</span>
+  },
+  orderBy: { date: <span class="st">"desc"</span> },
+});
+
+<span class="cm">// Aggregate — total amount</span>
+<span class="kw">const</span> total = <span class="kw">await</span> db.transaction.<span class="fn">aggregate</span>({
+  where: { userId, type: <span class="st">"expense"</span>, date: { gte: start, lte: end } },
+  _sum: { amount: <span class="kw">true</span> },  <span class="cm">// SQL: SUM(amount)</span>
+});
+
+<span class="cm">// Atomic batch — both succeed or both fail</span>
+<span class="kw">await</span> db.<span class="fn">$transaction</span>([
+  db.transaction.<span class="fn">create</span>({ data: { <span class="cm">/* new transaction */</span> } }),
+  db.recurringTransaction.<span class="fn">update</span>({
+    where: { id },
+    data: { lastRun: <span class="kw">new</span> <span class="tp">Date</span>() },
+  }),
+]);</pre>
+      </div>
+
+      <h3>The Singleton Pattern</h3>
+      <p>Next.js restarts the module system on every file change in development. Without this pattern, each hot-reload would open a new database connection, quickly exhausting the connection pool.</p>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — lib/db.ts</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="kw">const</span> globalForPrisma = global <span class="kw">as unknown as</span> { prisma: <span class="tp">PrismaClient</span> };
+
+<span class="kw">export const</span> db =
+  globalForPrisma.prisma ??
+  <span class="kw">new</span> <span class="fn">PrismaClient</span>();
+
+<span class="cm">// In dev: store on global so hot-reloads reuse it</span>
+<span class="kw">if</span> (process.env.NODE_ENV !== <span class="st">"production"</span>) globalForPrisma.prisma = db;</pre>
+      </div>
+
+      <h3>Two Connection URLs</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Variable</th><th>Type</th><th>Used for</th></tr></thead>
+          <tbody>
+            <tr><td><code>POSTGRES_PRISMA_URL</code></td><td>Pooled (PgBouncer)</td><td>All queries — fast, reuses connections</td></tr>
+            <tr><td><code>POSTGRES_URL_NON_POOLING</code></td><td>Direct TCP</td><td>Migrations only — some migration features require a real connection</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- MODULE 5 -->
+    <div id="m5" class="module-section">
+      <div class="module-header">
+        <div class="module-badge">05</div>
+        <div class="module-title-wrap">
+          <div class="module-label">Module 5</div>
+          <div class="module-title">Server Actions (The Mutation Layer)</div>
+        </div>
+      </div>
+
+      <p>Server Actions are functions marked with <code>"use server"</code> that run on the server but can be called from client components as if they were regular functions. <strong>No REST API boilerplate needed.</strong></p>
+
+      <h3>How They Work</h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — lib/actions.ts (server)</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="st">"use server"</span>;  <span class="cm">// ← entire file runs on the server</span>
+
+<span class="kw">export async function</span> <span class="fn">addTransaction</span>(data: { category: <span class="tp">string</span>; amount: <span class="tp">number</span> }) {
+  <span class="kw">const</span> userId = <span class="kw">await</span> <span class="fn">getAuthenticatedUserId</span>();  <span class="cm">// always verify first</span>
+  <span class="kw">const</span> tx = <span class="kw">await</span> db.transaction.<span class="fn">create</span>({ data: { userId, ...data } });
+  <span class="fn">revalidatePath</span>(<span class="st">"/dashboard"</span>);   <span class="cm">// bust the Next.js render cache</span>
+  <span class="fn">revalidatePath</span>(<span class="st">"/transactions"</span>);
+  <span class="kw">return</span> tx;  <span class="cm">// return value comes back to the client</span>
+}</pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — components/ExpenseInput.tsx (client)</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="st">"use client"</span>;
+<span class="kw">import</span> { addTransaction } <span class="kw">from</span> <span class="st">"@/lib/actions"</span>;  <span class="cm">// import like any function</span>
+
+<span class="kw">async function</span> <span class="fn">handleSubmit</span>() {
+  <span class="cm">// Called like a regular async function — Next.js serializes it as POST</span>
+  <span class="kw">const</span> result = <span class="kw">await</span> <span class="fn">addTransaction</span>({ category: <span class="st">"Food"</span>, amount: <span class="nm">20</span> });
+  console.<span class="fn">log</span>(result.id);  <span class="cm">// real CUID from the database</span>
+}</pre>
+      </div>
+
+      <div class="callout tip">
+        <span class="callout-icon">⚡</span>
+        <div class="callout-body">Under the hood, Next.js converts server action calls into <strong>POST requests</strong> with arguments serialized. You get type-safety across the network boundary — TypeScript will catch mismatched argument types at compile time.</div>
+      </div>
+
+      <h3>Cache Invalidation</h3>
+      <p>After a mutation, <code>revalidatePath</code> tells Next.js to re-fetch and re-render those pages on the next request. The root <code>/</code> is intentionally <em>not</em> revalidated:</p>
+      <div class="callout warn">
+        <span class="callout-icon">⚠️</span>
+        <div class="callout-body"><strong>Do not call <code>revalidatePath("/")</code></strong> — the root page is just a redirect. Revalidating it triggers a navigation loop. Only revalidate <code>/dashboard</code> and <code>/transactions</code>.</div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- MODULE 6 -->
+    <div id="m6" class="module-section">
+      <div class="module-header">
+        <div class="module-badge">06</div>
+        <div class="module-title-wrap">
+          <div class="module-label">Module 6</div>
+          <div class="module-title">UI Architecture & Tailwind CSS</div>
+        </div>
+      </div>
+
+      <p>Tailwind replaces separate CSS files with <strong>utility classes composed inline</strong>. Instead of <code>.card { background: #1e293b; border-radius: 12px; }</code> you write <code>bg-surface-card rounded-2xl</code> directly on the element.</p>
+
+      <h3>The Custom Color System</h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — tailwind.config.ts</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre>colors: {
+  surface: {
+    DEFAULT: <span class="st">"#0f172a"</span>,   <span class="cm">// Darkest — page background</span>
+    card:    <span class="st">"#1e293b"</span>,   <span class="cm">// Cards and panels</span>
+    hover:   <span class="st">"#334155"</span>,   <span class="cm">// Hover states, text inputs</span>
+    border:  <span class="st">"#334155"</span>,   <span class="cm">// Borders</span>
+  },
+}</pre>
+      </div>
+      <p>These become Tailwind classes: <code>bg-surface</code>, <code>bg-surface-card</code>, <code>border-surface-border</code>. Consistent naming makes the dark theme systematic — one color change propagates everywhere.</p>
+
+      <h3>Reusable Utilities via <code>@apply</code></h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">css — app/globals.css</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="at">@layer</span> components {
+  .card {
+    <span class="at">@apply</span> bg-surface-card rounded-2xl p-5 border border-surface-border;
+  }
+  .btn-primary {
+    <span class="at">@apply</span> bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg;
+  }
+  .input-base {
+    <span class="at">@apply</span> bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-slate-200;
+  }
+}</pre>
+      </div>
+
+      <h3>Responsive Layout</h3>
+      <p>Tailwind is <strong>mobile-first</strong> — no prefix applies at all sizes, <code>md:</code> applies at ≥768px:</p>
+
+      <div class="diagram">
+        <div class="diagram-label">Layout shift at md breakpoint (768px)</div>
+        <pre>Mobile (&lt; 768px)          Desktop (≥ 768px)
+┌──────────────────┐      ┌────────┬─────────────────────────┐
+│  Page content    │      │  Side  │  Page content           │
+│  (full width)    │      │  Nav   │  (max-w-4xl, centered)  │
+│                  │      │  Bar   │                         │
+├──────────────────┤      │(fixed) │                         │
+│  Bottom Nav Bar  │      └────────┴─────────────────────────┘
+└──────────────────┘
+
+CSS:   md:ml-56     ← offset content for sidebar
+       pb-20        ← space for mobile bottom nav bar
+       md:pb-0      ← remove on desktop (no bottom bar)</pre>
+      </div>
+
+      <h3>Dark Mode</h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">tsx — app/layout.tsx</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre>&lt;<span class="tp">html</span> lang=<span class="st">"en"</span> className=<span class="st">"dark"</span>&gt;</pre>
+      </div>
+      <p>The <code>dark</code> class on <code>&lt;html&gt;</code> activates all <code>dark:</code> Tailwind variants. It's hardcoded — this app is always dark, no toggle needed.</p>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- MODULE 7 -->
+    <div id="m7" class="module-section">
+      <div class="module-header">
+        <div class="module-badge">07</div>
+        <div class="module-title-wrap">
+          <div class="module-label">Module 7</div>
+          <div class="module-title">State Management & Optimistic UI</div>
+        </div>
+      </div>
+
+      <p>State is managed with plain React hooks inside <code>DashboardContent.tsx</code>. No Redux — for an app of this size that would be premature overhead.</p>
+
+      <h3>What is Optimistic UI?</h3>
+      <p>Update the UI <em>immediately</em> before the server confirms the change. If the server succeeds, swap the temporary data for real data. If it fails, roll back. This makes the app feel instant.</p>
+
+      <div class="diagram">
+        <div class="diagram-label">Optimistic Update Flow</div>
+        <pre>User clicks "Add" for "Food RM 20"
+        ↓
+Generate tempId = "temp_1746000000_abc"
+        ↓
+Add { id: tempId, category: "Food", amount: 20 } to local state
+        → UI shows transaction IMMEDIATELY (no spinner, no wait)
+        ↓
+Call addTransaction() server action in background
+        ↓
+Server returns { id: "cm4realid..." }   ← real CUID from DB
+        ↓
+handleReplace(tempId, "cm4realid...")   ← swap in state
+        ↓
+Both IDB and React state now have the real ID</pre>
+      </div>
+
+      <h3>The State Slice</h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — components/DashboardContent.tsx (simplified)</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="cm">// All initialized from server-fetched initial* props</span>
+<span class="kw">const</span> [transactions,    setTransactions]    = <span class="fn">useState</span>(initialTransactions);
+<span class="kw">const</span> [pendingItems,    setPendingItems]    = <span class="fn">useState</span>([]);    <span class="cm">// from IDB</span>
+<span class="kw">const</span> [totalIncome,     setTotalIncome]     = <span class="fn">useState</span>(initialTotalIncome);
+<span class="kw">const</span> [totalExpenses,   setTotalExpenses]   = <span class="fn">useState</span>(initialTotalExpenses);
+<span class="kw">const</span> [categoryData,    setCategoryData]    = <span class="fn">useState</span>(initialCategoryData);
+
+<span class="kw">async function</span> <span class="fn">handleAdd</span>(parsed) {
+  <span class="kw">const</span> tempId = <span class="st">`temp_<span class="op">${</span>Date.<span class="fn">now</span>()<span class="op">}</span>`</span>;
+
+  <span class="cm">// 1. Optimistic update</span>
+  <span class="fn">setTransactions</span>(prev =&gt; [{ id: tempId, ...parsed }, ...prev]);
+  <span class="fn">setTotalExpenses</span>(prev =&gt; prev + parsed.amount);
+
+  <span class="kw">try</span> {
+    <span class="cm">// 2. Server call (async)</span>
+    <span class="kw">const</span> result = <span class="kw">await</span> <span class="fn">addTransaction</span>(parsed);
+    <span class="fn">handleReplace</span>(tempId, result.id);  <span class="cm">// 3. Swap temp → real</span>
+  } <span class="kw">catch</span> {
+    <span class="cm">// 4. Roll back on failure</span>
+    <span class="fn">setTransactions</span>(prev =&gt; prev.<span class="fn">filter</span>(t =&gt; t.id !== tempId));
+    <span class="fn">setTotalExpenses</span>(prev =&gt; prev - parsed.amount);
+  }
+}</pre>
+      </div>
+
+      <h3>Why Not <code>startTransition</code>?</h3>
+      <div class="callout warn">
+        <span class="callout-icon">⚠️</span>
+        <div class="callout-body">React 18 does not properly track async transitions in <code>startTransition(async fn)</code>. State updates can fire in the wrong order. This app uses plain <code>async/await</code> with a <code>useState</code> loading flag instead.</div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- MODULE 8 -->
+    <div id="m8" class="module-section">
+      <div class="module-header">
+        <div class="module-badge">08</div>
+        <div class="module-title-wrap">
+          <div class="module-label">Module 8</div>
+          <div class="module-title">Offline-First Architecture</div>
+        </div>
+      </div>
+
+      <p>This is the most sophisticated part of the codebase. Five interlocking layers work together to make the app function without a network connection.</p>
+
+      <h3>Layer 1 — IndexedDB (<code>lib/idb.ts</code>)</h3>
+      <p>IndexedDB is a browser database — structured, persistent, works offline. The <code>idb</code> library wraps the raw callback-based API with Promises.</p>
+
+      <div class="diagram">
+        <div class="diagram-label">IndexedDB Structure</div>
+        <pre>Database: "expense-tracker-v1"
+│
+├── Object Store: "transactions"
+│   Key: id (string)
+│   Indexes: userId, date, syncStatus
+│   Extra fields: syncStatus, syncError (beyond DB schema)
+│
+│   syncStatus values:
+│   ├── "synced"          ← server has the latest version
+│   ├── "pending"         ← created offline, never sent
+│   ├── "pending-update"  ← exists on server, update queued
+│   └── "pending-delete"  ← exists on server, delete queued
+│
+└── Object Store: "syncQueue"
+    Key: queueId (autoIncrement integer)
+    Fields: op, tempId, payload, createdAt
+    Purpose: ordered list of mutations to replay on reconnect</pre>
+      </div>
+
+      <h3>Layer 2 — Sync Logic (<code>lib/sync.ts</code>)</h3>
+
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — lib/sync.ts (simplified)</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="cm">// applyLocalMutation — the offline WRITE path</span>
+<span class="kw">async function</span> <span class="fn">applyLocalMutation</span>(op: <span class="st">"add"</span> | <span class="st">"update"</span> | <span class="st">"delete"</span>, data) {
+  <span class="kw">if</span> (op === <span class="st">"add"</span>) {
+    <span class="kw">const</span> tempId = <span class="st">`pending_<span class="op">${</span>Date.<span class="fn">now</span>()<span class="op">}</span>_<span class="op">${</span><span class="fn">random</span>()<span class="op">}</span>`</span>;
+    <span class="kw">await</span> <span class="fn">putTransaction</span>({ ...data, id: tempId, syncStatus: <span class="st">"pending"</span> });
+    <span class="kw">await</span> <span class="fn">enqueueOp</span>({ op: <span class="st">"add"</span>, tempId, payload: data });
+    <span class="kw">return</span> tempId;
+  }
+
+  <span class="kw">if</span> (op === <span class="st">"update"</span>) {
+    <span class="kw">const</span> existing = <span class="kw">await</span> <span class="fn">getTransaction</span>(data.id);
+    <span class="kw">if</span> (existing.syncStatus === <span class="st">"pending"</span>) {
+      <span class="cm">// Never synced — update in place, modify queue entry (no double-queue)</span>
+      <span class="kw">await</span> <span class="fn">patchTransaction</span>(data.id, data);
+      <span class="kw">await</span> <span class="fn">updateQueuePayload</span>(data.id, data);
+    } <span class="kw">else</span> {
+      <span class="cm">// Synced — mark for update, enqueue new op</span>
+      <span class="kw">await</span> <span class="fn">patchTransaction</span>(data.id, { ...data, syncStatus: <span class="st">"pending-update"</span> });
+      <span class="kw">await</span> <span class="fn">enqueueOp</span>({ op: <span class="st">"update"</span>, id: data.id, payload: data });
+    }
+  }
+}</pre>
+      </div>
+
+      <h3>Layer 3 — Sync API (<code>app/api/sync/route.ts</code>)</h3>
+      <p>A regular REST API route (not a server action) because <strong>service workers cannot call server actions</strong> — they're not in a React rendering context.</p>
+      <div class="callout info">
+        <span class="callout-icon">📌</span>
+        <div class="callout-body">This endpoint mirrors all the ownership checks from <code>lib/actions.ts</code>. The same <code>userId</code> verification happens here — no shortcuts just because it's called by the service worker.</div>
+      </div>
+
+      <h3>Layer 4 — SyncProvider (<code>context/SyncProvider.tsx</code>)</h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — context/SyncProvider.tsx</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="cm">// Exposed to every component via useContext</span>
+<span class="kw">interface</span> <span class="tp">SyncContextValue</span> {
+  isOnline:            <span class="tp">boolean</span>;   <span class="cm">// navigator.onLine</span>
+  pendingCount:        <span class="tp">number</span>;    <span class="cm">// items in IDB syncQueue</span>
+  isSyncing:           <span class="tp">boolean</span>;   <span class="cm">// drainQueue() running?</span>
+  syncNow:             () =&gt; <span class="tp">void</span>; <span class="cm">// manually trigger sync</span>
+  refreshPendingCount: () =&gt; <span class="tp">void</span>;
+  userId:              <span class="tp">string</span>;
+}
+
+<span class="cm">// Auto-sync 500ms after reconnecting (small delay for stability)</span>
+<span class="fn">useEffect</span>(() =&gt; {
+  <span class="kw">const</span> <span class="fn">onOnline</span> = () =&gt; <span class="fn">setTimeout</span>(syncNow, <span class="nm">500</span>);
+  window.<span class="fn">addEventListener</span>(<span class="st">"online"</span>, onOnline);
+  <span class="kw">return</span> () =&gt; window.<span class="fn">removeEventListener</span>(<span class="st">"online"</span>, onOnline);
+}, []);</pre>
+      </div>
+
+      <h3>Layer 5 — Service Worker (<code>public/sw.js</code>)</h3>
+      <p>Runs in a separate thread. Handles caching strategy and background sync when the tab is closed.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Request Type</th><th>Strategy</th><th>Reason</th></tr></thead>
+          <tbody>
+            <tr><td><code>/_next/static/**</code></td><td>Cache-first</td><td>JS bundles are content-hashed, never change</td></tr>
+            <tr><td>Page navigations</td><td>Network-first → cache fallback</td><td>Fresh data preferred; offline shows cached version</td></tr>
+            <tr><td>API calls</td><td>Always network</td><td>Mutations must hit the server</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Complete Offline Flow</h3>
+      <div class="diagram">
+        <div class="diagram-label">End-to-end offline sequence</div>
+        <pre>── OFFLINE ─────────────────────────────────────────────────────
+
+User: "food 20"
+  ↓ isOnline === false
+ExpenseInput → applyLocalMutation("add", data)
+  ├─ IDB transactions: { id: "pending_123", syncStatus: "pending" }
+  └─ IDB syncQueue:    { queueId: 1, op: "add", tempId: "pending_123" }
+  ↓
+UI shows item with amber "Pending" badge
+
+── RECONNECT ───────────────────────────────────────────────────
+
+window fires "online" event
+  ↓
+SyncProvider → setTimeout(syncNow, 500)
+  ↓
+drainQueue()
+  ├─ read syncQueue: [{ op: "add", tempId: "pending_123" }]
+  ├─ POST /api/sync { op: "add", payload: { category: "Food", ... } }
+  │       ↓ server: INSERT → { id: "cm4real..." }
+  ├─ replaceTempId("pending_123", "cm4real...")  ← atomic IDB tx
+  └─ deleteQueuedOp(1)
+  ↓
+router.refresh() → amber badge disappears
+
+── TAB WAS CLOSED WHILE OFFLINE ────────────────────────────────
+
+Browser gets network (no tab open)
+  ↓ Service Worker fires "sync" event (tag: "expense-sync")
+  ↓
+drainQueueFromSW()
+  ├─ opens IDB via raw cursor API (no React, no idb library)
+  └─ POSTs each queued op to /api/sync</pre>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- MODULE 9 -->
+    <div id="m9" class="module-section">
+      <div class="module-header">
+        <div class="module-badge">09</div>
+        <div class="module-title-wrap">
+          <div class="module-label">Module 9</div>
+          <div class="module-title">Natural Language Parsing</div>
+        </div>
+      </div>
+
+      <p>The parser in <code>lib/parser.ts</code> converts free-form text into structured transaction data. This reduces friction for the most common action in the app.</p>
+
+      <h3>Input Examples</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Input</th><th>Output</th></tr></thead>
+          <tbody>
+            <tr><td><code>food 20</code></td><td>category: Food, amount: 20, type: expense</td></tr>
+            <tr><td><code>salary 5000</code></td><td>category: Salary, amount: 5000, type: <strong>income</strong></td></tr>
+            <tr><td><code>grab rm15</code></td><td>category: Grab, amount: 15, type: expense</td></tr>
+            <tr><td><code>coffee 4.5 starbucks #date #work</code></td><td>category: Coffee, amount: 4.5, note: "starbucks", labels: ["date", "work"]</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Parsing Algorithm</h3>
+      <div class="diagram">
+        <div class="diagram-label">Token classification</div>
+        <pre>Input: "coffee 4.5 starbucks #date #work"
+        │      │   │          │     │
+        │      │   │          └─────┘── Labels (# prefix → stripped, lowercased)
+        │      │   └─────────────────── Note (after amount, not a label)
+        │      └─────────────────────── Amount (numeric, strips rm/$)
+        └────────────────────────────── Category (tokens before amount)
+
+Steps:
+  1. Tokenize by whitespace
+  2. Extract #label tokens → remove from main list
+  3. Find numeric token → strip currency prefix → parse float
+  4. Tokens BEFORE number = category words (capitalize each)
+  5. Tokens AFTER number (not labels) = note
+  6. Check if any category word is in INCOME_KEYWORDS
+     → "salary", "freelance", "dividend", "bonus", "gift", "refund", …</pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — lib/parser.ts (simplified)</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="kw">const</span> INCOME_KEYWORDS = <span class="kw">new</span> <span class="fn">Set</span>([
+  <span class="st">"salary"</span>, <span class="st">"income"</span>, <span class="st">"freelance"</span>, <span class="st">"dividend"</span>, <span class="st">"interest"</span>,
+  <span class="st">"bonus"</span>, <span class="st">"gift"</span>, <span class="st">"refund"</span>, <span class="st">"allowance"</span>, <span class="st">"commission"</span>,
+  <span class="cm">// …37 keywords total</span>
+]);
+
+<span class="kw">function</span> <span class="fn">stripCurrencyPrefix</span>(token: <span class="tp">string</span>): <span class="tp">string</span> {
+  <span class="kw">return</span> token.<span class="fn">replace</span>(<span class="st">/^(rm|\$|€|£|¥|₹|usd|aud)/i</span>, <span class="st">""</span>);
+}
+
+<span class="kw">export function</span> <span class="fn">parseExpenseInput</span>(input: <span class="tp">string</span>): <span class="tp">ParsedExpense</span> | <span class="tp">null</span> {
+  <span class="kw">const</span> tokens = input.<span class="fn">trim</span>().<span class="fn">split</span>(<span class="st">/\s+/</span>);
+
+  <span class="cm">// Extract labels</span>
+  <span class="kw">const</span> labels = tokens.<span class="fn">filter</span>(t =&gt; t.<span class="fn">startsWith</span>(<span class="st">"#"</span>))
+                       .<span class="fn">map</span>(t =&gt; t.<span class="fn">slice</span>(<span class="nm">1</span>).<span class="fn">toLowerCase</span>());
+  <span class="kw">const</span> rest = tokens.<span class="fn">filter</span>(t =&gt; !t.<span class="fn">startsWith</span>(<span class="st">"#"</span>));
+
+  <span class="cm">// Find amount</span>
+  <span class="kw">const</span> amountIdx = rest.<span class="fn">findIndex</span>(t =&gt; !<span class="fn">isNaN</span>(<span class="fn">parseFloat</span>(<span class="fn">stripCurrencyPrefix</span>(t))));
+  <span class="kw">if</span> (amountIdx === <span class="nm">-1</span>) <span class="kw">return null</span>;
+
+  <span class="kw">const</span> categoryWords = rest.<span class="fn">slice</span>(<span class="nm">0</span>, amountIdx);
+  <span class="kw">const</span> category = categoryWords.<span class="fn">map</span>(<span class="fn">capitalize</span>).<span class="fn">join</span>(<span class="st">" "</span>);
+  <span class="kw">const</span> isIncome = categoryWords.<span class="fn">some</span>(w =&gt; INCOME_KEYWORDS.<span class="fn">has</span>(w.<span class="fn">toLowerCase</span>()));
+
+  <span class="kw">return</span> { category, amount, type: isIncome ? <span class="st">"income"</span> : <span class="st">"expense"</span>, labels };
+}</pre>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- MODULE 10 -->
+    <div id="m10" class="module-section">
+      <div class="module-header">
+        <div class="module-badge">10</div>
+        <div class="module-title-wrap">
+          <div class="module-label">Module 10</div>
+          <div class="module-title">Recurring Transactions</div>
+        </div>
+      </div>
+
+      <p>Recurring transactions are rules stored in the database. The user manually "posts" them when due (instead of auto-posting, which would require a cron job).</p>
+
+      <h3>Status Logic</h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — lib/utils.ts</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="kw">function</span> <span class="fn">getNextDueDate</span>(frequency, startDate, lastRun): <span class="tp">Date</span> {
+  <span class="kw">const</span> base = lastRun ?? startDate;  <span class="cm">// null lastRun = never posted</span>
+  <span class="kw">switch</span> (frequency) {
+    <span class="kw">case</span> <span class="st">"daily"</span>:   <span class="kw">return</span> <span class="fn">addDays</span>(base, <span class="nm">1</span>);
+    <span class="kw">case</span> <span class="st">"weekly"</span>:  <span class="kw">return</span> <span class="fn">addDays</span>(base, <span class="nm">7</span>);
+    <span class="kw">case</span> <span class="st">"monthly"</span>: <span class="kw">return</span> <span class="fn">addMonths</span>(base, <span class="nm">1</span>);
+    <span class="kw">case</span> <span class="st">"yearly"</span>:  <span class="kw">return</span> <span class="fn">addYears</span>(base, <span class="nm">1</span>);
+  }
+}
+
+<span class="kw">function</span> <span class="fn">getRecurringStatus</span>(nextDue, endDate): <span class="tp">Status</span> {
+  <span class="kw">if</span> (endDate &amp;&amp; today &gt; endDate)              <span class="kw">return</span> <span class="st">"ended"</span>;
+  <span class="kw">if</span> (today &gt; nextDue)                         <span class="kw">return</span> <span class="st">"overdue"</span>;
+  <span class="kw">if</span> (<span class="fn">differenceInDays</span>(nextDue, today) &lt;= <span class="nm">3</span>)   <span class="kw">return</span> <span class="st">"due"</span>;
+  <span class="kw">return</span> <span class="st">"upcoming"</span>;
+}</pre>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Status</th><th>Badge</th><th>UI behavior</th></tr></thead>
+          <tbody>
+            <tr><td><code>upcoming</code></td><td><span class="pill pill-blue">upcoming</span></td><td>Section is collapsed by default</td></tr>
+            <tr><td><code>due</code></td><td><span class="pill pill-amber">due</span></td><td>Section auto-expands</td></tr>
+            <tr><td><code>overdue</code></td><td><span class="pill pill-red">overdue</span></td><td>Section auto-expands</td></tr>
+            <tr><td><code>ended</code></td><td><span class="pill pill-accent">ended</span></td><td>Shown but Post button disabled</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Atomic Posting</h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — lib/actions.ts</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="cm">// db.$transaction = SQL transaction: both succeed or both fail</span>
+<span class="kw">await</span> db.<span class="fn">$transaction</span>([
+  <span class="cm">// 1. Create the actual transaction</span>
+  db.transaction.<span class="fn">create</span>({ data: { userId, category, amount, date: <span class="kw">new</span> <span class="tp">Date</span>() } }),
+
+  <span class="cm">// 2. Update lastRun so next due date advances</span>
+  db.recurringTransaction.<span class="fn">update</span>({
+    where: { id },
+    data: { lastRun: <span class="kw">new</span> <span class="tp">Date</span>() },
+  }),
+]);
+<span class="cm">// Without this: "transaction created but lastRun not updated" = double-posting</span></pre>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- MODULE 11 -->
+    <div id="m11" class="module-section">
+      <div class="module-header">
+        <div class="module-badge">11</div>
+        <div class="module-title-wrap">
+          <div class="module-label">Module 11</div>
+          <div class="module-title">Charts with Recharts</div>
+        </div>
+      </div>
+
+      <p>Recharts is a declarative chart library for React built on D3. Instead of imperative D3 code, you describe charts as JSX components.</p>
+
+      <h3>Donut Pie Chart</h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">tsx — components/charts/SpendingPieChart.tsx</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre>&lt;<span class="tp">ResponsiveContainer</span> width=<span class="st">"100%"</span> height={<span class="nm">200</span>}&gt;
+  &lt;<span class="tp">PieChart</span>&gt;
+    &lt;<span class="tp">Pie</span>
+      data={data}          <span class="cm">// [{ name: "Food", value: 150 }, ...]</span>
+      dataKey=<span class="st">"value"</span>      <span class="cm">// which field = slice size</span>
+      innerRadius={<span class="nm">60</span>}     <span class="cm">// donut hole</span>
+      outerRadius={<span class="nm">90</span>}
+    &gt;
+      {data.<span class="fn">map</span>((entry) =&gt; (
+        &lt;<span class="tp">Cell</span>
+          key={entry.name}
+          fill={<span class="fn">stringToColor</span>(entry.name)}  <span class="cm">// deterministic per-category color</span>
+        /&gt;
+      ))}
+    &lt;/<span class="tp">Pie</span>&gt;
+    &lt;<span class="tp">Tooltip</span> formatter={(v) =&gt; <span class="fn">formatCurrency</span>(v)} /&gt;
+  &lt;/<span class="tp">PieChart</span>&gt;
+&lt;/<span class="tp">ResponsiveContainer</span>&gt;</pre>
+      </div>
+
+      <h3>Deterministic Category Colors</h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — lib/utils.ts</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="kw">export function</span> <span class="fn">stringToColor</span>(str: <span class="tp">string</span>): <span class="tp">string</span> {
+  <span class="kw">let</span> hash = <span class="nm">0</span>;
+  <span class="kw">for</span> (<span class="kw">let</span> i = <span class="nm">0</span>; i &lt; str.length; i++) {
+    hash = str.<span class="fn">charCodeAt</span>(i) + ((hash &lt;&lt; <span class="nm">5</span>) - hash);
+  }
+  <span class="kw">const</span> hue = Math.<span class="fn">abs</span>(hash) % <span class="nm">360</span>;
+  <span class="kw">return</span> <span class="st">`hsl(<span class="op">${</span>hue<span class="op">}</span>, 65%, 55%)`</span>;  <span class="cm">// fixed saturation/lightness</span>
+}
+<span class="cm">// "Food" always → same hue. No stored mapping needed.</span>
+<span class="cm">// 65% saturation + 55% lightness = visible on dark background</span></pre>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- MODULE 12 -->
+    <div id="m12" class="module-section">
+      <div class="module-header">
+        <div class="module-badge">12</div>
+        <div class="module-title-wrap">
+          <div class="module-label">Module 12</div>
+          <div class="module-title">Testing with Playwright</div>
+        </div>
+      </div>
+
+      <p>Playwright controls a real browser and takes screenshots. Tests compare those screenshots against stored baselines — any visual change is caught.</p>
+
+      <h3>Visual Regression Testing</h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — e2e/dashboard.spec.ts</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre>test(<span class="st">"dashboard looks correct on desktop"</span>, <span class="kw">async</span> ({ page }) =&gt; {
+  <span class="kw">await</span> page.<span class="fn">goto</span>(<span class="st">"/dashboard"</span>);
+  <span class="kw">await</span> <span class="fn">amountMasks</span>(page);  <span class="cm">// blur currency amounts — they change daily!</span>
+
+  <span class="cm">// Compare screenshot to stored baseline — fails if pixels differ</span>
+  <span class="kw">await</span> <span class="fn">expect</span>(page).<span class="fn">toHaveScreenshot</span>(<span class="st">"dashboard-desktop.png"</span>);
+});</pre>
+      </div>
+
+      <h3>The <code>amountMasks</code> Helper</h3>
+      <div class="code-wrap">
+        <div class="code-header">
+          <span class="code-lang">typescript — e2e/helpers.ts</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="kw">export async function</span> <span class="fn">amountMasks</span>(page: <span class="tp">Page</span>) {
+  <span class="cm">// All currency amounts use .tabular-nums — blur them so</span>
+  <span class="cm">// daily spending changes don't break snapshots</span>
+  <span class="kw">await</span> page.<span class="fn">addStyleTag</span>({
+    content: <span class="st">".tabular-nums { filter: blur(4px); }"</span>,
+  });
+}</pre>
+      </div>
+
+      <h3>Test Viewports & Commands</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>npm run test:ui</code></td><td>Run all tests at 3 viewports (mobile 390px, tablet 768px, desktop 1280px)</td></tr>
+            <tr><td><code>npm run test:ui:update</code></td><td>Regenerate baselines after intentional design changes</td></tr>
+            <tr><td><code>npm run test:ui:report</code></td><td>Open HTML report with screenshots and diffs</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout tip">
+        <span class="callout-icon">💡</span>
+        <div class="callout-body">The global setup (<code>e2e/global.setup.ts</code>) logs in once and saves the session to <code>.auth/session.json</code>. All tests reuse this session — no repeated login needed, much faster test runs.</div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- MODULE 13 -->
+    <div id="m13" class="module-section">
+      <div class="module-header">
+        <div class="module-badge">13</div>
+        <div class="module-title-wrap">
+          <div class="module-label">Module 13</div>
+          <div class="module-title">Putting It All Together</div>
+        </div>
+      </div>
+
+      <p>Let's trace a complete request through every layer of the stack.</p>
+
+      <h3>End-to-End: Adding an Expense Online</h3>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-line"><div class="flow-dot">1</div><div class="flow-connector"></div></div>
+          <div class="flow-content"><strong>User types "coffee 15 starbucks #work" → Enter</strong><p><code>components/ExpenseInput.tsx</code></p></div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-line"><div class="flow-dot">2</div><div class="flow-connector"></div></div>
+          <div class="flow-content"><strong>Parser runs</strong><p><code>lib/parser.ts</code> → <code>{ category: "Coffee", amount: 15, note: "starbucks", labels: ["work"] }</code></p></div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-line"><div class="flow-dot">3</div><div class="flow-connector"></div></div>
+          <div class="flow-content"><strong>Optimistic state update</strong><p>Generate <code>tempId</code>, add to React state immediately. UI shows transaction with no spinner.</p></div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-line"><div class="flow-dot">4</div><div class="flow-connector"></div></div>
+          <div class="flow-content"><strong>Server action called</strong><p><code>lib/actions.ts → addTransaction()</code>: verify JWT → <code>db.transaction.create()</code> → <code>revalidatePath()</code> → return <code>{ id: "cm4real..." }</code></p></div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-line"><div class="flow-dot">5</div><div class="flow-connector"></div></div>
+          <div class="flow-content"><strong>Temp ID swapped for real ID</strong><p><code>handleReplace(tempId, result.id)</code> — React state + IndexedDB both updated</p></div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-line"><div class="flow-dot">6</div></div>
+          <div class="flow-content"><strong>UI reflects confirmed transaction</strong><p>No amber badge, real ID, charts recalculated</p></div>
+        </div>
+      </div>
+
+      <h3>Key Design Decision Reference</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Decision</th><th>Reason</th></tr></thead>
+          <tbody>
+            <tr><td>Server Components for data fetching</td><td>Zero client JS cost; data available at render time, no loading spinner</td></tr>
+            <tr><td>Client Component for interactivity</td><td><code>useState</code>/<code>useEffect</code> only work in client components</td></tr>
+            <tr><td>Optimistic UI everywhere</td><td>Feels instant; 99% of mutations succeed</td></tr>
+            <tr><td>IndexedDB for offline storage</td><td>Survives page reloads; structured queries; same data shape as server</td></tr>
+            <tr><td>Service Worker for background sync</td><td>Works even when the tab is closed</td></tr>
+            <tr><td><code>drainQueue()</code> stops on first failure</td><td>Preserves causal ordering — ADD must succeed before UPDATE for same record</td></tr>
+            <tr><td><code>replaceTempId()</code> is an atomic IDB transaction</td><td>Prevents ID inconsistency if page reloads mid-sync</td></tr>
+            <tr><td>HTTP-only cookies for JWT</td><td>JavaScript can't read them → XSS-safe session storage</td></tr>
+            <tr><td>Natural language input</td><td>Minimum friction for the most common action in the app</td></tr>
+            <tr><td>Don't <code>revalidatePath("/")</code></td><td>Root page is a redirect; revalidating it causes a navigation loop</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Quick File Reference</h3>
+      <div class="file-map">
+        <div class="file-card"><div class="file-card-name">middleware.ts</div><div class="file-card-desc">Route protection — JWT validation on every request</div></div>
+        <div class="file-card"><div class="file-card-name">lib/auth.ts</div><div class="file-card-desc">NextAuth config, credentials provider, bcrypt compare</div></div>
+        <div class="file-card"><div class="file-card-name">prisma/schema.prisma</div><div class="file-card-desc">Database schema — Transaction, RecurringTransaction</div></div>
+        <div class="file-card"><div class="file-card-name">lib/db.ts</div><div class="file-card-desc">Prisma client singleton (dev hot-reload safe)</div></div>
+        <div class="file-card"><div class="file-card-name">lib/actions.ts</div><div class="file-card-desc">All server mutations — CRUD + dashboard data fetch</div></div>
+        <div class="file-card"><div class="file-card-name">app/(dashboard)/dashboard/page.tsx</div><div class="file-card-desc">Server component — fetches initial data for dashboard</div></div>
+        <div class="file-card"><div class="file-card-name">components/DashboardContent.tsx</div><div class="file-card-desc">Client component — owns all dashboard state + optimistic updates</div></div>
+        <div class="file-card"><div class="file-card-name">components/ExpenseInput.tsx</div><div class="file-card-desc">Quick-add input — parses NL, handles online + offline paths</div></div>
+        <div class="file-card"><div class="file-card-name">lib/parser.ts</div><div class="file-card-desc">Natural language → { category, amount, type, labels }</div></div>
+        <div class="file-card"><div class="file-card-name">lib/idb.ts</div><div class="file-card-desc">IndexedDB wrapper — transactions + syncQueue stores</div></div>
+        <div class="file-card"><div class="file-card-name">lib/sync.ts</div><div class="file-card-desc">Offline logic — applyLocalMutation, drainQueue</div></div>
+        <div class="file-card"><div class="file-card-name">context/SyncProvider.tsx</div><div class="file-card-desc">React context — online state, pending count, sync trigger</div></div>
+        <div class="file-card"><div class="file-card-name">app/api/sync/route.ts</div><div class="file-card-desc">REST endpoint for service worker sync (not a server action)</div></div>
+        <div class="file-card"><div class="file-card-name">public/sw.js</div><div class="file-card-desc">Service worker — cache strategy + background sync drain</div></div>
+      </div>
+
+      <h3>Where to Go Next</h3>
+      <ul>
+        <li><strong>React Server Components deep dive</strong> — streaming, Suspense boundaries, partial hydration</li>
+        <li><strong>Raw IndexedDB API</strong> — understand what the <code>idb</code> library abstracts away</li>
+        <li><strong>Service Worker lifecycle</strong> — install, activate, claim phases in depth</li>
+        <li><strong>Web Background Sync API</strong> — browser support, fallbacks, quotas</li>
+        <li><strong>Prisma advanced features</strong> — middleware, raw queries, migrations vs <code>db push</code></li>
+        <li><strong>NextAuth customization</strong> — database sessions, role-based access, custom providers</li>
+        <li><strong>Recharts customization</strong> — custom shapes, reference lines, animations</li>
+        <li><strong>Playwright advanced</strong> — network mocking, accessibility testing, CI parallelization</li>
+      </ul>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<script>
+  // ── Sidebar active state ──────────────────────────────────────────────────
+  function setActive(el) {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    const label = el.textContent.trim().split('\n').pop().trim();
+    document.getElementById('current-section').textContent = label;
+    closeSidebar();
+  }
+
+  // ── Intersection observer for auto-highlight ──────────────────────────────
+  const sections = document.querySelectorAll('.module-section');
+  const navItems = document.querySelectorAll('.nav-item');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navItems.forEach(item => {
+          const href = item.getAttribute('href').replace('#', '');
+          if (href === id) {
+            item.classList.add('active');
+            const label = item.textContent.trim().split('\n').pop().trim();
+            document.getElementById('current-section').textContent = label;
+          } else {
+            item.classList.remove('active');
+          }
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+
+  // ── Scroll progress ───────────────────────────────────────────────────────
+  const scrollBar = document.getElementById('scroll-progress');
+  const fill = document.getElementById('progress-fill');
+  const progressLabel = document.getElementById('progress-label');
+
+  window.addEventListener('scroll', () => {
+    const total = document.body.scrollHeight - window.innerHeight;
+    const pct = Math.min(100, Math.round((window.scrollY / total) * 100));
+    scrollBar.style.transform = `scaleX(${pct / 100})`;
+    fill.style.width = pct + '%';
+    progressLabel.textContent = pct + '% read';
+  });
+
+  // ── Copy buttons ──────────────────────────────────────────────────────────
+  function copyCode(btn) {
+    const pre = btn.closest('.code-wrap').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      btn.textContent = '✓ Copied';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 1800);
+    });
+  }
+
+  // ── Mobile sidebar ────────────────────────────────────────────────────────
+  function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('show');
+  }
+
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('overlay').classList.remove('show');
+  }
+
+  // ── Search ────────────────────────────────────────────────────────────────
+  function handleSearch(q) {
+    const items = document.querySelectorAll('.nav-item');
+    const query = q.toLowerCase();
+    items.forEach(item => {
+      const text = item.textContent.toLowerCase();
+      item.style.display = text.includes(query) ? '' : 'none';
+    });
+  }
+
+  // ── TOC card navigation ───────────────────────────────────────────────────
+  document.querySelectorAll('.toc-card').forEach(card => {
+    card.addEventListener('click', e => {
+      const href = card.getAttribute('href');
+      const target = document.querySelector(href);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+</script>
+</body>
+</html>

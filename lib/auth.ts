@@ -22,7 +22,13 @@ export const authOptions: NextAuthOptions = {
         if (dbUser) {
           const ok = await bcrypt.compare(credentials.password, dbUser.passwordHash);
           if (!ok) return null;
-          return { id: dbUser.id, email: dbUser.email, name: dbUser.name, role: dbUser.role };
+          return {
+            id: dbUser.id,
+            email: dbUser.email,
+            name: dbUser.name,
+            role: dbUser.role,
+            sessionVersion: dbUser.sessionVersion,
+          };
         }
 
         // Bootstrap fallback: fires only on first login before seed has run
@@ -53,7 +59,24 @@ export const authOptions: NextAuthOptions = {
           update: {},
         });
 
-        return { id: created.id, email: created.email, name: created.name, role: created.role };
+        // Seed default categories for the bootstrap admin if not already done
+        try {
+          const { DEFAULT_CATEGORIES } = await import("@/lib/utils");
+          await db.category.createMany({
+            data: DEFAULT_CATEGORIES.map((c) => ({ ...c, userId: created.id, isDefault: true })),
+            skipDuplicates: true,
+          });
+        } catch {
+          // Non-fatal — user can manually trigger via Settings
+        }
+
+        return {
+          id: created.id,
+          email: created.email,
+          name: created.name,
+          role: created.role,
+          sessionVersion: created.sessionVersion,
+        };
       },
     }),
   ],
@@ -73,6 +96,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.userId = user.id;
         token.role = (user as { role?: string }).role ?? "user";
+        token.sessionVersion = (user as { sessionVersion?: number }).sessionVersion ?? 1;
       }
       return token;
     },
@@ -80,6 +104,7 @@ export const authOptions: NextAuthOptions = {
       if (token && session.user) {
         session.user.userId = token.userId;
         session.user.role = token.role;
+        session.user.sessionVersion = token.sessionVersion as number;
       }
       return session;
     },

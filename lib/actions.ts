@@ -6,31 +6,35 @@ import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getNextDueDate, DEFAULT_CATEGORIES, type RecurringFrequency } from "@/lib/utils";
+import { IS_SQLITE, encodeLabels, normalizeTx, getLabelFilter, getDailyRows } from "@/lib/db-adapter";
+import { transactionSchema, categorySchema, budgetSchema, recurringSchema, passwordSchema } from "@/lib/validation";
 import bcrypt from "bcryptjs";
 
-// SQLite stores labels as a JSON string; PostgreSQL uses a native string array.
-const IS_SQLITE = (process.env.DATABASE_URL ?? "").startsWith("file:");
-
-function parseLabels(val: string | string[]): string[] {
-  if (Array.isArray(val)) return val;
-  try { return JSON.parse(val); } catch { return []; }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function encodeLabels(labels: string[]): any {
-  return IS_SQLITE ? JSON.stringify(labels) : labels;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function normalizeTx(tx: any) {
-  return { ...tx, labels: parseLabels(tx.labels) };
-}
-
-// ─── Auth helper ──────────────────────────────────────────────────────────────
+// ─── Auth helpers ──────────────────────────────────────────────────────────────
 
 async function getAuthenticatedUserId(): Promise<string> {
   const session = await getServerSession(authOptions);
   if (!session?.user) throw new Error("Unauthorized");
+  const userId = session.user.userId;
+  if (!userId) throw new Error("Unauthorized");
+
+  // Session version check — rejects stale JWTs after password change
+  const dbUser = await db.user.findUnique({
+    where: { id: userId },
+    select: { sessionVersion: true },
+  });
+  if (!dbUser) throw new Error("Unauthorized");
+  if (dbUser.sessionVersion !== (session.user.sessionVersion ?? 1)) {
+    throw new Error("Unauthorized");
+  }
+
+  return userId;
+}
+
+async function requireAdmin(): Promise<string> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) throw new Error("Unauthorized");
+  if (session.user.role !== "admin") throw new Error("Forbidden");
   const userId = session.user.userId;
   if (!userId) throw new Error("Unauthorized");
   return userId;
@@ -47,6 +51,7 @@ export async function addTransaction(data: {
   labels?: string[];
 }) {
   const userId = await getAuthenticatedUserId();
+  transactionSchema.parse({ ...data, date: data.date ?? undefined });
 
   const tx = await db.transaction.create({
     data: {
@@ -77,6 +82,7 @@ export async function updateTransaction(
   }
 ) {
   const userId = await getAuthenticatedUserId();
+  transactionSchema.partial().parse(data);
 
   // Verify ownership
   const existing = await db.transaction.findFirst({ where: { id, userId } });
@@ -116,6 +122,9 @@ export async function getTransactionIds(): Promise<string[]> {
   const rows = await db.transaction.findMany({
     where: { userId },
     select: { id: true },
+    // Practical upper bound for IDB reconciliation; prevents unbounded scans
+    // while still covering virtually all real-world usage.
+    take: 25000,
   });
   return rows.map((r) => r.id);
 }
@@ -141,19 +150,7 @@ export async function getDashboardData(month: number, year: number) {
       where: { userId, date: dateFilter },
       _sum: { amount: true },
     }),
-    IS_SQLITE
-      ? db.$queryRaw<Array<{ day: string; type: string; total: number }>>`
-          SELECT strftime('%Y-%m-%d', date) AS day, type, SUM(amount) AS total
-          FROM transactions
-          WHERE userId = ${userId} AND date >= ${start} AND date <= ${end}
-          GROUP BY day, type
-        `
-      : db.$queryRaw<Array<{ day: Date; type: string; total: number | bigint }>>`
-          SELECT date_trunc('day', date) AS day, type, SUM(amount) AS total
-          FROM transactions
-          WHERE "userId" = ${userId} AND date >= ${start} AND date <= ${end}
-          GROUP BY day, type
-        `,
+    getDailyRows(userId, start, end),
   ]);
 
   const transactions = transactionsRaw.map(normalizeTx);
@@ -261,8 +258,8 @@ export async function getTransactions(filters: {
     })).map(normalizeTx).filter((tx) => tx.labels.includes(filters.label!));
 
     const cursorIdx = filters.cursor ? rows.findIndex((r) => r.id === filters.cursor) : -1;
-    const start = cursorIdx >= 0 ? cursorIdx + 1 : 0;
-    const page = rows.slice(start, start + limit + 1);
+    const startIdx = cursorIdx >= 0 ? cursorIdx + 1 : 0;
+    const page = rows.slice(startIdx, startIdx + limit + 1);
     const nextCursor = page.length > limit ? page[limit - 1].id : null;
     const finalRows = page.slice(0, limit);
     const totalIncome = rows.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
@@ -272,7 +269,7 @@ export async function getTransactions(filters: {
 
   const pgWhere = {
     ...baseWhere,
-    ...(filters.label ? { labels: { has: filters.label } } : {}),
+    ...getLabelFilter(filters.label),
   };
 
   const [rows, totals, count] = await Promise.all([
@@ -320,6 +317,7 @@ export async function addCategory(data: {
   color?: string;
 }) {
   const userId = await getAuthenticatedUserId();
+  categorySchema.parse(data);
 
   const category = await db.category.create({
     data: {
@@ -336,6 +334,38 @@ export async function addCategory(data: {
   return category;
 }
 
+export async function updateCategory(
+  id: string,
+  data: { name?: string; icon?: string; color?: string }
+) {
+  const userId = await getAuthenticatedUserId();
+  categorySchema.partial().parse(data);
+
+  const existing = await db.category.findFirst({ where: { id, userId } });
+  if (!existing) throw new Error("Category not found");
+
+  if (data.name && data.name !== existing.name) {
+    const conflict = await db.category.findFirst({
+      where: { userId, name: data.name, id: { not: id } },
+    });
+    if (conflict) throw new Error("A category with that name already exists");
+  }
+
+  const updated = await db.category.update({
+    where: { id },
+    data: {
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.icon !== undefined && { icon: data.icon }),
+      ...(data.color !== undefined && { color: data.color }),
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  revalidatePath("/settings");
+  return updated;
+}
+
 export async function deleteCategory(id: string) {
   const userId = await getAuthenticatedUserId();
 
@@ -346,6 +376,14 @@ export async function deleteCategory(id: string) {
   await db.category.delete({ where: { id } });
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
+}
+
+// Seeds all default categories for a given userId — no auth check (internal use only).
+async function _seedDefaultCategories(userId: string): Promise<void> {
+  await db.category.createMany({
+    data: DEFAULT_CATEGORIES.map((c) => ({ ...c, userId, isDefault: true })),
+    skipDuplicates: true,
+  });
 }
 
 export async function addDefaultCategories() {
@@ -390,6 +428,8 @@ export async function createRecurringTransaction(data: {
   note?: string;
 }) {
   const userId = await getAuthenticatedUserId();
+  recurringSchema.parse(data);
+
   const rec = await db.recurringTransaction.create({
     data: {
       userId,
@@ -473,6 +513,8 @@ export async function getBudgets() {
 
 export async function upsertBudget(data: { category: string; amount: number }) {
   const userId = await getAuthenticatedUserId();
+  budgetSchema.parse(data);
+
   const budget = await db.budget.upsert({
     where: { userId_category: { userId, category: data.category } },
     create: { userId, category: data.category, amount: data.amount },
@@ -510,6 +552,8 @@ export async function skipRecurringTransaction(id: string) {
   return updated;
 }
 
+// ─── Auth & Users ─────────────────────────────────────────────────────────────
+
 export async function changePassword(
   currentPassword: string,
   newPassword: string
@@ -518,17 +562,21 @@ export async function changePassword(
   const session = await getServerSession(authOptions);
   if (session?.user?.role === "demo") throw new Error("Demo accounts cannot change their password");
 
+  passwordSchema.parse(newPassword);
+
   const user = await db.user.findUnique({ where: { id: userId } });
   if (!user) throw new Error("User not found");
 
   const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
   if (!isValid) throw new Error("Current password is incorrect");
 
-  if (newPassword.length < 8) throw new Error("New password must be at least 8 characters");
   if (newPassword === currentPassword) throw new Error("New password must differ from your current password");
 
   const newHash = await bcrypt.hash(newPassword, 12);
-  await db.user.update({ where: { id: userId }, data: { passwordHash: newHash } });
+  await db.user.update({
+    where: { id: userId },
+    data: { passwordHash: newHash, sessionVersion: { increment: 1 } },
+  });
 
   return { success: true };
 }
@@ -542,7 +590,7 @@ export async function createUser(data: {
   const session = await getServerSession(authOptions);
   if (session?.user?.role !== "admin") throw new Error("Forbidden: admin only");
   if (!data.email || !data.password) throw new Error("Email and password are required");
-  if (data.password.length < 8) throw new Error("Password must be at least 8 characters");
+  passwordSchema.parse(data.password);
 
   const existing = await db.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (existing) throw new Error("A user with that email already exists");
@@ -556,23 +604,16 @@ export async function createUser(data: {
       role: data.role ?? "user",
     },
   });
+
+  // Seed default categories so the new user has a working setup immediately
+  await _seedDefaultCategories(user.id);
+
   return { id: user.id, email: user.email };
 }
 
 export async function getSessionRole(): Promise<string> {
   const session = await getServerSession(authOptions);
   return session?.user?.role ?? "user";
-}
-
-// ─── Admin helpers ─────────────────────────────────────────────────────────────
-
-async function requireAdmin(): Promise<string> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) throw new Error("Unauthorized");
-  if (session.user.role !== "admin") throw new Error("Forbidden");
-  const userId = session.user.userId;
-  if (!userId) throw new Error("Unauthorized");
-  return userId;
 }
 
 export async function getUsers() {
@@ -636,12 +677,15 @@ export async function updateUser(
 
 export async function adminResetPassword(id: string, newPassword: string): Promise<{ success: true }> {
   await requireAdmin();
-  if (newPassword.length < 8) throw new Error("Password must be at least 8 characters");
+  passwordSchema.parse(newPassword);
 
   const target = await db.user.findUnique({ where: { id }, select: { id: true } });
   if (!target) throw new Error("Not found");
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
-  await db.user.update({ where: { id }, data: { passwordHash } });
+  await db.user.update({
+    where: { id },
+    data: { passwordHash, sessionVersion: { increment: 1 } },
+  });
   return { success: true };
 }

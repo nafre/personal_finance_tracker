@@ -43,6 +43,11 @@ export function BudgetProgress({ category, budget, spent, className }: BudgetPro
           style={{ width: `${pct}%` }}
         />
       </div>
+      <p className={cn("text-xs tabular-nums", isOver ? "text-rose-400" : "text-emerald-400")}>
+        {isOver
+          ? `${formatCurrency(spent - budget)} over budget`
+          : `${formatCurrency(budget - spent)} remaining`}
+      </p>
     </div>
   );
 }

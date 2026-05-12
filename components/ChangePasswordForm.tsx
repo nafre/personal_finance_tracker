@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { signOut } from "next-auth/react";
 import { changePassword } from "@/lib/actions";
 
 export function ChangePasswordForm() {
@@ -10,13 +11,11 @@ export function ChangePasswordForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [currentPasswordError, setCurrentPasswordError] = useState("");
-  const [success, setSuccess] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setCurrentPasswordError("");
-    setSuccess(false);
 
     if (newPassword.length < 8) {
       setError("New password must be at least 8 characters");
@@ -30,10 +29,8 @@ export function ChangePasswordForm() {
     setIsLoading(true);
     try {
       await changePassword(currentPassword, newPassword);
-      setSuccess(true);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      // Sign out to clear the now-stale JWT — session version was incremented
+      await signOut({ callbackUrl: "/login" });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
       if (msg === "Current password is incorrect") {
@@ -41,7 +38,6 @@ export function ChangePasswordForm() {
       } else {
         setError(msg);
       }
-    } finally {
       setIsLoading(false);
     }
   }
@@ -49,12 +45,6 @@ export function ChangePasswordForm() {
   return (
     <div data-testid="change-password-form" className="card space-y-4">
       <h2 className="text-sm font-semibold text-slate-300">Change password</h2>
-
-      {success && (
-        <p className="text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
-          Password updated successfully.
-        </p>
-      )}
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="space-y-1">

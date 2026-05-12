@@ -79,13 +79,14 @@ model RecurringTransaction {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String   @default("Me")
-  passwordHash String
-  role         String   @default("user")   // "admin" | "user" | "demo"
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String   @default("Me")
+  passwordHash   String
+  role           String   @default("user")   // "admin" | "user" | "demo"
+  sessionVersion Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@map("users")
 }

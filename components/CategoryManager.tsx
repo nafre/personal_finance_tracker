@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { addCategory, deleteCategory, addDefaultCategories } from "@/lib/actions";
-import { DEFAULT_CATEGORIES } from "@/lib/utils";
+import { addCategory, deleteCategory, addDefaultCategories, updateCategory } from "@/lib/actions";
 
 interface Category {
   id: string;
@@ -27,8 +26,40 @@ export function CategoryManager({ initialCategories }: { initialCategories: Cate
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const existingDefaultNames = new Set(categories.filter((c) => c.isDefault).map((c) => c.name));
-  const missingDefaults = DEFAULT_CATEGORIES.filter((c) => !existingDefaultNames.has(c.name));
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", icon: "📦", color: "#6366f1" });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+
+  function startEdit(cat: Category) {
+    setEditingId(cat.id);
+    setEditForm({ name: cat.name, icon: cat.icon, color: cat.color });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  async function handleSaveEdit() {
+    if (!editingId) return;
+    setIsSavingEdit(true);
+    setError("");
+    try {
+      await updateCategory(editingId, { name: editForm.name.trim(), icon: editForm.icon, color: editForm.color });
+      setCategories((prev) =>
+        prev.map((c) =>
+          c.id === editingId
+            ? { ...c, name: editForm.name.trim(), icon: editForm.icon, color: editForm.color }
+            : c
+        )
+      );
+      setEditingId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update category");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
 
   async function handleRestoreDefaults() {
     setIsRestoring(true);
@@ -89,7 +120,7 @@ export function CategoryManager({ initialCategories }: { initialCategories: Cate
   return (
     <div className="space-y-6">
       {/* Missing defaults banner */}
-      {missingDefaults.length === DEFAULT_CATEGORIES.length && (
+      {defaults.length === 0 && (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3">
           <p className="text-sm text-indigo-300">No default categories yet.</p>
           <button
@@ -115,7 +146,19 @@ export function CategoryManager({ initialCategories }: { initialCategories: Cate
               </div>
             )}
             {defaults.map((cat) => (
-              <CategoryRow key={cat.id} cat={cat} onDelete={handleDelete} deletingId={deletingId} />
+              <CategoryRow
+                key={cat.id}
+                cat={cat}
+                onDelete={handleDelete}
+                deletingId={deletingId}
+                isEditing={editingId === cat.id}
+                editForm={editForm}
+                setEditForm={setEditForm}
+                isSavingEdit={isSavingEdit}
+                onStartEdit={startEdit}
+                onSaveEdit={handleSaveEdit}
+                onCancelEdit={cancelEdit}
+              />
             ))}
             {custom.length > 0 && (
               <div className="px-4 pt-3 pb-1">
@@ -123,7 +166,19 @@ export function CategoryManager({ initialCategories }: { initialCategories: Cate
               </div>
             )}
             {custom.map((cat) => (
-              <CategoryRow key={cat.id} cat={cat} onDelete={handleDelete} deletingId={deletingId} />
+              <CategoryRow
+                key={cat.id}
+                cat={cat}
+                onDelete={handleDelete}
+                deletingId={deletingId}
+                isEditing={editingId === cat.id}
+                editForm={editForm}
+                setEditForm={setEditForm}
+                isSavingEdit={isSavingEdit}
+                onStartEdit={startEdit}
+                onSaveEdit={handleSaveEdit}
+                onCancelEdit={cancelEdit}
+              />
             ))}
           </>
         )}
@@ -207,11 +262,91 @@ function CategoryRow({
   cat,
   onDelete,
   deletingId,
+  isEditing,
+  editForm,
+  setEditForm,
+  isSavingEdit,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
 }: {
   cat: Category;
   onDelete: (id: string) => void;
   deletingId: string | null;
+  isEditing: boolean;
+  editForm: { name: string; icon: string; color: string };
+  setEditForm: React.Dispatch<React.SetStateAction<{ name: string; icon: string; color: string }>>;
+  isSavingEdit: boolean;
+  onStartEdit: (cat: Category) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
 }) {
+  if (isEditing) {
+    return (
+      <div className="px-4 py-3 space-y-3">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={editForm.icon}
+            onChange={(e) => setEditForm((f) => ({ ...f, icon: e.target.value }))}
+            onBlur={(e) => { if (!e.target.value.trim()) setEditForm((f) => ({ ...f, icon: "📦" })); }}
+            className="input-base w-14 text-center text-lg"
+            maxLength={4}
+            aria-label="Icon"
+          />
+          <input
+            type="text"
+            value={editForm.name}
+            onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+            className="input-base flex-1"
+            maxLength={50}
+            autoFocus
+          />
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-slate-500 shrink-0">Color:</span>
+          {PRESET_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setEditForm((f) => ({ ...f, color: c }))}
+              className="w-5 h-5 rounded-full transition-transform hover:scale-110 focus:outline-none"
+              style={{
+                backgroundColor: c,
+                outline: editForm.color === c ? `2px solid ${c}` : "none",
+                outlineOffset: "2px",
+              }}
+              aria-label={c}
+            />
+          ))}
+          <input
+            type="color"
+            value={editForm.color}
+            onChange={(e) => setEditForm((f) => ({ ...f, color: e.target.value }))}
+            className="w-5 h-5 rounded-full cursor-pointer bg-transparent border-0 p-0 overflow-hidden"
+            title="Custom color"
+          />
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={onSaveEdit}
+            disabled={isSavingEdit || !editForm.name.trim()}
+            className="btn-primary text-xs px-3 py-1.5 disabled:opacity-50"
+          >
+            {isSavingEdit ? "Saving…" : "Save"}
+          </button>
+          <button
+            onClick={onCancelEdit}
+            disabled={isSavingEdit}
+            className="text-xs text-slate-400 hover:text-slate-200 transition-colors px-3 py-1.5"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-3 py-3 px-4">
       <div
@@ -224,23 +359,34 @@ function CategoryRow({
       {cat.isDefault ? (
         <span className="text-xs text-slate-500 px-2 py-0.5 rounded-md bg-slate-800">Default</span>
       ) : (
-        <button
-          onClick={() => onDelete(cat.id)}
-          disabled={deletingId === cat.id}
-          className="text-slate-500 hover:text-rose-400 transition-colors disabled:opacity-40 p-1 rounded"
-          aria-label={`Delete ${cat.name}`}
-        >
-          {deletingId === cat.id ? (
-            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onStartEdit(cat)}
+            className="text-slate-500 hover:text-indigo-400 transition-colors p-1 rounded"
+            aria-label={`Edit ${cat.name}`}
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
-          ) : (
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          )}
-        </button>
+          </button>
+          <button
+            onClick={() => onDelete(cat.id)}
+            disabled={deletingId === cat.id}
+            className="text-slate-500 hover:text-rose-400 transition-colors disabled:opacity-40 p-1 rounded"
+            aria-label={`Delete ${cat.name}`}
+          >
+            {deletingId === cat.id ? (
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            )}
+          </button>
+        </div>
       )}
     </div>
   );

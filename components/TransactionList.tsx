@@ -134,6 +134,7 @@ function TransactionRow({
   );
   const [rowError, setRowError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { isOnline, userId, refreshPendingCount } = useSyncContext();
 
   function handleSave() {
@@ -190,6 +191,7 @@ function TransactionRow({
   function handleDelete() {
     if (!confirm("Delete this transaction?")) return;
     setRowError("");
+    setIsDeleting(true);
 
     if (!isOnline) {
       (async () => {
@@ -198,6 +200,7 @@ function TransactionRow({
           await refreshPendingCount();
           onDelete(tx.id);
         } catch {
+          setIsDeleting(false);
           setRowError("Failed to delete. Please try again.");
         }
       })();
@@ -216,14 +219,14 @@ function TransactionRow({
 
   if (editing) {
     return (
-      <div className="bg-slate-800 rounded-xl p-4 space-y-3 animate-fade-in">
+      <div className={cn("bg-slate-800 rounded-xl p-4 space-y-3 animate-fade-in", isSaving && "opacity-50 pointer-events-none")}>
         <div className="grid grid-cols-3 gap-2">
           <div>
             <label className="text-xs text-slate-400 mb-1 block">Category</label>
             <CategoryCombobox
               value={editCategory}
               onChange={setEditCategory}
-              categories={categories.map((c) => c.name)}
+              categories={categories}
             />
           </div>
           <div>
@@ -367,10 +370,18 @@ function TransactionRow({
           </button>
           <button
             onClick={handleDelete}
-            className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition-colors text-xs"
+            disabled={isDeleting}
+            className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition-colors text-xs disabled:opacity-40"
             title="Delete"
           >
-            🗑️
+            {isDeleting ? (
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <span>🗑️</span>
+            )}
           </button>
         </div>
       </div>
