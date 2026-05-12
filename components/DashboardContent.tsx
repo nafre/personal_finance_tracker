@@ -208,7 +208,7 @@ export function DashboardContent({
   const [totalIncome, setTotalIncome] = useState(initialTotalIncome);
   const [totalExpenses, setTotalExpenses] = useState(initialTotalExpenses);
   const [categoryData, setCategoryData] = useState(initialCategoryData);
-  const [dailyData] = useState(initialDailyData);
+  const [dailyData, setDailyData] = useState(initialDailyData);
   const [topCategory] = useState(initialTopCategory);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
@@ -362,6 +362,16 @@ export function DashboardContent({
           );
         });
       }
+
+      const txDay = txDate.getDate();
+      const field = tx.type === "income" ? "income" : "expense";
+      setDailyData((prev) =>
+        prev.map((d) =>
+          d.day === txDay
+            ? { ...d, [field]: Math.round((d[field] + tx.amount) * 100) / 100 }
+            : d
+        )
+      );
     },
     [month, year]
   );
@@ -398,6 +408,16 @@ export function DashboardContent({
           .sort((a, b) => b.value - a.value)
       );
     }
+
+    const delDay = new Date(tx.date).getDate();
+    const delField = tx.type === "income" ? "income" : "expense";
+    setDailyData((prev) =>
+      prev.map((d) =>
+        d.day === delDay
+          ? { ...d, [delField]: Math.round(Math.max(0, d[delField] - tx.amount) * 100) / 100 }
+          : d
+      )
+    );
   }, [transactions, pendingTransactions]);
 
   const handleUpdate = useCallback(
@@ -464,6 +484,27 @@ export function DashboardContent({
           }
         }
 
+        return updated;
+      });
+
+      const oldDay = new Date(old.date).getDate();
+      const newDay = new Date(data.date ? data.date : old.date).getDate();
+      const newTxAmount = data.amount ?? old.amount;
+      const newTxType   = data.type   ?? old.type;
+      setDailyData((prev) => {
+        let updated = [...prev];
+        const oldField = old.type === "income" ? "income" : "expense";
+        updated = updated.map((d) =>
+          d.day === oldDay
+            ? { ...d, [oldField]: Math.round(Math.max(0, d[oldField] - old.amount) * 100) / 100 }
+            : d
+        );
+        const newField = newTxType === "income" ? "income" : "expense";
+        updated = updated.map((d) =>
+          d.day === newDay
+            ? { ...d, [newField]: Math.round((d[newField] + newTxAmount) * 100) / 100 }
+            : d
+        );
         return updated;
       });
     },
