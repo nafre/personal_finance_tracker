@@ -82,7 +82,7 @@ export function StatCard({
         </div>
       </div>
 
-      <p className={cn("text-3xl font-bold tabular-nums relative", colorMap[effectiveKey])}>
+      <p className={cn("text-xl sm:text-3xl font-bold tabular-nums truncate relative", colorMap[effectiveKey])}>
         {variant === "balance" && amount < 0 ? "-" : ""}
         {formatCurrency(Math.abs(amount))}
       </p>

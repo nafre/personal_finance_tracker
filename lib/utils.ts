@@ -60,8 +60,8 @@ export function getRecurringStatus(
   if (endDate) {
     const end = new Date(endDate);
     end.setHours(0, 0, 0, 0);
-    // Ended if endDate is past OR next due falls beyond endDate (no payments left)
-    if (end < today || due > end) return "ended";
+    // Ended only when next due falls beyond endDate — a missed payment within the window stays overdue
+    if (due > end) return "ended";
   }
   if (due < today) return "overdue";
   if (due.getTime() === today.getTime()) return "due";
