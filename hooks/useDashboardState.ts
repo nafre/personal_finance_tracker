@@ -6,6 +6,37 @@ import { seedIDBFromServer, getTransactionsByMonth, deleteTransactionFromIDB } f
 import { getNextDueDate, getRecurringStatus, toMonthlyAmount, type RecurringFrequency } from "@/lib/utils";
 import type { Transaction, CategoryData, DailyData, RecurringTransaction, Budget } from "@/types";
 
+function computeBudgetSpent(
+  budget: Budget,
+  displayExpenses: number,
+  categoryData: CategoryData[],
+  mergedTransactions: Transaction[]
+): number {
+  switch (budget.budgetType) {
+    case "overall":
+      return displayExpenses;
+    case "category":
+      return categoryData.find((c) => c.name === budget.category)?.value ?? 0;
+    case "excluded": {
+      const excludedSpent = budget.excludedCategories.reduce(
+        (sum, cat) => sum + (categoryData.find((c) => c.name === cat)?.value ?? 0),
+        0
+      );
+      return Math.max(0, displayExpenses - excludedSpent);
+    }
+    case "label":
+      return mergedTransactions
+        .filter(
+          (t) =>
+            t.type === "expense" &&
+            budget.labels.some((l) => t.labels?.includes(l))
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+    default:
+      return 0;
+  }
+}
+
 interface UseDashboardStateProps {
   initialTransactions: Transaction[];
   initialTotalIncome: number;
@@ -354,11 +385,21 @@ export function useDashboardState({
     [transactions, pendingTransactions]
   );
 
+  const budgetSpending = useMemo(
+    () =>
+      budgets.map((b) => ({
+        id: b.id,
+        spent: computeBudgetSpent(b, displayExpenses, categoryData, mergedTransactions),
+      })),
+    [budgets, displayExpenses, categoryData, mergedTransactions]
+  );
+
   return {
     // State
     categoryData,
     dailyData,
     budgets,
+    budgetSpending,
     showBudgetManager,
     setShowBudgetManager,
     sheetOpen,

@@ -16,8 +16,12 @@ export const categorySchema = z.object({
 });
 
 export const budgetSchema = z.object({
-  category: z.string().min(1, "Category is required"),
+  name: z.string().min(1, "Name is required"),
   amount: z.number().positive("Amount must be positive"),
+  budgetType: z.enum(["overall", "category", "excluded", "label"]),
+  category: z.string().optional().nullable(),
+  excludedCategories: z.array(z.string()).default([]),
+  labels: z.array(z.string()).default([]),
 });
 
 export const recurringSchema = z.object({

@@ -17,6 +17,25 @@ export function normalizeTx(tx: any) {
   return { ...tx, labels: parseLabels(tx.labels) };
 }
 
+export function parseBudgetArray(val: string | string[]): string[] {
+  if (Array.isArray(val)) return val;
+  try { return JSON.parse(val); } catch { return []; }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function encodeBudgetArray(arr: string[]): any {
+  return IS_SQLITE ? JSON.stringify(arr) : arr;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function normalizeBudget(b: any) {
+  return {
+    ...b,
+    excludedCategories: parseBudgetArray(b.excludedCategories ?? []),
+    labels: parseBudgetArray(b.labels ?? []),
+  };
+}
+
 export function getLabelFilter(label?: string): Record<string, unknown> {
   if (!label) return {};
   if (IS_SQLITE) return {}; // SQLite: caller must do JS-side filtering

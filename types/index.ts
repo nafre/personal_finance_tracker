@@ -38,10 +38,16 @@ export interface RecurringTransaction {
   updatedAt: Date;
 }
 
+export type BudgetType = "overall" | "category" | "excluded" | "label";
+
 export interface Budget {
   id: string;
-  category: string;
+  name: string;
   amount: number;
+  budgetType: BudgetType;
+  category?: string | null;
+  excludedCategories: string[];
+  labels: string[];
 }
 
 export interface CategoryOption {

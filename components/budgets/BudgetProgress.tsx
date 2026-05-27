@@ -1,17 +1,18 @@
 "use client";
 
 import { formatCurrency, cn } from "@/lib/utils";
+import type { Budget } from "@/types";
 
 interface BudgetProgressProps {
-  category: string;
-  budget: number;
+  budget: Budget;
   spent: number;
   className?: string;
 }
 
-export function BudgetProgress({ category, budget, spent, className }: BudgetProgressProps) {
-  const pct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
-  const isOver = spent > budget;
+export function BudgetProgress({ budget, spent, className }: BudgetProgressProps) {
+  const { amount, name, budgetType, excludedCategories, labels } = budget;
+  const pct = amount > 0 ? Math.min((spent / amount) * 100, 100) : 0;
+  const isOver = spent > amount;
   const isWarning = !isOver && pct >= 70;
 
   const barColor = isOver
@@ -26,14 +27,24 @@ export function BudgetProgress({ category, budget, spent, className }: BudgetPro
     ? "text-amber-400"
     : "text-slate-400";
 
-  const label = category === "_overall_" ? "Overall" : category;
+  let subtitle: string | null = null;
+  if (budgetType === "excluded" && excludedCategories.length > 0) {
+    subtitle = `Excl: ${excludedCategories.join(", ")}`;
+  } else if (budgetType === "label" && labels.length > 0) {
+    subtitle = `Tagged: ${labels.map((l) => `#${l}`).join(", ")}`;
+  }
 
   return (
     <div className={cn("space-y-1", className)}>
       <div className="flex items-center justify-between text-xs">
-        <span className="text-slate-300 font-medium truncate">{label}</span>
-        <span className={cn("tabular-nums shrink-0 ml-2", textColor)}>
-          {formatCurrency(spent)} / {formatCurrency(budget)}
+        <div className="min-w-0 flex-1 mr-2">
+          <span className="text-slate-300 font-medium truncate block">{name}</span>
+          {subtitle && (
+            <span className="text-slate-500 text-[10px] truncate block">{subtitle}</span>
+          )}
+        </div>
+        <span className={cn("tabular-nums shrink-0", textColor)}>
+          {formatCurrency(spent)} / {formatCurrency(amount)}
           {isOver && <span className="ml-1 font-semibold">over</span>}
         </span>
       </div>
@@ -45,8 +56,8 @@ export function BudgetProgress({ category, budget, spent, className }: BudgetPro
       </div>
       <p className={cn("text-xs tabular-nums", isOver ? "text-rose-400" : "text-emerald-400")}>
         {isOver
-          ? `${formatCurrency(spent - budget)} over budget`
-          : `${formatCurrency(budget - spent)} remaining`}
+          ? `${formatCurrency(spent - amount)} over budget`
+          : `${formatCurrency(amount - spent)} remaining`}
       </p>
     </div>
   );

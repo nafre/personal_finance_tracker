@@ -47,6 +47,7 @@ export function DashboardContent(props: DashboardContentProps) {
     categoryData,
     dailyData,
     budgets,
+    budgetSpending,
     showBudgetManager,
     setShowBudgetManager,
     sheetOpen,
@@ -207,15 +208,11 @@ export function DashboardContent(props: DashboardContentProps) {
           </div>
           <div className="space-y-3">
             {budgets.map((b) => {
-              const spent =
-                b.category === "_overall_"
-                  ? displayExpenses
-                  : (categoryData.find((c) => c.name === b.category)?.value ?? 0);
+              const spent = budgetSpending.find((s) => s.id === b.id)?.spent ?? 0;
               return (
                 <BudgetProgress
                   key={b.id}
-                  category={b.category}
-                  budget={b.amount}
+                  budget={b}
                   spent={spent}
                 />
               );

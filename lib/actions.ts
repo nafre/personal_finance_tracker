@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getNextDueDate, DEFAULT_CATEGORIES, type RecurringFrequency } from "@/lib/utils";
-import { IS_SQLITE, encodeLabels, normalizeTx, getLabelFilter, getDailyRows } from "@/lib/db-adapter";
+import { IS_SQLITE, encodeLabels, normalizeTx, getLabelFilter, getDailyRows, normalizeBudget, encodeBudgetArray, parseLabels } from "@/lib/db-adapter";
 import { transactionSchema, categorySchema, budgetSchema, recurringSchema, passwordSchema } from "@/lib/validation";
 import bcrypt from "bcryptjs";
 
@@ -508,20 +508,45 @@ export async function postRecurringTransaction(id: string) {
 
 export async function getBudgets() {
   const userId = await getAuthenticatedUserId();
-  return db.budget.findMany({ where: { userId }, orderBy: { category: "asc" } });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = await (db.budget as any).findMany({ where: { userId }, orderBy: { name: "asc" } });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (rows as any[]).map(normalizeBudget);
 }
 
-export async function upsertBudget(data: { category: string; amount: number }) {
+export async function saveBudget(
+  data: {
+    name: string;
+    amount: number;
+    budgetType: "overall" | "category" | "excluded" | "label";
+    category?: string | null;
+    excludedCategories?: string[];
+    labels?: string[];
+  },
+  id?: string
+) {
   const userId = await getAuthenticatedUserId();
-  budgetSchema.parse(data);
+  budgetSchema.parse({ ...data, amount: Number(data.amount) });
 
-  const budget = await db.budget.upsert({
-    where: { userId_category: { userId, category: data.category } },
-    create: { userId, category: data.category, amount: data.amount },
-    update: { amount: data.amount },
-  });
+  const payload = {
+    name: data.name,
+    amount: data.amount,
+    budgetType: data.budgetType,
+    category: data.category ?? undefined,
+    excludedCategories: encodeBudgetArray(data.excludedCategories ?? []),
+    labels: encodeBudgetArray(data.labels ?? []),
+  };
+
+  if (id) {
+    const existing = await db.budget.findFirst({ where: { id, userId } });
+    if (!existing) throw new Error("Budget not found");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (db.budget as any).update({ where: { id }, data: payload });
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (db.budget as any).create({ data: { userId, ...payload } });
+  }
   revalidatePath("/dashboard");
-  return budget;
 }
 
 export async function deleteBudget(id: string) {
@@ -530,6 +555,14 @@ export async function deleteBudget(id: string) {
   if (!existing) throw new Error("Budget not found");
   await db.budget.delete({ where: { id } });
   revalidatePath("/dashboard");
+}
+
+export async function getUsedLabels(): Promise<string[]> {
+  const userId = await getAuthenticatedUserId();
+  const rows = await db.transaction.findMany({ where: { userId }, select: { labels: true } });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const all = rows.flatMap((r) => parseLabels(r.labels as any));
+  return [...new Set(all)].sort();
 }
 
 export async function skipRecurringTransaction(id: string) {
