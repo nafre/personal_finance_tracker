@@ -46,7 +46,8 @@
     @apply fixed z-40 flex items-center justify-center
            w-14 h-14 rounded-full text-white text-2xl
            active:scale-95 transition-all;
-    bottom: 72px;
+    bottom: 80px;
+    right: 1.25rem;
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
     box-shadow: 0 8px 24px rgba(99,102,241,0.45), 0 2px 8px rgba(0,0,0,0.3);
   }

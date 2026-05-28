@@ -44,7 +44,7 @@ model Category {
 model Budget {
   id                 String   @id @default(cuid())
   userId             String
-  name               String
+  name               String   @default("Budget")
   amount             Float
   period             String   @default("monthly")
   budgetType         String   @default("category")

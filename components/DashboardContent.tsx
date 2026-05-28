@@ -101,7 +101,7 @@ export function DashboardContent(props: DashboardContentProps) {
 
       {/* Mobile FAB */}
       <button
-        className="fab md:hidden right-6"
+        className="fab md:hidden"
         onClick={() => setSheetOpen(true)}
         aria-label="Add expense"
       >
@@ -153,7 +153,7 @@ export function DashboardContent(props: DashboardContentProps) {
       </div>
 
       {/* Summary stats */}
-      <div data-testid="stat-cards" className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div data-testid="stat-cards" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Income" amount={displayIncome} variant="income" icon="📈" momDelta={incomeDelta} />
         <StatCard label="Expenses" amount={displayExpenses} variant="expense" icon="📉" momDelta={expenseDelta} />
         <StatCard label="Net" amount={displayBalance} variant="balance" icon="⚖️" />

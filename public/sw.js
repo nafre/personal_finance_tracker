@@ -1,4 +1,4 @@
-const CACHE_NAME = "expense-tracker-v1";
+const CACHE_NAME = "expense-tracker-v2";
 const DB_NAME = "expense-tracker-v1";
 const SHELL_ASSETS = ["/dashboard", "/transactions", "/manifest.json"];
 const STATIC_PREFIX = "/_next/static/";
