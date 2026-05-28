@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ExpenseInput } from "@/components/ExpenseInput";
@@ -75,6 +75,17 @@ export function DashboardContent(props: DashboardContentProps) {
 
   const { month, year } = props;
 
+  const handleTransactionPosted = useCallback(
+    (tx: { id: string; category: string; amount: number; type: string; note?: string | null; labels?: string[] | null; date: Date | string }) =>
+      handleAdd({
+        ...tx,
+        type: tx.type as "income" | "expense",
+        note: tx.note ?? undefined,
+        labels: tx.labels ?? [],
+      }),
+    [handleAdd]
+  );
+
   return (
     <div className="space-y-5">
       {/* Month selector */}
@@ -139,14 +150,7 @@ export function DashboardContent(props: DashboardContentProps) {
           <div className="mt-3">
             <RecurringList
               initialRecurring={props.initialRecurring}
-              onTransactionPosted={(tx) =>
-                handleAdd({
-                  ...tx,
-                  type: tx.type as "income" | "expense",
-                  note: tx.note ?? undefined,
-                  labels: tx.labels ?? [],
-                })
-              }
+              onTransactionPosted={handleTransactionPosted}
             />
           </div>
         )}

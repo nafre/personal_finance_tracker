@@ -1,6 +1,7 @@
 import { getDashboardData, getRecurringTransactions, getBudgets } from "@/lib/actions";
 import { getCurrentMonthYear, getPrevMonth } from "@/lib/utils";
 import { DashboardContent } from "@/components/DashboardContent";
+import { DashboardErrorBoundary } from "@/components/DashboardErrorBoundary";
 
 interface PageProps {
   searchParams: Promise<{ month?: string; year?: string }>;
@@ -28,20 +29,22 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   ]);
 
   return (
-    <DashboardContent
-      initialTransactions={data.transactions}
-      initialTotalIncome={data.totalIncome}
-      initialTotalExpenses={data.totalExpenses}
-      initialCategoryData={data.categoryData}
-      initialDailyData={data.dailyData}
-      initialTopCategory={data.topCategory}
-      initialRecurring={recurring}
-      initialBudgets={budgets}
-      month={month}
-      year={year}
-      prevTotalExpenses={prevData.totalExpenses}
-      prevTotalIncome={prevData.totalIncome}
-      prevCategoryData={prevData.categoryData}
-    />
+    <DashboardErrorBoundary>
+      <DashboardContent
+        initialTransactions={data.transactions}
+        initialTotalIncome={data.totalIncome}
+        initialTotalExpenses={data.totalExpenses}
+        initialCategoryData={data.categoryData}
+        initialDailyData={data.dailyData}
+        initialTopCategory={data.topCategory}
+        initialRecurring={recurring}
+        initialBudgets={budgets}
+        month={month}
+        year={year}
+        prevTotalExpenses={prevData.totalExpenses}
+        prevTotalIncome={prevData.totalIncome}
+        prevCategoryData={prevData.categoryData}
+      />
+    </DashboardErrorBoundary>
   );
 }

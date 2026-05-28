@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useSyncContext } from "@/context/SyncProvider";
 import { seedIDBFromServer, getTransactionsByMonth, deleteTransactionFromIDB } from "@/lib/idb";
 import { getNextDueDate, getRecurringStatus, toMonthlyAmount, type RecurringFrequency } from "@/lib/utils";
@@ -75,7 +75,9 @@ export function useDashboardState({
   const [dailyData, setDailyData] = useState<DailyData[]>(initialDailyData);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
-  const [budgets] = useState<Budget[]>(initialBudgets);
+  const [budgets, setBudgets] = useState<Budget[]>(initialBudgets);
+
+  useEffect(() => { setBudgets(initialBudgets); }, [initialBudgets]);
   const [showBudgetManager, setShowBudgetManager] = useState(false);
 
   // Derived from categoryData so it stays current after mutations
@@ -110,6 +112,13 @@ export function useDashboardState({
     void seedIDBFromServer(initialTransactions, userId);
   }, [initialTransactions, userId]);
 
+  // Keep a ref to the current server ID set so the pending-load effect doesn't
+  // need `transactions` as a dependency (avoids a double-IDB-read per mutation).
+  const serverIdsRef = useRef(new Set(transactions.map((t) => t.id)));
+  useEffect(() => {
+    serverIdsRef.current = new Set(transactions.map((t) => t.id));
+  }, [transactions]);
+
   // Load pending (unsynced) transactions from IDB and merge into display.
   // Also keeps recently-synced IDB items visible (isPending: false) until
   // router.refresh() delivers the server-confirmed version, preventing a flash.
@@ -117,7 +126,7 @@ export function useDashboardState({
     if (!userId) return;
     getTransactionsByMonth(userId, month, year)
       .then((localTxs) => {
-        const serverIdSet = new Set(transactions.map((t) => t.id));
+        const serverIdSet = serverIdsRef.current;
         const pending = localTxs
           .filter((t) => {
             if (t.syncStatus === "pending-delete") return false;
@@ -137,7 +146,7 @@ export function useDashboardState({
         setPendingTransactions(pending);
       })
       .catch(() => {});
-  }, [userId, month, year, pendingCount, transactions]);
+  }, [userId, month, year, pendingCount]);
 
   // Merged list: pending items first, deduped against server list
   const mergedTransactions = useMemo(() => {
