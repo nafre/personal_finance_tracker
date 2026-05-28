@@ -125,15 +125,15 @@ export function DashboardContent(props: DashboardContentProps) {
           onClick={() => setShowRecurring((v) => !v)}
           className="w-full flex items-center justify-between group"
         >
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
-            <span className="text-sm font-semibold text-slate-200">Recurring</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60 shrink-0" />
+            <span className="text-sm font-semibold text-slate-200 shrink-0">Recurring</span>
             {dueCount > 0 && (
-              <span className="text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded-full">
+              <span className="text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded-full shrink-0">
                 {dueCount} due
               </span>
             )}
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-slate-500 hidden sm:inline">
               Fixed cash: <span className={cn("tabular-nums", fixedAvailableCash >= 0 ? "text-emerald-400" : "text-rose-400")}>{formatCurrency(fixedAvailableCash)}/mo</span>
             </span>
           </div>
@@ -157,7 +157,7 @@ export function DashboardContent(props: DashboardContentProps) {
       </div>
 
       {/* Summary stats */}
-      <div data-testid="stat-cards" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div data-testid="stat-cards" className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Income" amount={displayIncome} variant="income" icon="📈" momDelta={incomeDelta} />
         <StatCard label="Expenses" amount={displayExpenses} variant="expense" icon="📉" momDelta={expenseDelta} />
         <StatCard label="Net" amount={displayBalance} variant="balance" icon="⚖️" />

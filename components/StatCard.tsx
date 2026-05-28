@@ -57,7 +57,7 @@ export function StatCard({
 
   return (
     <div
-      className="rounded-2xl border p-5 relative overflow-hidden"
+      className="rounded-2xl border p-3 sm:p-5 relative overflow-hidden"
       style={{
         background: gradientMap[effectiveKey],
         borderColor: borderMap[effectiveKey],
@@ -70,19 +70,19 @@ export function StatCard({
         style={{ background: decorMap[effectiveKey] }}
       />
 
-      <div className="flex items-center justify-between mb-3 relative">
-        <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+      <div className="flex items-center justify-between mb-2 sm:mb-3 relative">
+        <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-slate-400 truncate min-w-0 flex-1 mr-1">
           {label}
         </span>
         <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-sm"
+          className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-xs sm:text-sm shrink-0"
           style={{ background: iconBgMap[effectiveKey] }}
         >
           {icon}
         </div>
       </div>
 
-      <p className={cn("text-xl sm:text-3xl font-bold tabular-nums truncate relative", colorMap[effectiveKey])}>
+      <p className={cn("text-lg sm:text-3xl font-bold tabular-nums truncate relative", colorMap[effectiveKey])}>
         {variant === "balance" && amount < 0 ? "-" : ""}
         {formatCurrency(Math.abs(amount))}
       </p>
@@ -90,13 +90,13 @@ export function StatCard({
       {momDelta != null && isFinite(momDelta) && (
         <span
           className={cn(
-            "text-xs font-medium mt-2 block relative",
+            "text-[10px] sm:text-xs font-medium mt-1 sm:mt-2 block relative",
             variant === "expense"
               ? momDelta > 0 ? "text-rose-400" : "text-emerald-400"
               : momDelta > 0 ? "text-emerald-400" : "text-rose-400"
           )}
         >
-          {momDelta > 0 ? "▲" : "▼"} {Math.abs(momDelta).toFixed(0)}% vs last month
+          {momDelta > 0 ? "▲" : "▼"} {Math.abs(momDelta).toFixed(0)}%<span className="hidden sm:inline"> vs last month</span>
         </span>
       )}
     </div>

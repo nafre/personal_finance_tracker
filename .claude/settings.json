@@ -4,7 +4,8 @@
       "Bash(grep -E \"\\\\.tsx$\")",
       "mcp__playwright__browser_evaluate",
       "Bash(npx tsc *)",
-      "mcp__playwright__browser_console_messages"
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_wait_for"
     ]
   }
 }
