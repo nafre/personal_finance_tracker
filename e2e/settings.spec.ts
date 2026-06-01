@@ -15,6 +15,11 @@ test.describe("Settings", () => {
   });
 
   test("category list", async ({ page }) => {
+    // Admin users default to the Users tab — click Categories first
+    const categoriesTab = page.getByRole("button", { name: "Categories" });
+    if (await categoriesTab.isVisible()) {
+      await categoriesTab.click();
+    }
     const list = page.locator('[data-testid="category-list"]');
     await expect(list).toHaveScreenshot("category-list.png", {
       animations: "disabled",
