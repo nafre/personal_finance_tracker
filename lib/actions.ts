@@ -2,7 +2,7 @@
 
 import { cache } from "react";
 import { getServerSession } from "next-auth";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag, unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getNextDueDate, DEFAULT_CATEGORIES, type RecurringFrequency } from "@/lib/utils";
@@ -67,6 +67,7 @@ export async function addTransaction(data: {
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
+  updateTag("transactions");
   return normalizeTx(tx);
 }
 
@@ -102,6 +103,7 @@ export async function updateTransaction(
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
+  updateTag("transactions");
   return normalizeTx(tx);
 }
 
@@ -115,6 +117,7 @@ export async function deleteTransaction(id: string) {
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
+  updateTag("transactions");
 }
 
 export async function getTransactionIds(): Promise<string[]> {
@@ -131,9 +134,10 @@ export async function getTransactionIds(): Promise<string[]> {
 
 // ─── Dashboard data ───────────────────────────────────────────────────────────
 
-export async function getDashboardData(month: number, year: number) {
-  const userId = await getAuthenticatedUserId();
-
+// Inner implementation — receives userId explicitly so it can be cached.
+// Dates in the return value are serialized to ISO strings by unstable_cache;
+// Transaction.date is typed as Date|string to handle both cached and live paths.
+async function _fetchDashboardData(userId: string, month: number, year: number) {
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 0, 23, 59, 59, 999); // last ms of month
   const dateFilter = { gte: start, lte: end };
@@ -210,6 +214,20 @@ export async function getDashboardData(month: number, year: number) {
     dailyData,
     topCategory: categoryData[0] ?? null,
   };
+}
+
+// Cached by (userId, month, year). Invalidated via revalidateTag("transactions")
+// on any transaction mutation, ensuring past months are served from cache and
+// the current month is refreshed after writes.
+const _getDashboardDataCached = unstable_cache(
+  _fetchDashboardData,
+  ["dashboard-data"],
+  { tags: ["transactions"] }
+);
+
+export async function getDashboardData(month: number, year: number) {
+  const userId = await getAuthenticatedUserId();
+  return _getDashboardDataCached(userId, month, year);
 }
 
 function getDaysInMonth(year: number, month: number): number[] {
@@ -501,6 +519,7 @@ export async function postRecurringTransaction(id: string) {
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
+  updateTag("transactions");
   return normalizeTx(tx);
 }
 

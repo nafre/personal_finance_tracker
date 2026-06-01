@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import useSWR from "swr";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { getTransactions, getCategories } from "@/lib/actions";
 import { useSyncContext } from "@/context/SyncProvider";
@@ -50,7 +51,6 @@ export default function TransactionsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // Local search input state — debounced into URL
@@ -106,45 +106,45 @@ export default function TransactionsPage() {
     to: toFilter ? new Date(toFilter + "T23:59:59") : undefined,
   }), [month, year, categoryFilter, labelFilter, qFilter, fromFilter, toFilter]);
 
+  // Stable cache key — serialized filter dims (no Date objects)
+  const filterKey = useMemo(() => JSON.stringify({
+    month, year,
+    category: categoryFilter || undefined,
+    label: labelFilter || undefined,
+    q: qFilter || undefined,
+    from: fromFilter || undefined,
+    to: toFilter || undefined,
+  }), [month, year, categoryFilter, labelFilter, qFilter, fromFilter, toFilter]);
+
+  // SWR manages initial fetch and caches results per filter combination.
+  // Re-visiting a previously-seen filter returns the cached data instantly
+  // while revalidating in the background.
+  const { isLoading, mutate } = useSWR(
+    filterKey,
+    () => getTransactions(buildFilters()),
+    {
+      onSuccess: (result) => {
+        setTransactions(result.transactions as Transaction[]);
+        setNextCursor(result.nextCursor);
+        setTotalCount(result.totalCount);
+        setTotalIncome(result.totalIncome);
+        setTotalExpenses(result.totalExpenses);
+      },
+    }
+  );
+
   // Fetch categories once on mount — they don't change within a session
   useEffect(() => {
     getCategories().then((cats) => setCategories(cats as Category[]));
   }, []);
-
-  // Initial / filter-change fetch
-  useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    setNextCursor(null);
-
-    getTransactions(buildFilters()).then((result) => {
-      if (cancelled) return;
-      setTransactions(result.transactions as Transaction[]);
-      setNextCursor(result.nextCursor);
-      setTotalCount(result.totalCount);
-      setTotalIncome(result.totalIncome);
-      setTotalExpenses(result.totalExpenses);
-    }).finally(() => {
-      if (!cancelled) setIsLoading(false);
-    });
-
-    return () => { cancelled = true; };
-  }, [buildFilters]);
 
   // Silent re-fetch after sync completes — clears isPending badges
   useEffect(() => {
     const prev = prevPendingCountRef.current;
     prevPendingCountRef.current = pendingCount;
     if (pendingCount >= prev) return;
-    const filters = buildFilters();
-    getTransactions(filters).then((result) => {
-      setTransactions(result.transactions as Transaction[]);
-      setNextCursor(result.nextCursor);
-      setTotalCount(result.totalCount);
-      setTotalIncome(result.totalIncome);
-      setTotalExpenses(result.totalExpenses);
-    });
-  }, [pendingCount, buildFilters]);
+    mutate();
+  }, [pendingCount, mutate]);
 
   async function loadMore() {
     if (!nextCursor || isLoadingMore) return;
