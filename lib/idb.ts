@@ -99,7 +99,7 @@ export async function getTransactionsByMonth(
   const end = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
   const range = IDBKeyRange.bound(start, end);
   const all = await db.getAllFromIndex("transactions", "by-date", range);
-  return all.filter((t) => t.userId === userId);
+  return all.reverse().filter((t) => t.userId === userId);
 }
 
 export async function getTransactionFromIDB(

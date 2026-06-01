@@ -148,11 +148,13 @@ export function useDashboardState({
       .catch(() => {});
   }, [userId, month, year, pendingCount]);
 
-  // Merged list: pending items first, deduped against server list
+  // Merged list: pending items deduped against server list, sorted newest-first
   const mergedTransactions = useMemo(() => {
     const serverIds = new Set(transactions.map((t) => t.id));
     const dedupedPending = pendingTransactions.filter((p) => !serverIds.has(p.id));
-    return [...dedupedPending, ...transactions];
+    return [...dedupedPending, ...transactions].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
   }, [transactions, pendingTransactions]);
 
   // Pending stats deltas (so stat cards reflect unsynced adds immediately)
