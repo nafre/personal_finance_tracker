@@ -77,6 +77,11 @@ export function useDashboardState({
   const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>(initialBudgets);
 
+  useEffect(() => { setTransactions(initialTransactions); }, [initialTransactions]);
+  useEffect(() => { setTotalIncome(initialTotalIncome); }, [initialTotalIncome]);
+  useEffect(() => { setTotalExpenses(initialTotalExpenses); }, [initialTotalExpenses]);
+  useEffect(() => { setCategoryData(initialCategoryData); }, [initialCategoryData]);
+  useEffect(() => { setDailyData(initialDailyData); }, [initialDailyData]);
   useEffect(() => { setBudgets(initialBudgets); }, [initialBudgets]);
   const [showBudgetManager, setShowBudgetManager] = useState(false);
 
