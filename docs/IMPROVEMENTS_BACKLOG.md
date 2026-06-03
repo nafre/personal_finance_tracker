@@ -1,15 +1,13 @@
 # Improvements Backlog
 
-Ideas that were scoped but not implemented in the current session. Each entry has an effort estimate (S/M/L) and a suggested file to start from.
+Ideas that were scoped but not fully implemented. Each open item has an effort estimate (S/M/L) and a suggested file to start from. Items marked **DONE** have since been implemented.
 
 ---
 
 ## UX / Features
 
-### 1d — CSV Export (S, medium)
-Add a "Download CSV" button on `/transactions` that streams the current filter result.
-- Start: `app/(dashboard)/transactions/page.tsx` — add a button that calls a new `exportTransactions()` server action.
-- Action returns a CSV string; trigger download via `Blob` + `URL.createObjectURL`.
+### ~~1d — CSV Export~~ DONE
+Implemented as `GET /api/export` — see `app/api/export/route.ts`. The transactions page has an **Export CSV ↓** button in the filter bar.
 
 ### 1e — Bulk Select + Bulk Delete (M, medium)
 Add multi-select checkboxes to `TransactionList`, a "Delete selected" action, and optionally "Add label to selected".
@@ -31,7 +29,7 @@ On add, check if a transaction with the same amount + category was created in th
 - Start: `components/ExpenseInput.tsx` — in `handleSubmit`, check the most recent transactions list before calling `addTransaction`.
 
 ### 1i — Mobile Polish (S, medium)
-- Make the top-category card visible on mobile (currently `hidden sm:flex` in `DashboardContent.tsx:452`).
+- Make the top-category card visible on mobile (currently `hidden sm:flex` in `DashboardContent.tsx`).
 - Month selector at 390px — switch to a compact dropdown or swipe gesture.
 
 ### 1j — Recurring Upgrades (M, medium)
@@ -44,32 +42,32 @@ On add, check if a transaction with the same amount + category was created in th
 
 ## Performance
 
-### 2d — Memoize Hot Paths in DashboardContent (S, medium)
-`components/DashboardContent.tsx` (596+ lines) recomputes `dueCount`, `fixedAvailableCash`, `recentCategories` on every render.
-- Wrap in `useMemo`. Also wrap `TransactionRow` in `React.memo`.
+### 2d — Memoize Remaining Hot Paths (S, medium)
+Dashboard state was extracted to `hooks/useDashboardState.ts`. Some derived values (`recentCategories`) could still benefit from `useMemo`. Also consider wrapping `TransactionRow` in `React.memo`.
+- Start: `hooks/useDashboardState.ts`.
 
-### 2e — `getTransactionIds` Select-Only (S, low)
-`lib/actions.ts:getTransactionIds` fetches full rows to extract IDs. Use `select: { id: true }`.
+### ~~2e — `getTransactionIds` Select-Only~~ DONE
+`lib/actions.ts:getTransactionIds` now uses `select: { id: true }` — only IDs are fetched.
 
-### 2f — Lazy-Load Recharts on Idle (S, medium)
-`SpendingPieChart` is not dynamically imported — it ships Recharts (~300KB) on the critical path.
-- Wrap in `dynamic({ ssr: false })` like `TrendChart`. Add a skeleton placeholder.
+### 2f — Lazy-Load SpendingPieChart (S, medium)
+`SpendingPieChart` is not dynamically imported — if re-introduced on the dashboard it would ship Recharts (~300KB) on the critical path.
+- Wrap in `dynamic({ ssr: false })` like `TrendChart` and `BudgetManager`. Add a skeleton placeholder.
 
 ---
 
 ## Reliability
 
 ### 3b — Service Worker Retry/Backoff (S, medium)
-`public/sw.js:syncQueueFromSW` has no backoff. Network glitch = permanent miss for that sync cycle.
+`public/sw.js` BackgroundSync handler has no backoff. Network glitch = permanent miss for that sync cycle.
 - Add exponential backoff (1s → 2s → 4s) with a max attempt count before marking as failed.
 
 ### 3c — Error Boundaries (S, medium)
-`DashboardContent` has no error boundary — an IDB seed failure crashes the whole page.
-- Add a `components/ErrorBoundary.tsx` (class component) and wrap dashboard sections.
+`DashboardErrorBoundary` exists at `components/DashboardErrorBoundary.tsx` but coverage is partial — an IDB seed failure could still crash individual sections.
+- Wrap each dashboard section (charts, recurring, budgets) in its own boundary.
 
 ### 3d — Toast Notifications (S, medium)
-No global toast system. Mutation failures are silent.
-- Add `sonner` (0.7KB) or build a minimal `ToastContext` with a queue and auto-dismiss.
+No global toast system. Mutation failures are silent (except inline form errors).
+- Add `sonner` (tiny) or build a minimal `ToastContext` with a queue and auto-dismiss.
 
 ---
 
@@ -95,14 +93,11 @@ Daily intensity grid (GitHub contribution-style) for the year.
 
 ## Code Quality
 
-### 5a — Split DashboardContent (M, medium)
-`components/DashboardContent.tsx` is 600+ lines. Extract:
-- `hooks/useDashboardState.ts` — state + mutation handlers
-- `hooks/useIDBSync.ts` — IDB seeding + pending merge logic
-- Keep the component as a thin layout shell.
+### ~~5a — Split DashboardContent~~ DONE
+State and handlers were extracted to `hooks/useDashboardState.ts`. `DashboardContent` is now a thin layout shell.
 
-### 5b — Centralize IS_SQLITE Branch (S, low)
-`lib/actions.ts` has the SQLite guard inlined in multiple queries. Extract a `labelsQuery(label)` helper returning the right Prisma fragment.
+### ~~5b — Centralize IS_SQLITE Branch~~ DONE
+Dialect abstraction lives in `lib/db-adapter.ts`: `IS_SQLITE`, `parseLabels`, `encodeLabels`, `normalizeTx`, `getLabelFilter`, `getDailyRows`. `lib/actions.ts` imports from there.
 
 ### 5c — Unit Tests (L, medium)
 `lib/parser.ts`, `lib/utils.ts` (`getNextDueDate`, `getRecurringStatus`), and `lib/sync.ts` are untested but regression-prone.
@@ -122,4 +117,4 @@ No production error visibility. Sentry's free tier covers a single-user app.
 
 ### 6c — Backup / Export (S, low)
 Monthly "Download backup JSON" button in settings (or a scheduled email).
-- Server action `exportAllData()` that returns JSON of all transactions, categories, recurring rules.
+- Server action `exportAllData()` that returns JSON of all transactions, categories, and recurring rules.

@@ -63,6 +63,7 @@ The dev server must be running (`npm run dev`) before using these tools. The MCP
 | `e2e/login.spec.ts` | Login layout, error state |
 | `e2e/dashboard.spec.ts` | Full page, stat cards, quick-add, transaction list, recurring section, navigation |
 | `e2e/transactions.spec.ts` | Full page, filter bar, summary strip, transaction list, category filter |
+| `e2e/settings.spec.ts` | Settings page: categories tab, account tab, users tab (admin) |
 
 Tests run at three viewports: **mobile (390px)**, **tablet (768px)**, **desktop (1280px)**.
 
@@ -102,7 +103,7 @@ When `DATABASE_URL` is set, all `POSTGRES_*` variables are ignored and the app u
 
 ## Architecture
 
-**Stack:** Next.js 15 App Router · React 18 · Prisma 6 (PostgreSQL/Supabase or SQLite) · NextAuth v4 · Recharts · Tailwind CSS · IndexedDB (`idb@8`) · `bcryptjs` (password hashing) · `zod` (input validation) · `clsx` + `tailwind-merge` (`cn()` helper)
+**Stack:** Next.js 16 App Router · React 18 · Prisma 6 (PostgreSQL/Supabase or SQLite) · NextAuth v4 · SWR 2 · Recharts · Tailwind CSS · IndexedDB (`idb@8`) · `bcryptjs` (password hashing) · `zod` (input validation) · `clsx` + `tailwind-merge` (`cn()` helper)
 
 ### Data flow
 
@@ -220,6 +221,7 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `components/recurring/RecurringList.tsx` | Client component owning recurring state. Syncs from `initialRecurring` via `useEffect`. |
 | `components/recurring/RecurringRow.tsx` | Individual recurring row: status badge, Post/Skip/Edit/Delete. Uses plain async/await (not startTransition). |
 | `components/recurring/RecurringForm.tsx` | Create/edit form for recurring rules. Passes `CategoryOption[]` to `CategoryCombobox`. |
+| `components/DashboardErrorBoundary.tsx` | Error boundary wrapping dashboard sections to isolate IDB/render failures. |
 | `components/UserManager.tsx` | Admin-only client component: user list (avatar, role badge, inline reset-password expand) + create form. Exports `UserRecord` interface. |
 | `components/SettingsTabs.tsx` | Client component wrapping all settings sections in a tab bar (Users / Categories / Account). Admins default to Users tab; non-admins default to Categories tab. |
 | `prisma/schema.prisma` | Four models: `User`, `Transaction`, `Category`, `RecurringTransaction`. |
