@@ -248,7 +248,7 @@ export default function TransactionsPage() {
             />
           </div>
           {/* Month selector — hidden when date range is active */}
-          {!hasDateRange && <MonthSelector month={month} year={year} />}
+          {!hasDateRange && <MonthSelector period="month" month={month} year={year} showPeriodToggle={false} />}
         </div>
 
         {/* Row 2: category + label + date range */}

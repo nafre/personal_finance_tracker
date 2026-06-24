@@ -57,3 +57,7 @@ export interface CategoryOption {
   icon?: string;
   color?: string;
 }
+
+// Dashboard view window. "month" is the original single-month view; "year"
+// covers Jan–Dec of a year; "all" covers every transaction (all-time).
+export type Period = "month" | "year" | "all";

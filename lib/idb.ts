@@ -104,6 +104,19 @@ export async function getTransactionsByMonth(
   return all.reverse().filter((t) => t.userId === userId);
 }
 
+// Range variant used by the year / all-time dashboard views. `startISO`/`endISO`
+// are ISO date strings; reads via the same `by-date` index as the month helper.
+export async function getTransactionsInRange(
+  userId: string,
+  startISO: string,
+  endISO: string
+): Promise<LocalTransaction[]> {
+  const db = await getDB();
+  const range = IDBKeyRange.bound(startISO, endISO);
+  const all = await db.getAllFromIndex("transactions", "by-date", range);
+  return all.reverse().filter((t) => t.userId === userId);
+}
+
 export async function getTransactionFromIDB(
   id: string
 ): Promise<LocalTransaction | undefined> {

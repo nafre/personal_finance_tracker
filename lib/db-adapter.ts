@@ -47,14 +47,43 @@ export function getLabelFilter(label?: string): Record<string, unknown> {
   return { labels: { has: label } };
 }
 
-export async function getDailyRows(
+export type TrendGranularity = "day" | "month";
+
+// Aggregated income/expense totals bucketed by day or by month, depending on
+// `granularity`. The `day` field holds the bucket key: an ISO date/month string
+// on SQLite, or a truncated Date on Postgres. Always excludes `excludeFromStats`
+// rows (charts-only exclusion) on both dialects.
+export async function getTrendRows(
   userId: string,
   start: Date,
-  end: Date
+  end: Date,
+  granularity: TrendGranularity = "day"
 ): Promise<Array<{ day: string | Date; type: string; total: number | bigint }>> {
+  if (granularity === "month") {
+    if (IS_SQLITE) {
+      // SQLite stores DateTime as integer epoch-ms, so convert to seconds and
+      // use the 'unixepoch' modifier before strftime can format it.
+      return db.$queryRaw<Array<{ day: string; type: string; total: number }>>`
+        SELECT strftime('%Y-%m', date / 1000, 'unixepoch') AS day, type, SUM(amount) AS total
+        FROM transactions
+        WHERE userId = ${userId} AND date >= ${start} AND date <= ${end}
+          AND excludeFromStats = 0
+        GROUP BY day, type
+      `;
+    }
+    return db.$queryRaw<Array<{ day: Date; type: string; total: number | bigint }>>`
+      SELECT date_trunc('month', date) AS day, type, SUM(amount) AS total
+      FROM transactions
+      WHERE "userId" = ${userId} AND date >= ${start} AND date <= ${end}
+        AND "excludeFromStats" = false
+      GROUP BY day, type
+    `;
+  }
+
   if (IS_SQLITE) {
+    // See note above re: integer epoch-ms storage.
     return db.$queryRaw<Array<{ day: string; type: string; total: number }>>`
-      SELECT strftime('%Y-%m-%d', date) AS day, type, SUM(amount) AS total
+      SELECT strftime('%Y-%m-%d', date / 1000, 'unixepoch') AS day, type, SUM(amount) AS total
       FROM transactions
       WHERE userId = ${userId} AND date >= ${start} AND date <= ${end}
         AND excludeFromStats = 0
@@ -68,4 +97,9 @@ export async function getDailyRows(
       AND "excludeFromStats" = false
     GROUP BY day, type
   `;
+}
+
+// Backward-compatible daily wrapper.
+export function getDailyRows(userId: string, start: Date, end: Date) {
+  return getTrendRows(userId, start, end, "day");
 }

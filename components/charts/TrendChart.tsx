@@ -20,6 +20,11 @@ interface DailyData {
 
 interface TrendChartProps {
   data: DailyData[];
+  // Force the X-axis label interval (1 = every label). When omitted the chart
+  // auto-thins labels based on point count. Monthly trends pass 1 so all 12
+  // month labels render.
+  labelEvery?: number;
+  emptyMessage?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -40,20 +45,21 @@ function CustomTooltip({ active, payload, label }: any) {
   return null;
 }
 
-export function TrendChart({ data }: TrendChartProps) {
-  // Only show days that have data for a cleaner chart
+export function TrendChart({ data, labelEvery, emptyMessage }: TrendChartProps) {
+  // Only show points that have data for a cleaner chart
   const hasData = data.some((d) => d.income > 0 || d.expense > 0);
 
   if (!hasData) {
     return (
       <div className="flex items-center justify-center h-40 text-slate-500 text-sm">
-        No transactions this month
+        {emptyMessage ?? "No transactions this month"}
       </div>
     );
   }
 
-  // Show every Nth label to avoid crowding on mobile
-  const step = data.length > 20 ? 5 : data.length > 10 ? 3 : 1;
+  // Show every Nth label to avoid crowding on mobile (unless a fixed interval
+  // is requested, e.g. monthly trends that want every label).
+  const step = labelEvery ?? (data.length > 20 ? 5 : data.length > 10 ? 3 : 1);
 
   return (
     <ResponsiveContainer width="100%" height={200}>
