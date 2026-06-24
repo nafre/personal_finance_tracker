@@ -5,6 +5,7 @@ export interface Transaction {
   type: string;
   note?: string | null;
   labels?: string[];
+  excludedBudgetIds?: string[];
   date: Date | string;
   isPending?: boolean;
 }

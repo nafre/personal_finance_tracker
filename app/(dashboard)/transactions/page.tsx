@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import useSWR from "swr";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { getTransactions, getCategories } from "@/lib/actions";
+import { getTransactions, getCategories, getBudgets } from "@/lib/actions";
 import { useSyncContext } from "@/context/SyncProvider";
 import { TransactionList } from "@/components/TransactionList";
 import { MonthSelector } from "@/components/MonthSelector";
@@ -17,6 +17,7 @@ interface Transaction {
   type: string;
   note?: string | null;
   labels?: string[];
+  excludedBudgetIds?: string[];
   date: Date | string;
 }
 
@@ -47,6 +48,7 @@ export default function TransactionsPage() {
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [budgets, setBudgets] = useState<{ id: string; name: string }[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [totalIncome, setTotalIncome] = useState(0);
@@ -136,6 +138,11 @@ export default function TransactionsPage() {
   // Fetch categories once on mount — they don't change within a session
   useEffect(() => {
     getCategories().then((cats) => setCategories(cats as Category[]));
+  }, []);
+
+  // Fetch budgets once — used by the edit form's "exclude from budgets" control
+  useEffect(() => {
+    getBudgets().then((bs) => setBudgets(bs.map((b) => ({ id: b.id, name: b.name }))));
   }, []);
 
   // Silent re-fetch after sync completes — clears isPending badges
@@ -373,6 +380,7 @@ export default function TransactionsPage() {
               transactions={transactions}
               onDelete={handleDelete}
               onUpdate={handleUpdate}
+              budgets={budgets}
             />
             {/* Load More */}
             {nextCursor && (

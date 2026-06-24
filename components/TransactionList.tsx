@@ -14,8 +14,14 @@ interface Transaction {
   type: string;
   note?: string | null;
   labels?: string[];
+  excludedBudgetIds?: string[];
   date: Date | string;
   isPending?: boolean;
+}
+
+interface BudgetOption {
+  id: string;
+  name: string;
 }
 
 interface TransactionListProps {
@@ -23,6 +29,7 @@ interface TransactionListProps {
   onDelete?: (id: string) => void;
   onUpdate?: (id: string, data: Partial<Transaction>) => void;
   compact?: boolean;
+  budgets?: BudgetOption[];
 }
 
 // Pill badge for a single label
@@ -102,6 +109,68 @@ function LabelEditor({
   );
 }
 
+// Dropdown checklist for excluding a transaction from specific budgets.
+// Closed state shows a summary button; open state lists each budget with a checkbox.
+function BudgetExcludeSelect({
+  budgets,
+  value,
+  onChange,
+}: {
+  budgets: BudgetOption[];
+  value: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  function toggle(id: string) {
+    onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
+  }
+
+  const count = value.length;
+  const summary =
+    count === 0 ? "Not excluded" : `Excluded from ${count} budget${count > 1 ? "s" : ""}`;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="input-base w-full text-sm text-left flex items-center justify-between"
+      >
+        <span className={cn(count === 0 ? "text-slate-500" : "text-slate-200")}>{summary}</span>
+        <span className="text-slate-500 text-xs ml-2">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-10 mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-lg max-h-48 overflow-auto py-1">
+          {budgets.map((b) => (
+            <label
+              key={b.id}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={value.includes(b.id)}
+                onChange={() => toggle(b.id)}
+                className="accent-indigo-500"
+              />
+              <span className="truncate">{b.name}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface CategoryMeta {
   name: string;
   icon: string;
@@ -114,18 +183,23 @@ function TransactionRow({
   onUpdate,
   compact,
   categories,
+  budgets,
 }: {
   tx: Transaction;
   onDelete: (id: string) => void;
   onUpdate: (id: string, data: Partial<Transaction>) => void;
   compact?: boolean;
   categories: CategoryMeta[];
+  budgets: BudgetOption[];
 }) {
   const [editing, setEditing] = useState(false);
   const [editAmount, setEditAmount] = useState(tx.amount.toString());
   const [editCategory, setEditCategory] = useState(tx.category);
   const [editNote, setEditNote] = useState(tx.note ?? "");
   const [editLabels, setEditLabels] = useState<string[]>(tx.labels ?? []);
+  const [editExcludedBudgetIds, setEditExcludedBudgetIds] = useState<string[]>(
+    tx.excludedBudgetIds ?? []
+  );
   const [editType, setEditType] = useState<"income" | "expense">(
     tx.type as "income" | "expense"
   );
@@ -148,6 +222,7 @@ function TransactionRow({
       type: editType,
       note: editNote || undefined,
       labels: editLabels,
+      excludedBudgetIds: editExcludedBudgetIds,
       date: editDate,
     };
 
@@ -171,6 +246,7 @@ function TransactionRow({
       type: tx.type as "income" | "expense",
       note: tx.note,
       labels: tx.labels ?? [],
+      excludedBudgetIds: tx.excludedBudgetIds ?? [],
       date: tx.date,
       isPending: tx.isPending ?? false,
     };
@@ -264,6 +340,17 @@ function TransactionRow({
           <LabelEditor value={editLabels} onChange={setEditLabels} />
           <p className="text-[11px] text-slate-600 mt-1">Press Enter or comma to add · Backspace to remove</p>
         </div>
+        {editType === "expense" && budgets.length > 0 && (
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">Exclude from budgets</label>
+            <BudgetExcludeSelect
+              budgets={budgets}
+              value={editExcludedBudgetIds}
+              onChange={setEditExcludedBudgetIds}
+            />
+            <p className="text-[11px] text-slate-600 mt-1">This transaction won&apos;t count toward the selected budgets.</p>
+          </div>
+        )}
         <div>
           <label className="text-xs text-slate-400 mb-1 block">Type</label>
           <div className="flex gap-2">
@@ -398,6 +485,7 @@ export function TransactionList({
   onDelete,
   onUpdate,
   compact = false,
+  budgets = [],
 }: TransactionListProps) {
   const [txs, setTxs] = useState(initial);
   const [categories, setCategories] = useState<CategoryMeta[]>([]);
@@ -441,6 +529,7 @@ export function TransactionList({
           onUpdate={handleUpdate}
           compact={compact}
           categories={categories}
+          budgets={budgets}
         />
       ))}
     </div>

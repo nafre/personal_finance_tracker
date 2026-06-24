@@ -124,6 +124,7 @@ export async function applyLocalMutation(
     type?: "income" | "expense";
     note?: string;
     labels?: string[];
+    excludedBudgetIds?: string[];
     date?: string;
   }
 ): Promise<{ committed: LocalTransaction | null; wasQueued: boolean }> {
@@ -139,6 +140,7 @@ export async function applyLocalMutation(
       type: data.type ?? "expense",
       note: data.note,
       labels: data.labels ?? [],
+      excludedBudgetIds: data.excludedBudgetIds ?? [],
       date: data.date ?? now,
       syncStatus: "pending",
       createdAt: now,
@@ -155,6 +157,7 @@ export async function applyLocalMutation(
         type: localTx.type,
         note: localTx.note,
         labels: localTx.labels,
+        excludedBudgetIds: localTx.excludedBudgetIds,
         date: localTx.date,
       },
       createdAt: now,
@@ -174,6 +177,7 @@ export async function applyLocalMutation(
       ...(data.type !== undefined && { type: data.type }),
       ...(data.note !== undefined && { note: data.note }),
       ...(data.labels !== undefined && { labels: data.labels }),
+      ...(data.excludedBudgetIds !== undefined && { excludedBudgetIds: data.excludedBudgetIds }),
       syncStatus:
         existing.syncStatus === "pending" ? "pending" : "pending-update",
     };
@@ -191,6 +195,7 @@ export async function applyLocalMutation(
           ...(data.type !== undefined && { type: data.type }),
           ...(data.note !== undefined && { note: data.note }),
           ...(data.labels !== undefined && { labels: data.labels }),
+          ...(data.excludedBudgetIds !== undefined && { excludedBudgetIds: data.excludedBudgetIds }),
         },
         createdAt: now,
       });
@@ -208,6 +213,7 @@ export async function applyLocalMutation(
             ...(data.type !== undefined && { type: data.type }),
             ...(data.note !== undefined && { note: data.note }),
             ...(data.labels !== undefined && { labels: data.labels }),
+            ...(data.excludedBudgetIds !== undefined && { excludedBudgetIds: data.excludedBudgetIds }),
           },
         });
       }

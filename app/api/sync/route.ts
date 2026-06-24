@@ -26,13 +26,14 @@ export async function POST(req: NextRequest) {
 
   try {
     if (op === "add") {
-      const { clientId, category, amount, type, note, labels, date } = payload as {
+      const { clientId, category, amount, type, note, labels, excludedBudgetIds, date } = payload as {
         clientId?: string;
         category: string;
         amount: number;
         type: string;
         note?: string;
         labels?: string[];
+        excludedBudgetIds?: string[];
         date?: string;
       };
 
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
             note: note ?? null,
             date: date ? new Date(date) : new Date(),
             labels: encodeLabels(labels ?? []),
+            excludedBudgetIds: encodeLabels(excludedBudgetIds ?? []),
           },
         });
       } else {
@@ -75,6 +77,7 @@ export async function POST(req: NextRequest) {
             note: note ?? null,
             date: date ? new Date(date) : new Date(),
             labels: encodeLabels(labels ?? []),
+            excludedBudgetIds: encodeLabels(excludedBudgetIds ?? []),
           },
         });
       }
@@ -88,12 +91,13 @@ export async function POST(req: NextRequest) {
       const existing = await db.transaction.findFirst({ where: { id, userId } });
       if (!existing) return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
 
-      const { category, amount, type, note, labels } = payload as {
+      const { category, amount, type, note, labels, excludedBudgetIds } = payload as {
         category?: string;
         amount?: number;
         type?: string;
         note?: string;
         labels?: string[];
+        excludedBudgetIds?: string[];
       };
 
       await db.transaction.update({
@@ -104,6 +108,7 @@ export async function POST(req: NextRequest) {
           ...(type !== undefined && { type }),
           ...(note !== undefined && { note: note || null }),
           ...(labels !== undefined && { labels: encodeLabels(labels) }),
+          ...(excludedBudgetIds !== undefined && { excludedBudgetIds: encodeLabels(excludedBudgetIds) }),
         },
       });
 

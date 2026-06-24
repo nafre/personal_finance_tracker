@@ -6,6 +6,7 @@ export const transactionSchema = z.object({
   type: z.enum(["income", "expense"]),
   note: z.string().max(500, "Note must be 500 characters or fewer").optional(),
   labels: z.array(z.string()).max(10, "Maximum 10 labels").default([]),
+  excludedBudgetIds: z.array(z.string()).max(50, "Too many excluded budgets").default([]),
   date: z.date().optional(),
 });
 

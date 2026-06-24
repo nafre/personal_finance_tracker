@@ -18,6 +18,7 @@ model Transaction {
   date      DateTime @default(now())
   type      String   // "income" | "expense"
   labels    String[] @default([])
+  excludedBudgetIds String[] @default([])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

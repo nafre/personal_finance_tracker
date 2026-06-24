@@ -6,35 +6,32 @@ import { seedIDBFromServer, getTransactionsByMonth, deleteTransactionFromIDB } f
 import { getNextDueDate, getRecurringStatus, toMonthlyAmount, type RecurringFrequency } from "@/lib/utils";
 import type { Transaction, CategoryData, DailyData, RecurringTransaction, Budget } from "@/types";
 
+// Per-transaction budget spend so an individual transaction can be excluded
+// from a specific budget via its `excludedBudgetIds`. Iterating the full month
+// list keeps the totals identical to the old aggregate math for any
+// transaction that isn't excluded.
 function computeBudgetSpent(
   budget: Budget,
-  displayExpenses: number,
-  categoryData: CategoryData[],
   mergedTransactions: Transaction[]
 ): number {
-  switch (budget.budgetType) {
-    case "overall":
-      return displayExpenses;
-    case "category":
-      return categoryData.find((c) => c.name === budget.category)?.value ?? 0;
-    case "excluded": {
-      const excludedSpent = budget.excludedCategories.reduce(
-        (sum, cat) => sum + (categoryData.find((c) => c.name === cat)?.value ?? 0),
-        0
-      );
-      return Math.max(0, displayExpenses - excludedSpent);
-    }
-    case "label":
-      return mergedTransactions
-        .filter(
-          (t) =>
-            t.type === "expense" &&
-            budget.labels.some((l) => t.labels?.includes(l))
-        )
-        .reduce((sum, t) => sum + t.amount, 0);
-    default:
-      return 0;
-  }
+  return mergedTransactions
+    .filter((t) => {
+      if (t.type !== "expense") return false;
+      if (t.excludedBudgetIds?.includes(budget.id)) return false;
+      switch (budget.budgetType) {
+        case "overall":
+          return true;
+        case "category":
+          return t.category === budget.category;
+        case "excluded":
+          return !budget.excludedCategories.includes(t.category);
+        case "label":
+          return budget.labels.some((l) => t.labels?.includes(l));
+        default:
+          return false;
+      }
+    })
+    .reduce((sum, t) => sum + t.amount, 0);
 }
 
 interface UseDashboardStateProps {
@@ -145,6 +142,7 @@ export function useDashboardState({
             type: t.type,
             note: t.note,
             labels: t.labels,
+            excludedBudgetIds: t.excludedBudgetIds,
             date: t.date,
             isPending: t.syncStatus !== "synced",
           }));
@@ -405,9 +403,9 @@ export function useDashboardState({
     () =>
       budgets.map((b) => ({
         id: b.id,
-        spent: computeBudgetSpent(b, displayExpenses, categoryData, mergedTransactions),
+        spent: computeBudgetSpent(b, mergedTransactions),
       })),
-    [budgets, displayExpenses, categoryData, mergedTransactions]
+    [budgets, mergedTransactions]
   );
 
   return {

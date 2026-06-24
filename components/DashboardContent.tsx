@@ -266,6 +266,7 @@ export function DashboardContent(props: DashboardContentProps) {
             onDelete={handleDelete}
             onUpdate={handleUpdate}
             compact
+            budgets={budgets.map((b) => ({ id: b.id, name: b.name }))}
           />
         )}
       </div>

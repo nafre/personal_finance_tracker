@@ -14,7 +14,11 @@ export function encodeLabels(labels: string[]): any {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function normalizeTx(tx: any) {
-  return { ...tx, labels: parseLabels(tx.labels) };
+  return {
+    ...tx,
+    labels: parseLabels(tx.labels),
+    excludedBudgetIds: parseLabels(tx.excludedBudgetIds ?? []),
+  };
 }
 
 export function parseBudgetArray(val: string | string[]): string[] {

@@ -49,6 +49,7 @@ export async function addTransaction(data: {
   note?: string;
   date?: Date;
   labels?: string[];
+  excludedBudgetIds?: string[];
 }) {
   const userId = await getAuthenticatedUserId();
   transactionSchema.parse({ ...data, date: data.date ?? undefined });
@@ -62,6 +63,7 @@ export async function addTransaction(data: {
       note: data.note ?? null,
       date: data.date ?? new Date(),
       labels: encodeLabels(data.labels ?? []),
+      excludedBudgetIds: encodeLabels(data.excludedBudgetIds ?? []),
     },
   });
 
@@ -80,6 +82,7 @@ export async function updateTransaction(
     note?: string;
     date?: Date;
     labels?: string[];
+    excludedBudgetIds?: string[];
   }
 ) {
   const userId = await getAuthenticatedUserId();
@@ -98,6 +101,7 @@ export async function updateTransaction(
       ...(data.note !== undefined && { note: data.note || null }),
       ...(data.date !== undefined && { date: data.date }),
       ...(data.labels !== undefined && { labels: encodeLabels(data.labels) }),
+      ...(data.excludedBudgetIds !== undefined && { excludedBudgetIds: encodeLabels(data.excludedBudgetIds) }),
     },
   });
 
