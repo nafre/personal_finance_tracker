@@ -125,6 +125,7 @@ export async function applyLocalMutation(
     note?: string;
     labels?: string[];
     excludedBudgetIds?: string[];
+    excludeFromStats?: boolean;
     date?: string;
   }
 ): Promise<{ committed: LocalTransaction | null; wasQueued: boolean }> {
@@ -141,6 +142,7 @@ export async function applyLocalMutation(
       note: data.note,
       labels: data.labels ?? [],
       excludedBudgetIds: data.excludedBudgetIds ?? [],
+      excludeFromStats: data.excludeFromStats ?? false,
       date: data.date ?? now,
       syncStatus: "pending",
       createdAt: now,
@@ -158,6 +160,7 @@ export async function applyLocalMutation(
         note: localTx.note,
         labels: localTx.labels,
         excludedBudgetIds: localTx.excludedBudgetIds,
+        excludeFromStats: localTx.excludeFromStats,
         date: localTx.date,
       },
       createdAt: now,
@@ -178,6 +181,7 @@ export async function applyLocalMutation(
       ...(data.note !== undefined && { note: data.note }),
       ...(data.labels !== undefined && { labels: data.labels }),
       ...(data.excludedBudgetIds !== undefined && { excludedBudgetIds: data.excludedBudgetIds }),
+      ...(data.excludeFromStats !== undefined && { excludeFromStats: data.excludeFromStats }),
       syncStatus:
         existing.syncStatus === "pending" ? "pending" : "pending-update",
     };
@@ -196,6 +200,7 @@ export async function applyLocalMutation(
           ...(data.note !== undefined && { note: data.note }),
           ...(data.labels !== undefined && { labels: data.labels }),
           ...(data.excludedBudgetIds !== undefined && { excludedBudgetIds: data.excludedBudgetIds }),
+          ...(data.excludeFromStats !== undefined && { excludeFromStats: data.excludeFromStats }),
         },
         createdAt: now,
       });
@@ -214,6 +219,7 @@ export async function applyLocalMutation(
             ...(data.note !== undefined && { note: data.note }),
             ...(data.labels !== undefined && { labels: data.labels }),
             ...(data.excludedBudgetIds !== undefined && { excludedBudgetIds: data.excludedBudgetIds }),
+            ...(data.excludeFromStats !== undefined && { excludeFromStats: data.excludeFromStats }),
           },
         });
       }

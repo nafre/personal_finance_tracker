@@ -18,6 +18,7 @@ export function normalizeTx(tx: any) {
     ...tx,
     labels: parseLabels(tx.labels),
     excludedBudgetIds: parseLabels(tx.excludedBudgetIds ?? []),
+    excludeFromStats: Boolean(tx.excludeFromStats ?? false),
   };
 }
 
@@ -56,6 +57,7 @@ export async function getDailyRows(
       SELECT strftime('%Y-%m-%d', date) AS day, type, SUM(amount) AS total
       FROM transactions
       WHERE userId = ${userId} AND date >= ${start} AND date <= ${end}
+        AND excludeFromStats = 0
       GROUP BY day, type
     `;
   }
@@ -63,6 +65,7 @@ export async function getDailyRows(
     SELECT date_trunc('day', date) AS day, type, SUM(amount) AS total
     FROM transactions
     WHERE "userId" = ${userId} AND date >= ${start} AND date <= ${end}
+      AND "excludeFromStats" = false
     GROUP BY day, type
   `;
 }

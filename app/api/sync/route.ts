@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   try {
     if (op === "add") {
-      const { clientId, category, amount, type, note, labels, excludedBudgetIds, date } = payload as {
+      const { clientId, category, amount, type, note, labels, excludedBudgetIds, excludeFromStats, date } = payload as {
         clientId?: string;
         category: string;
         amount: number;
@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
         note?: string;
         labels?: string[];
         excludedBudgetIds?: string[];
+        excludeFromStats?: boolean;
         date?: string;
       };
 
@@ -65,6 +66,7 @@ export async function POST(req: NextRequest) {
             date: date ? new Date(date) : new Date(),
             labels: encodeLabels(labels ?? []),
             excludedBudgetIds: encodeLabels(excludedBudgetIds ?? []),
+            excludeFromStats: excludeFromStats ?? false,
           },
         });
       } else {
@@ -78,6 +80,7 @@ export async function POST(req: NextRequest) {
             date: date ? new Date(date) : new Date(),
             labels: encodeLabels(labels ?? []),
             excludedBudgetIds: encodeLabels(excludedBudgetIds ?? []),
+            excludeFromStats: excludeFromStats ?? false,
           },
         });
       }
@@ -91,13 +94,14 @@ export async function POST(req: NextRequest) {
       const existing = await db.transaction.findFirst({ where: { id, userId } });
       if (!existing) return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
 
-      const { category, amount, type, note, labels, excludedBudgetIds } = payload as {
+      const { category, amount, type, note, labels, excludedBudgetIds, excludeFromStats } = payload as {
         category?: string;
         amount?: number;
         type?: string;
         note?: string;
         labels?: string[];
         excludedBudgetIds?: string[];
+        excludeFromStats?: boolean;
       };
 
       await db.transaction.update({
@@ -109,6 +113,7 @@ export async function POST(req: NextRequest) {
           ...(note !== undefined && { note: note || null }),
           ...(labels !== undefined && { labels: encodeLabels(labels) }),
           ...(excludedBudgetIds !== undefined && { excludedBudgetIds: encodeLabels(excludedBudgetIds) }),
+          ...(excludeFromStats !== undefined && { excludeFromStats }),
         },
       });
 

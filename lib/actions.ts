@@ -50,6 +50,7 @@ export async function addTransaction(data: {
   date?: Date;
   labels?: string[];
   excludedBudgetIds?: string[];
+  excludeFromStats?: boolean;
 }) {
   const userId = await getAuthenticatedUserId();
   transactionSchema.parse({ ...data, date: data.date ?? undefined });
@@ -64,6 +65,7 @@ export async function addTransaction(data: {
       date: data.date ?? new Date(),
       labels: encodeLabels(data.labels ?? []),
       excludedBudgetIds: encodeLabels(data.excludedBudgetIds ?? []),
+      excludeFromStats: data.excludeFromStats ?? false,
     },
   });
 
@@ -83,6 +85,7 @@ export async function updateTransaction(
     date?: Date;
     labels?: string[];
     excludedBudgetIds?: string[];
+    excludeFromStats?: boolean;
   }
 ) {
   const userId = await getAuthenticatedUserId();
@@ -102,6 +105,7 @@ export async function updateTransaction(
       ...(data.date !== undefined && { date: data.date }),
       ...(data.labels !== undefined && { labels: encodeLabels(data.labels) }),
       ...(data.excludedBudgetIds !== undefined && { excludedBudgetIds: encodeLabels(data.excludedBudgetIds) }),
+      ...(data.excludeFromStats !== undefined && { excludeFromStats: data.excludeFromStats }),
     },
   });
 
@@ -147,15 +151,22 @@ async function _fetchDashboardData(userId: string, month: number, year: number) 
   const dateFilter = { gte: start, lte: end };
 
   // Run aggregation queries + a bounded recent-transactions query in parallel.
-  const [transactionsRaw, typeCategoryBreakdown, dailyRows] = await Promise.all([
+  // Totals include every transaction; the category breakdown and daily trend
+  // exclude transactions flagged `excludeFromStats` (charts-only exclusion).
+  const [transactionsRaw, typeBreakdown, categoryBreakdown, dailyRows] = await Promise.all([
     db.transaction.findMany({
       where: { userId, date: dateFilter },
       orderBy: { date: "desc" },
       take: 500,
     }),
     db.transaction.groupBy({
-      by: ["type", "category"],
+      by: ["type"],
       where: { userId, date: dateFilter },
+      _sum: { amount: true },
+    }),
+    db.transaction.groupBy({
+      by: ["category"],
+      where: { userId, date: dateFilter, type: "expense", excludeFromStats: false },
       _sum: { amount: true },
     }),
     getDailyRows(userId, start, end),
@@ -163,17 +174,19 @@ async function _fetchDashboardData(userId: string, month: number, year: number) 
 
   const transactions = transactionsRaw.map(normalizeTx);
 
-  // Derive totals and category breakdown from a single grouped result
+  // Totals from the unfiltered type breakdown (excluded txns still count).
   let totalIncome = 0;
   let totalExpenses = 0;
-  const catMap = new Map<string, number>();
-  for (const row of typeCategoryBreakdown) {
+  for (const row of typeBreakdown) {
     const sum = row._sum.amount ?? 0;
     if (row.type === "income") totalIncome += sum;
-    else if (row.type === "expense") {
-      totalExpenses += sum;
-      catMap.set(row.category, (catMap.get(row.category) ?? 0) + sum);
-    }
+    else if (row.type === "expense") totalExpenses += sum;
+  }
+
+  // Category breakdown excludes `excludeFromStats` transactions.
+  const catMap = new Map<string, number>();
+  for (const row of categoryBreakdown) {
+    catMap.set(row.category, (catMap.get(row.category) ?? 0) + (row._sum.amount ?? 0));
   }
 
   const categoryData = Array.from(catMap.entries())

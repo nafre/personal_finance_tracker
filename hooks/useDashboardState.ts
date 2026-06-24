@@ -228,42 +228,48 @@ export function useDashboardState({
       labels: string[];
       date: Date | string;
       isPending?: boolean;
+      excludeFromStats?: boolean;
     }) => {
       const txDate = new Date(tx.date);
       if (txDate.getMonth() + 1 !== month || txDate.getFullYear() !== year) return;
 
       setTransactions((prev) => [tx, ...prev]);
 
+      // Totals always count; charts (categoryData/dailyData) skip excluded txns.
       if (tx.type === "income") {
         setTotalIncome((p) => p + tx.amount);
       } else {
         setTotalExpenses((p) => p + tx.amount);
-        setCategoryData((prev) => {
-          const existing = prev.find((c) => c.name === tx.category);
-          if (existing) {
-            return prev
-              .map((c) =>
-                c.name === tx.category
-                  ? { ...c, value: Math.round((c.value + tx.amount) * 100) / 100 }
-                  : c
-              )
-              .sort((a, b) => b.value - a.value);
-          }
-          return [...prev, { name: tx.category, value: tx.amount }].sort(
-            (a, b) => b.value - a.value
-          );
-        });
+        if (!tx.excludeFromStats) {
+          setCategoryData((prev) => {
+            const existing = prev.find((c) => c.name === tx.category);
+            if (existing) {
+              return prev
+                .map((c) =>
+                  c.name === tx.category
+                    ? { ...c, value: Math.round((c.value + tx.amount) * 100) / 100 }
+                    : c
+                )
+                .sort((a, b) => b.value - a.value);
+            }
+            return [...prev, { name: tx.category, value: tx.amount }].sort(
+              (a, b) => b.value - a.value
+            );
+          });
+        }
       }
 
-      const txDay = txDate.getDate();
-      const field = tx.type === "income" ? "income" : "expense";
-      setDailyData((prev) =>
-        prev.map((d) =>
-          d.day === txDay
-            ? { ...d, [field]: Math.round((d[field] + tx.amount) * 100) / 100 }
-            : d
-        )
-      );
+      if (!tx.excludeFromStats) {
+        const txDay = txDate.getDate();
+        const field = tx.type === "income" ? "income" : "expense";
+        setDailyData((prev) =>
+          prev.map((d) =>
+            d.day === txDay
+              ? { ...d, [field]: Math.round((d[field] + tx.amount) * 100) / 100 }
+              : d
+          )
+        );
+      }
     },
     [month, year]
   );
@@ -287,31 +293,36 @@ export function useDashboardState({
     setPendingTransactions((prev) => prev.filter((t) => t.id !== id));
     void deleteTransactionFromIDB(id);
 
+    // Totals always count; charts only changed if the txn was included in them.
     if (tx.type === "income") {
       setTotalIncome((p) => p - tx.amount);
     } else {
       setTotalExpenses((p) => p - tx.amount);
-      setCategoryData((prev) =>
-        prev
-          .map((c) =>
-            c.name === tx.category
-              ? { ...c, value: Math.round((c.value - tx.amount) * 100) / 100 }
-              : c
-          )
-          .filter((c) => c.value > 0)
-          .sort((a, b) => b.value - a.value)
-      );
+      if (!tx.excludeFromStats) {
+        setCategoryData((prev) =>
+          prev
+            .map((c) =>
+              c.name === tx.category
+                ? { ...c, value: Math.round((c.value - tx.amount) * 100) / 100 }
+                : c
+            )
+            .filter((c) => c.value > 0)
+            .sort((a, b) => b.value - a.value)
+        );
+      }
     }
 
-    const delDay = new Date(tx.date).getDate();
-    const delField = tx.type === "income" ? "income" : "expense";
-    setDailyData((prev) =>
-      prev.map((d) =>
-        d.day === delDay
-          ? { ...d, [delField]: Math.round(Math.max(0, d[delField] - tx.amount) * 100) / 100 }
-          : d
-      )
-    );
+    if (!tx.excludeFromStats) {
+      const delDay = new Date(tx.date).getDate();
+      const delField = tx.type === "income" ? "income" : "expense";
+      setDailyData((prev) =>
+        prev.map((d) =>
+          d.day === delDay
+            ? { ...d, [delField]: Math.round(Math.max(0, d[delField] - tx.amount) * 100) / 100 }
+            : d
+        )
+      );
+    }
   }, [transactions, pendingTransactions]);
 
   const handleUpdate = useCallback(
@@ -324,6 +335,10 @@ export function useDashboardState({
       const newAmount   = data.amount   ?? old.amount;
       const newType     = data.type     ?? old.type;
       const newCategory = data.category ?? old.category;
+      // Whether the txn is excluded from charts before/after this update. Totals
+      // always reflect the change; chart slices only when (un)excluded.
+      const oldExcluded = old.excludeFromStats ?? false;
+      const newExcluded = data.excludeFromStats ?? oldExcluded;
 
       if (old.type === "income") {
         setTotalIncome((p) => p - old.amount);
@@ -345,7 +360,7 @@ export function useDashboardState({
 
       setCategoryData((prev) => {
         let updated = [...prev];
-        if (old.type === "expense") {
+        if (old.type === "expense" && !oldExcluded) {
           updated = updated
             .map((c) =>
               c.name === old.category
@@ -355,7 +370,7 @@ export function useDashboardState({
             .filter((c) => c.value > 0)
             .sort((a, b) => b.value - a.value);
         }
-        if (newType === "expense") {
+        if (newType === "expense" && !newExcluded) {
           const existing = updated.find((c) => c.name === newCategory);
           if (existing) {
             updated = updated
@@ -381,18 +396,22 @@ export function useDashboardState({
       const newTxType   = data.type   ?? old.type;
       setDailyData((prev) => {
         let updated = [...prev];
-        const oldField = old.type === "income" ? "income" : "expense";
-        updated = updated.map((d) =>
-          d.day === oldDay
-            ? { ...d, [oldField]: Math.round(Math.max(0, d[oldField] - old.amount) * 100) / 100 }
-            : d
-        );
-        const newField = newTxType === "income" ? "income" : "expense";
-        updated = updated.map((d) =>
-          d.day === newDay
-            ? { ...d, [newField]: Math.round((d[newField] + newTxAmount) * 100) / 100 }
-            : d
-        );
+        if (!oldExcluded) {
+          const oldField = old.type === "income" ? "income" : "expense";
+          updated = updated.map((d) =>
+            d.day === oldDay
+              ? { ...d, [oldField]: Math.round(Math.max(0, d[oldField] - old.amount) * 100) / 100 }
+              : d
+          );
+        }
+        if (!newExcluded) {
+          const newField = newTxType === "income" ? "income" : "expense";
+          updated = updated.map((d) =>
+            d.day === newDay
+              ? { ...d, [newField]: Math.round((d[newField] + newTxAmount) * 100) / 100 }
+              : d
+          );
+        }
         return updated;
       });
     },

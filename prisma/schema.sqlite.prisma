@@ -18,6 +18,7 @@ model Transaction {
   type      String
   labels    String   @default("[]")
   excludedBudgetIds String @default("[]")
+  excludeFromStats Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

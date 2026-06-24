@@ -9,6 +9,7 @@ export interface LocalTransaction {
   note?: string;
   labels: string[];
   excludedBudgetIds: string[];
+  excludeFromStats: boolean;
   date: string; // ISO string
   syncStatus: "synced" | "pending" | "pending-update" | "pending-delete";
   syncError?: string;
@@ -194,6 +195,7 @@ export async function seedIDBFromServer(
     note?: string | null;
     labels?: string[];
     excludedBudgetIds?: string[];
+    excludeFromStats?: boolean;
     date: Date | string;
   }>,
   userId: string
@@ -217,6 +219,7 @@ export async function seedIDBFromServer(
       note: tx.note ?? undefined,
       labels: tx.labels ?? [],
       excludedBudgetIds: tx.excludedBudgetIds ?? [],
+      excludeFromStats: tx.excludeFromStats ?? false,
       date:
         typeof tx.date === "string" ? tx.date : new Date(tx.date).toISOString(),
       syncStatus: "synced",

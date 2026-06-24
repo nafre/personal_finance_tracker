@@ -139,6 +139,7 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, aut
           note: tx.note ?? undefined,
           labels: tx.labels ?? [],
           excludedBudgetIds: tx.excludedBudgetIds ?? [],
+          excludeFromStats: tx.excludeFromStats ?? false,
           date: new Date(tx.date).toISOString(),
           syncStatus: "synced",
           createdAt: new Date(tx.createdAt).toISOString(),

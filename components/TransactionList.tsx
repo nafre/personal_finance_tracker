@@ -15,6 +15,7 @@ interface Transaction {
   note?: string | null;
   labels?: string[];
   excludedBudgetIds?: string[];
+  excludeFromStats?: boolean;
   date: Date | string;
   isPending?: boolean;
 }
@@ -200,6 +201,9 @@ function TransactionRow({
   const [editExcludedBudgetIds, setEditExcludedBudgetIds] = useState<string[]>(
     tx.excludedBudgetIds ?? []
   );
+  const [editExcludeFromStats, setEditExcludeFromStats] = useState<boolean>(
+    tx.excludeFromStats ?? false
+  );
   const [editType, setEditType] = useState<"income" | "expense">(
     tx.type as "income" | "expense"
   );
@@ -223,6 +227,7 @@ function TransactionRow({
       note: editNote || undefined,
       labels: editLabels,
       excludedBudgetIds: editExcludedBudgetIds,
+      excludeFromStats: editExcludeFromStats,
       date: editDate,
     };
 
@@ -247,6 +252,7 @@ function TransactionRow({
       note: tx.note,
       labels: tx.labels ?? [],
       excludedBudgetIds: tx.excludedBudgetIds ?? [],
+      excludeFromStats: tx.excludeFromStats ?? false,
       date: tx.date,
       isPending: tx.isPending ?? false,
     };
@@ -352,6 +358,18 @@ function TransactionRow({
           </div>
         )}
         <div>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-600 bg-slate-700 accent-indigo-500"
+              checked={editExcludeFromStats}
+              onChange={(e) => setEditExcludeFromStats(e.target.checked)}
+            />
+            <span className="text-xs text-slate-300">Exclude from charts</span>
+          </label>
+          <p className="text-[11px] text-slate-600 mt-1">Hidden from the spending breakdown and daily trend, but still counted in totals.</p>
+        </div>
+        <div>
           <label className="text-xs text-slate-400 mb-1 block">Type</label>
           <div className="flex gap-2">
             {(["expense", "income"] as const).map((t) => (
@@ -422,6 +440,14 @@ function TransactionRow({
           {tx.isPending && (
             <span className="text-[10px] text-amber-400 border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap">
               Pending
+            </span>
+          )}
+          {tx.excludeFromStats && (
+            <span
+              className="text-[10px] text-slate-400 border border-slate-600 bg-slate-700/40 px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap"
+              title="Excluded from charts (still counted in totals)"
+            >
+              Off-chart
             </span>
           )}
         </div>
