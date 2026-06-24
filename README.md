@@ -8,8 +8,9 @@ A personal finance tracker built with Next.js 16, Prisma, and PostgreSQL. Track 
 - **Income / expense toggle** — quick-add pill to override parser inference
 - **Recurring transactions** — daily, weekly, monthly, or yearly rules with due/overdue status
 - **Labels** — tag transactions with `#hashtag` syntax; filter by label on the transactions page
-- **Budgets** — per-category monthly budget targets with progress bars and over-budget alerts
+- **Budgets** — overall, per-category, excluded-category, or label-based monthly budget targets with progress bars and over-budget alerts; individual transactions can be excluded from specific budgets
 - **Charts** — daily income/expense area chart and category spending breakdown via Recharts
+- **Exclude from charts** — flag a one-off transaction so it drops out of the spending breakdown and daily trend while still counting toward your totals
 - **CSV export** — download filtered transactions as a CSV file from the transactions page
 - **Spending insights** — burn-rate analysis and daily average spending card
 - **Month navigation** — browse any historical month via prev/next arrows on the dashboard
@@ -119,7 +120,6 @@ Open [http://localhost:3000](http://localhost:3000) and log in.
 | `npm run dev` | Start development server |
 | `npm run build` | Generate Prisma client + build for production |
 | `npm run start` | Start production server |
-| `npm run lint` | Run ESLint |
 | `npm run db:push` | Push Prisma schema to DB (no migration history) |
 | `npm run db:migrate` | Deploy pending migrations |
 | `npm run db:studio` | Open Prisma Studio (DB GUI) |
@@ -327,7 +327,7 @@ lib/
 types/
   index.ts               # Shared TypeScript interfaces
 prisma/
-  schema.prisma          # PostgreSQL: User, Transaction, Category, RecurringTransaction
+  schema.prisma          # PostgreSQL: User, Transaction, Category, Budget, RecurringTransaction
   schema.sqlite.prisma   # SQLite-compatible variant
 e2e/
   dashboard.spec.ts      # Dashboard visual regression tests

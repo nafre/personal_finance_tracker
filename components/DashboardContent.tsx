@@ -169,7 +169,6 @@ export function DashboardContent(props: DashboardContentProps) {
         <SpendingInsights
           categoryData={categoryData}
           prevCategoryData={props.prevCategoryData}
-          totalExpenses={displayExpenses}
           month={month}
           year={year}
         />

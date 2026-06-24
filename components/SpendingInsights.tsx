@@ -10,7 +10,6 @@ interface CategoryData {
 interface SpendingInsightsProps {
   categoryData: CategoryData[];
   prevCategoryData: CategoryData[];
-  totalExpenses: number;
   month: number;
   year: number;
 }
@@ -20,7 +19,6 @@ type PaceStatus = "under" | "over" | "on";
 export function SpendingInsights({
   categoryData,
   prevCategoryData,
-  totalExpenses,
   month,
   year,
 }: SpendingInsightsProps) {
@@ -31,7 +29,11 @@ export function SpendingInsights({
   const daysInMonth = new Date(year, month, 0).getDate();
   const daysElapsed = isCurrentMonth ? today.getDate() : daysInMonth;
 
-  const dailyBurnRate = daysElapsed > 0 ? totalExpenses / daysElapsed : 0;
+  // Chart-basis total: sum of the (already excludeFromStats-filtered) category
+  // data. Keeps the bars, burn rate, and pace badge consistent with the pie /
+  // trend charts — off-chart transactions are uniformly absent here too.
+  const chartTotal = categoryData.reduce((s, c) => s + c.value, 0);
+  const dailyBurnRate = daysElapsed > 0 ? chartTotal / daysElapsed : 0;
 
   const prevTotal = prevCategoryData.reduce((s, c) => s + c.value, 0);
   const targetDailyRate = prevTotal > 0 ? prevTotal / daysInMonth : 0;
@@ -74,7 +76,7 @@ export function SpendingInsights({
         <p className="text-sm text-slate-500 text-center py-4">No expense data</p>
       ) : (
         top5.map((cat) => {
-          const pct = totalExpenses > 0 ? (cat.value / totalExpenses) * 100 : 0;
+          const pct = chartTotal > 0 ? (cat.value / chartTotal) * 100 : 0;
           const prevVal = prevCategoryMap.get(cat.name);
           const momDelta =
             prevVal != null && prevVal > 0

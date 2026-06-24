@@ -6,8 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm run dev          # Start dev server (via scripts/dev.mjs)
-npm run build        # prisma generate + next build
-npm run lint         # ESLint
+npm run build        # prisma generate + next build (also the type-check gate — there is no separate lint step)
 npm run db:push      # Push Prisma schema to DB (no migration history)
 npm run db:migrate   # Deploy pending migrations
 npm run db:studio    # Open Prisma Studio
@@ -116,7 +115,7 @@ The dashboard uses a **hybrid render pattern**:
 
 Props passed to `DashboardContent`: `initialTransactions`, `initialTotalIncome`, `initialTotalExpenses`, `initialCategoryData`, `initialDailyData`, `initialTopCategory`, `initialRecurring`, `initialBudgets`, `month`, `year`, `prevTotalExpenses`, `prevTotalIncome`, `prevCategoryData`.
 
-The transactions page (`/transactions`) is a **fully client-side** page — it fetches data via server actions inside `useEffect` on filter changes, rather than using server component rendering.
+The transactions page (`/transactions`) is a **fully client-side** page. It fetches data via the `getTransactions` server action through **SWR**, keyed by a serialized filter object (`month`, `year`, `category`, `label`, `q`, `from`, `to`) — re-visiting a previously-seen filter returns cached data instantly while revalidating in the background. Cursor-based "Load more" pagination appends pages outside SWR; categories and budgets are fetched once on mount. A drop in `pendingCount` (sync completed) triggers a silent `mutate()` to clear "Pending" badges.
 
 **Important React 18 note:** Do not use `startTransition(async fn)` for server actions — React 18 does not properly track async transitions. Use plain `async/await` with a `useState` loading flag instead.
 
@@ -139,7 +138,7 @@ The app is offline-capable. Mutations made without network connectivity are queu
 
 3. **`app/api/sync/route.ts`** — `POST /api/sync`. REST endpoint used by the service worker (which cannot call server actions). Accepts `{ op, id?, payload? }`, validates session cookie, applies the same ownership checks as `lib/actions.ts`. Returns `{ success: true, id? }`. For `add` ops uses upsert on `clientId` (the temp ID) to safely deduplicate retries.
 
-4. **`context/SyncProvider.tsx`** — React context wrapping the whole app (inside `SessionProvider`). Exposes `{ isOnline, pendingCount, isSyncing, syncNow, refreshPendingCount, userId }`. Registers `/sw.js`, listens for `online`/`offline` events, auto-calls `syncNow()` on reconnect. Registers the `"expense-sync"` BackgroundSync tag whenever `pendingCount > 0`.
+4. **`context/SyncProvider.tsx`** — React context wrapping the whole app (inside `SessionProvider`). Exposes `{ isOnline, pendingCount, failedCount, isSyncing, syncNow, refreshPendingCount, userId }` (`failedCount` = local records carrying a `syncError`). Registers `/sw.js`, listens for `online`/`offline` events, auto-calls `syncNow()` on reconnect. Registers the `"expense-sync"` BackgroundSync tag whenever `pendingCount > 0`.
 
 5. **`public/sw.js`** — service worker (plain JS, no bundler):
    - Cache-first for `/_next/static/**` and `/icons/**`.
@@ -178,7 +177,7 @@ App closed during sync
 
 ### SQLite mode
 
-When `DATABASE_URL=file:./dev.db` is set, the app targets `prisma/schema.sqlite.prisma` instead of the PostgreSQL schema. SQLite does not support native array columns, so `labels` are stored as a JSON string. All DB-dialect branching is centralised in `lib/db-adapter.ts`: `IS_SQLITE`, `parseLabels`, `encodeLabels`, `normalizeTx`, `getLabelFilter` (returns empty for SQLite — callers do JS-side filtering), and `getDailyRows` (different raw SQL per dialect). `lib/actions.ts` imports from `lib/db-adapter.ts` rather than inlining these helpers.
+When `DATABASE_URL=file:./dev.db` is set, the app targets `prisma/schema.sqlite.prisma` instead of the PostgreSQL schema. SQLite does not support native array columns, so array fields (`labels`, `excludedBudgetIds`, and Budget's `excludedCategories`/`labels`) are stored as JSON strings. All DB-dialect branching is centralised in `lib/db-adapter.ts`: `IS_SQLITE`, `parseLabels`/`encodeLabels` (transaction arrays), `parseBudgetArray`/`encodeBudgetArray` + `normalizeBudget` (budget arrays), `normalizeTx` (parses `labels`/`excludedBudgetIds` and coerces `excludeFromStats` to a boolean), `getLabelFilter` (returns empty for SQLite — callers do JS-side filtering), and `getDailyRows` (different raw SQL per dialect; always filters out `excludeFromStats` rows). `lib/actions.ts` imports from `lib/db-adapter.ts` rather than inlining these helpers. Note: `excludeFromStats` is a real `Boolean` column (not a JSON array), so it is filterable directly in SQL on both dialects.
 
 ### Currency
 
@@ -190,14 +189,14 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 |------|------|
 | `types/index.ts` | Shared TypeScript interfaces: `Transaction`, `CategoryData`, `DailyData`, `RecurringTransaction`, `Budget`, `CategoryOption`. Import from here — do not redeclare locally. |
 | `lib/actions.ts` | All server actions (CRUD + data fetch). Single source of truth for DB access. All mutations are Zod-validated via `lib/validation.ts`. Exports: `addTransaction`, `updateTransaction`, `deleteTransaction`, `getTransactionIds`, `getDashboardData`, `getTransactions`, `getCategories`, `addCategory`, `updateCategory`, `deleteCategory`, `addDefaultCategories`, `getRecurringTransactions`, `createRecurringTransaction`, `updateRecurringTransaction`, `deleteRecurringTransaction`, `postRecurringTransaction`, `skipRecurringTransaction`, `getBudgets`, `upsertBudget`, `deleteBudget`, `changePassword`, `createUser`, `getSessionRole`, `getUsers`, `deleteUser`, `updateUser`, `adminResetPassword`. |
-| `lib/db-adapter.ts` | DB-dialect abstraction: `IS_SQLITE`, `parseLabels`, `encodeLabels`, `normalizeTx`, `getLabelFilter`, `getDailyRows`. Keeps all SQLite/Postgres branching out of `actions.ts`. |
+| `lib/db-adapter.ts` | DB-dialect abstraction: `IS_SQLITE`, `parseLabels`, `encodeLabels`, `parseBudgetArray`, `encodeBudgetArray`, `normalizeTx` (transactions, incl. `excludeFromStats`), `normalizeBudget`, `getLabelFilter`, `getDailyRows`. Keeps all SQLite/Postgres branching out of `actions.ts`. |
 | `lib/validation.ts` | Zod schemas: `transactionSchema`, `categorySchema`, `budgetSchema`, `recurringSchema`, `passwordSchema`. Applied at the top of every mutation in `actions.ts`. |
-| `lib/idb.ts` | IndexedDB singleton (DB version 2): `transactions` and `syncQueue` stores. Typed with `idb@8`. `QueuedOp` now has `retryCount?: number`. Key exports: `putTransaction`, `patchTransaction`, `getTransactionsByMonth`, `getTransactionFromIDB`, `deleteTransactionFromIDB`, `replaceTempId`, `enqueueOp`, `getAllQueuedOps`, `deleteQueuedOp`, `updateQueuedOp`, `getPendingCount`, `seedIDBFromServer`, `reconcileWithServer`. |
+| `lib/idb.ts` | IndexedDB singleton (DB version 2): `transactions` and `syncQueue` stores. Typed with `idb@8`. `LocalTransaction` mirrors the server record incl. `labels`, `excludedBudgetIds`, and `excludeFromStats`. `QueuedOp` has `retryCount?: number`. Key exports: `putTransaction`, `patchTransaction`, `getTransactionsByMonth`, `getTransactionFromIDB`, `deleteTransactionFromIDB`, `replaceTempId`, `enqueueOp`, `getAllQueuedOps`, `deleteQueuedOp`, `updateQueuedOp`, `getPendingCount`, `getFailedSyncCount`, `seedIDBFromServer`, `reconcileWithServer`. |
 | `lib/sync.ts` | Offline mutation logic: `applyLocalMutation`, `drainQueue` (MAX_RETRIES=5, increments retryCount on failure), `seedIDBFromServer`, `reconcileAfterSync`. |
 | `lib/parser.ts` | Parses natural-language input into `{category, amount, type, note, labels}`. Type inferred from `INCOME_KEYWORDS`. Labels parsed from `#tag` tokens (e.g. `food 20 #date`). |
 | `lib/utils.ts` | `cn`, `formatCurrency`, `formatDate`, `formatDateShort`, `getMonthName`, `getCurrentMonthYear`, `getPrevMonth`, `getNextMonth`, `getNextDueDate`, `getRecurringStatus`, `isPostedThisPeriod`, `toMonthlyAmount`, `countRemainingPayments`, `stringToColor`. Also exports `DEFAULT_CATEGORIES` (used server-side only — do not import in client components to avoid Turbopack module boundary conflicts). |
 | `lib/auth.ts` | NextAuth config. JWT callback stores `sessionVersion` alongside `userId`/`role`. Bootstrap path seeds default categories for the admin user on first login. |
-| `context/SyncProvider.tsx` | React context: online state, pending count, sync trigger, SW registration. Exposes `{ isOnline, pendingCount, isSyncing, syncNow, refreshPendingCount, userId }`. Runs `reconcileAfterSync` on first load while online. Must be inside `SessionProvider`. |
+| `context/SyncProvider.tsx` | React context: online state, pending count, failed count, sync trigger, SW registration. Exposes `{ isOnline, pendingCount, failedCount, isSyncing, syncNow, refreshPendingCount, userId }`. Runs `reconcileAfterSync` on first load while online. Must be inside `SessionProvider`. |
 | `hooks/useDashboardState.ts` | All dashboard state, effects, memos, and handlers extracted from `DashboardContent`. Returns everything the JSX needs including `handleAdd`, `handleReplace`, `handleDelete`, `handleUpdate`. |
 | `hooks/useOnlineStatus.ts` | Thin hook: `navigator.onLine` + `online`/`offline` events. |
 | `app/api/sync/route.ts` | REST endpoint for SW background sync. Mirrors `lib/actions.ts` ownership checks. Uses upsert on `clientId` for add-op deduplication. |
@@ -206,9 +205,10 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `components/DashboardContent.tsx` | Thin client orchestrator: calls `useDashboardState(props)` and renders JSX. No state or logic lives here directly. |
 | `components/StatCard.tsx` | Standalone stat card with gradient background, MoM delta badge, and income/expense/balance colour variants. |
 | `components/ExpenseInput.tsx` | Quick-add input with Exp/Inc type toggle pill. Offline-aware: routes to `applyLocalMutation` when offline. |
-| `components/TransactionList.tsx` | Renders rows with label badges and amber "Pending" badge for unsynced items; inline edit/delete are offline-aware. Delete shows spinner while in-flight; edit form dims (`opacity-50`) while saving. `CategoryCombobox` receives `CategoryOption[]` for icon display. |
+| `components/TransactionList.tsx` | Renders rows with label badges, amber "Pending" badge for unsynced items, and a grey "Off-chart" badge when `excludeFromStats` is set; inline edit/delete are offline-aware. The inline edit form includes a `LabelEditor`, a `BudgetExcludeSelect` (per-transaction `excludedBudgetIds`, expenses only), and an "Exclude from charts" checkbox (`excludeFromStats`, all types). Delete shows spinner while in-flight; edit form dims (`opacity-50`) while saving. `CategoryCombobox` receives `CategoryOption[]` for icon display. |
 | `components/CategoryCombobox.tsx` | Searchable category dropdown. Accepts `categories: CategoryOption[]` — renders icon alongside name. Has "Use …" option for free-text entry. |
 | `components/CategoryManager.tsx` | Settings category list with inline edit mode for custom categories (name + icon + colour picker). Default categories show a "Default" badge; custom categories show pencil + delete icons. |
+| `components/budgets/BudgetManager.tsx` | Dashboard modal to create/edit/delete budgets. Supports the four `budgetType`s (overall / category / excluded / label). Dynamically imported. |
 | `components/budgets/BudgetProgress.tsx` | Progress bar with "RM X.XX remaining" / "RM X.XX over budget" label below the bar. |
 | `components/SyncStatusBar.tsx` | Offline/syncing status indicator. |
 | `components/MonthSelector.tsx` | Month/year navigation control used on the dashboard. |
@@ -224,7 +224,7 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `components/DashboardErrorBoundary.tsx` | Error boundary wrapping dashboard sections to isolate IDB/render failures. |
 | `components/UserManager.tsx` | Admin-only client component: user list (avatar, role badge, inline reset-password expand) + create form. Exports `UserRecord` interface. |
 | `components/SettingsTabs.tsx` | Client component wrapping all settings sections in a tab bar (Users / Categories / Account). Admins default to Users tab; non-admins default to Categories tab. |
-| `prisma/schema.prisma` | Four models: `User`, `Transaction`, `Category`, `RecurringTransaction`. |
+| `prisma/schema.prisma` | Five models: `User`, `Transaction`, `Category`, `Budget`, `RecurringTransaction`. |
 | `prisma/schema.sqlite.prisma` | SQLite-compatible variant of the schema (used when `DATABASE_URL` is set). |
 
 ### Schema overview
@@ -233,14 +233,19 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 - `sessionVersion` is incremented by `changePassword` and `adminResetPassword`. `getAuthenticatedUserId()` compares this DB value against the JWT claim — a mismatch throws `"Unauthorized"`, invalidating stale tokens. After a password change the client calls `signOut()` so the user re-authenticates with a fresh token.
 - No FK relations to other models — cascade deletes must be done manually in `deleteUser()` using `db.$transaction`.
 
-**Transaction** — `id, clientId String? @unique, userId, amount Float, category, note?, date, type String ("income"\|"expense"), labels String[] @default([]), createdAt, updatedAt`
+**Transaction** — `id, clientId String? @unique, userId, amount Float, category, note?, date, type String ("income"\|"expense"), labels String[] @default([]), excludedBudgetIds String[] @default([]), excludeFromStats Boolean @default(false), createdAt, updatedAt`
 - `clientId` stores the offline temp ID (`pending_…`) and is used by `/api/sync` to upsert offline-add ops idempotently, preventing duplicates on retry.
+- `excludedBudgetIds` — budget IDs this transaction is excluded from (per-transaction budget opt-out; filtered client-side in `useDashboardState`).
+- `excludeFromStats` — when `true`, the transaction is dropped from the dashboard charts (category breakdown + daily trend) but **still counts** in the Income/Expense/Balance totals.
+- On SQLite, `labels` and `excludedBudgetIds` are JSON strings; `excludeFromStats` is a native `Boolean`.
 
 **RecurringTransaction** — `id, userId, name, category, amount, type, frequency ("daily"\|"weekly"\|"monthly"\|"yearly"), startDate, endDate?, lastRun?, isActive, note?, createdAt, updatedAt`
 
 **Category** — `id, userId, name, icon, color, isDefault, createdAt`
 
-**IndexedDB `transactions` store** — mirrors Transaction fields plus `syncStatus: "synced"|"pending"|"pending-update"|"pending-delete"`, `syncError?`, and ISO-string dates. Key: `id`.
+**Budget** — `id, userId, name @default("Budget"), amount Float, period @default("monthly"), budgetType ("overall"\|"category"\|"excluded"\|"label"), category?, excludedCategories String[] @default([]), labels String[] @default([]), createdAt, updatedAt`. Unique on `[userId, name]`. On SQLite, `excludedCategories`/`labels` are JSON strings (handled by `normalizeBudget`/`encodeBudgetArray`).
+
+**IndexedDB `transactions` store** — mirrors Transaction fields (incl. `labels`, `excludedBudgetIds`, `excludeFromStats`) plus `syncStatus: "synced"|"pending"|"pending-update"|"pending-delete"`, `syncError?`, and ISO-string dates. Key: `id`.
 
 **IndexedDB `syncQueue` store** — `queueId` (autoIncrement), `op`, `tempId`, `payload`, `createdAt`, `retryCount?`. Key: `queueId`. Ops with `retryCount >= 5` are dropped by `drainQueue` to prevent queue deadlock.
 
@@ -290,9 +295,25 @@ Settings → Categories shows all categories split into Default and Custom group
 
 `CategoryCombobox` accepts `categories: CategoryOption[]` (with `name`, `icon?`, `color?`). The dropdown renders the emoji icon beside each category name. Callers (TransactionList edit form, RecurringForm) map the `getCategories()` result to `CategoryOption[]` before passing it in.
 
-#### Budget remaining
+#### Budgets
 
-`BudgetProgress` shows a "RM X.XX remaining" line (emerald) or "RM X.XX over budget" line (rose) below each progress bar, giving an at-a-glance cash figure alongside the existing percentage bar.
+Budgets are stored in the `Budget` table and managed via `BudgetManager` (dashboard modal, dynamically imported). Each budget has a `budgetType`:
+- `overall` — all expenses count.
+- `category` — only the matching `category`.
+- `excluded` — all expenses except those in `excludedCategories`.
+- `label` — expenses carrying any of the budget's `labels`.
+
+Per-budget spend is computed **client-side** in `useDashboardState` (`computeBudgetSpent`) by iterating the month's transactions and applying the type rule — skipping any transaction that lists the budget in its `excludedBudgetIds`. `BudgetProgress` shows a "RM X.XX remaining" line (emerald) or "RM X.XX over budget" line (rose) below each progress bar.
+
+#### Per-transaction budget exclusion
+
+A transaction can be excluded from specific budgets via its `excludedBudgetIds` array. The inline edit form's `BudgetExcludeSelect` (expenses only) lets you tick which budgets to opt out of. Because budget spend is computed client-side, no server aggregation change is needed — `computeBudgetSpent` simply skips excluded transactions.
+
+#### Exclude from charts (`excludeFromStats`)
+
+A per-transaction **boolean** toggle ("Exclude from charts" checkbox in the inline edit form, all types) that drops a transaction from the dashboard's **category breakdown** (pie chart, "Top spend", `SpendingInsights`) and **daily trend** chart — while keeping it in the Income/Expense/Balance totals. Excluded rows show a grey "Off-chart" badge.
+
+Because these charts are aggregated **server-side**, the filtering happens in `_fetchDashboardData` (`lib/actions.ts`): totals come from an unfiltered `groupBy(["type"])`, while the category breakdown uses a separate `groupBy(["category"])` with `where: { excludeFromStats: false }`; `getDailyRows` always appends the `excludeFromStats` filter to its raw SQL. The optimistic handlers in `useDashboardState` (`handleAdd`/`handleUpdate`/`handleDelete`) mirror this: totals always update, but `categoryData`/`dailyData` are only patched when `!excludeFromStats` (with `handleUpdate` accounting for the flag toggling). `SpendingInsights` derives its own total from the already-filtered `categoryData` so its bars, burn rate, and pace badge stay on the same basis as the charts. A future "overall dashboard" can reuse the same `excludeFromStats: false` filter.
 
 #### Offline / pending transactions
 

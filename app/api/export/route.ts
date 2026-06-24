@@ -25,11 +25,14 @@ export async function GET(req: NextRequest) {
     limit: 10000,
   });
 
+  // Double up embedded quotes so commas/quotes in any field can't break the row
+  const esc = (s: string) => s.replace(/"/g, '""');
   const rows = transactions.map((tx) => {
-    const date   = new Date(tx.date).toISOString().split("T")[0];
-    const note   = (tx.note ?? "").replace(/"/g, '""');
-    const labels = (tx.labels ?? []).join(";");
-    return `${date},"${tx.category}",${tx.type},${tx.amount.toFixed(2)},"${note}","${labels}"`;
+    const date     = new Date(tx.date).toISOString().split("T")[0];
+    const category = esc(tx.category);
+    const note     = esc(tx.note ?? "");
+    const labels   = esc((tx.labels ?? []).join(";"));
+    return `${date},"${category}",${tx.type},${tx.amount.toFixed(2)},"${note}","${labels}"`;
   });
 
   const csv = ["Date,Category,Type,Amount (RM),Note,Labels", ...rows].join("\n");
