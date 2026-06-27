@@ -1,8 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import {
-  AreaChart,
+  ComposedChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -25,6 +27,9 @@ interface TrendChartProps {
   // month labels render.
   labelEvery?: number;
   emptyMessage?: string;
+  // Overlay a running balance (cumulative income − expense) line on a second
+  // axis — the "net worth" view across the period.
+  showCumulative?: boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,7 +50,17 @@ function CustomTooltip({ active, payload, label }: any) {
   return null;
 }
 
-export function TrendChart({ data, labelEvery, emptyMessage }: TrendChartProps) {
+export function TrendChart({ data, labelEvery, emptyMessage, showCumulative }: TrendChartProps) {
+  // Running balance per bucket — only computed/rendered when requested.
+  const chartData = useMemo(() => {
+    if (!showCumulative) return data;
+    let running = 0;
+    return data.map((d) => {
+      running += d.income - d.expense;
+      return { ...d, balance: Math.round(running * 100) / 100 };
+    });
+  }, [data, showCumulative]);
+
   // Only show points that have data for a cleaner chart
   const hasData = data.some((d) => d.income > 0 || d.expense > 0);
 
@@ -63,7 +78,7 @@ export function TrendChart({ data, labelEvery, emptyMessage }: TrendChartProps) 
 
   return (
     <ResponsiveContainer width="100%" height={200}>
-      <AreaChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+      <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
         <defs>
           <linearGradient id="gradExpense" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
@@ -93,6 +108,19 @@ export function TrendChart({ data, labelEvery, emptyMessage }: TrendChartProps) 
           tickLine={false}
           tickFormatter={(v) => (v === 0 ? "0" : `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`)}
         />
+        {showCumulative && (
+          <YAxis
+            yAxisId="balance"
+            orientation="right"
+            tick={{ fill: "#a16207", fontSize: 11 }}
+            axisLine={false}
+            tickLine={false}
+            width={36}
+            tickFormatter={(v) =>
+              `${v >= 1000 || v <= -1000 ? `${(v / 1000).toFixed(0)}k` : v}`
+            }
+          />
+        )}
         <Tooltip content={<CustomTooltip />} />
 
         <Area
@@ -115,7 +143,20 @@ export function TrendChart({ data, labelEvery, emptyMessage }: TrendChartProps) 
           dot={false}
           activeDot={{ r: 4, fill: "#10b981", stroke: "#0f172a", strokeWidth: 2 }}
         />
-      </AreaChart>
+        {showCumulative && (
+          <Line
+            yAxisId="balance"
+            type="monotone"
+            dataKey="balance"
+            name="balance"
+            stroke="#f59e0b"
+            strokeWidth={2}
+            strokeDasharray="4 3"
+            dot={false}
+            activeDot={{ r: 4, fill: "#f59e0b", stroke: "#0f172a", strokeWidth: 2 }}
+          />
+        )}
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

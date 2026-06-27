@@ -116,6 +116,19 @@ export function useDashboardState({
     return r.type === "income" ? sum + monthly : sum - monthly;
   }, 0), [initialRecurring]);
 
+  // Monthly-normalized sum of active recurring *expense* commitments — the
+  // "fixed" half of the fixed-vs-discretionary split (month view only).
+  const fixedMonthlyExpense = useMemo(() => initialRecurring.reduce((sum, r) => {
+    if (r.type !== "expense") return sum;
+    const nextDue = getNextDueDate(
+      r.frequency as RecurringFrequency,
+      new Date(r.startDate),
+      r.lastRun ? new Date(r.lastRun) : null
+    );
+    if (getRecurringStatus(nextDue, r.endDate ? new Date(r.endDate) : null) === "ended") return sum;
+    return sum + toMonthlyAmount(r.frequency as RecurringFrequency, r.amount);
+  }, 0), [initialRecurring]);
+
   const [showRecurring, setShowRecurring] = useState(dueCount > 0);
 
   // Seed IDB with fresh server data on mount / when server data updates
@@ -183,6 +196,21 @@ export function useDashboardState({
   const displayIncome = totalIncome + pendingIncome;
   const displayExpenses = totalExpenses + pendingExpenses;
   const displayBalance = displayIncome - displayExpenses;
+
+  // Savings rate: share of income kept (net / income). Null when no income.
+  const savingsRate = displayIncome > 0 ? (displayBalance / displayIncome) * 100 : null;
+
+  // Average spend per active month — only meaningful in the wider (year /
+  // all-time) views, where dailyData holds one bucket per month.
+  const avgMonthlySpend = useMemo(() => {
+    if (isMonthView) return 0;
+    const activeMonths = dailyData.filter((d) => d.expense > 0).length;
+    return activeMonths > 0 ? displayExpenses / activeMonths : 0;
+  }, [isMonthView, dailyData, displayExpenses]);
+
+  // Fixed (recurring) vs discretionary spend for the month. Discretionary is
+  // whatever's left over once the fixed commitments are covered.
+  const discretionarySpend = Math.max(0, displayExpenses - fixedMonthlyExpense);
 
   const { isCurrentMonth, dailySpend } = useMemo(() => {
     // The "Today's spend / daily avg" card is month-only; skip the computation
@@ -460,12 +488,16 @@ export function useDashboardState({
     topCategory,
     dueCount,
     fixedAvailableCash,
+    fixedMonthlyExpense,
+    discretionarySpend,
     mergedTransactions,
     recentTransactions,
     recentCategories,
     displayIncome,
     displayExpenses,
     displayBalance,
+    savingsRate,
+    avgMonthlySpend,
     dailySpend,
     isCurrentMonth,
     isMonthView,

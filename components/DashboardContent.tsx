@@ -26,6 +26,11 @@ const TrendChart = dynamic(
   { ssr: false }
 );
 
+const MonthlyBarChart = dynamic(
+  () => import("@/components/charts/MonthlyBarChart").then((m) => ({ default: m.MonthlyBarChart })),
+  { ssr: false }
+);
+
 interface DashboardContentProps {
   initialTransactions: Transaction[];
   initialTotalIncome: number;
@@ -61,12 +66,16 @@ export function DashboardContent(props: DashboardContentProps) {
     topCategory,
     dueCount,
     fixedAvailableCash,
+    fixedMonthlyExpense,
+    discretionarySpend,
     mergedTransactions,
     recentTransactions,
     recentCategories,
     displayIncome,
     displayExpenses,
     displayBalance,
+    savingsRate,
+    avgMonthlySpend,
     dailySpend,
     isCurrentMonth,
     isMonthView,
@@ -79,6 +88,14 @@ export function DashboardContent(props: DashboardContentProps) {
   } = useDashboardState(props);
 
   const { period, month, year, deltaLabel } = props;
+
+  // "42% saved" / "12% overspent" subtitle for the Net card.
+  const savingsLabel =
+    savingsRate == null
+      ? undefined
+      : savingsRate >= 0
+      ? `${savingsRate.toFixed(0)}% saved`
+      : `${Math.abs(savingsRate).toFixed(0)}% overspent`;
 
   const handleTransactionPosted = useCallback(
     (tx: { id: string; category: string; amount: number; type: string; note?: string | null; labels?: string[] | null; date: Date | string }) =>
@@ -168,14 +185,47 @@ export function DashboardContent(props: DashboardContentProps) {
       )}
 
       {/* Summary stats */}
-      <div data-testid="stat-cards" className={cn("grid grid-cols-2 gap-3", isMonthView ? "lg:grid-cols-4" : "lg:grid-cols-3")}>
+      <div data-testid="stat-cards" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Income" amount={displayIncome} variant="income" icon="📈" momDelta={incomeDelta} deltaLabel={deltaLabel} />
         <StatCard label="Expenses" amount={displayExpenses} variant="expense" icon="📉" momDelta={expenseDelta} deltaLabel={deltaLabel} />
-        <StatCard label="Net" amount={displayBalance} variant="balance" icon="⚖️" />
-        {isMonthView && (
+        <StatCard label="Net" amount={displayBalance} variant="balance" icon="⚖️" subtitle={savingsLabel} />
+        {isMonthView ? (
           <StatCard label={isCurrentMonth ? "Today's Spend" : "Daily Avg"} amount={dailySpend} variant="expense" icon="📅" />
+        ) : (
+          <StatCard label="Avg Spend / mo" amount={avgMonthlySpend} variant="expense" icon="📅" />
         )}
       </div>
+
+      {/* Fixed vs discretionary spend — month view, only when recurring
+          commitments exist (otherwise everything is discretionary). */}
+      {isMonthView && fixedMonthlyExpense > 0 && (() => {
+        const mixTotal = fixedMonthlyExpense + discretionarySpend;
+        const fixedPct = mixTotal > 0 ? (fixedMonthlyExpense / mixTotal) * 100 : 0;
+        return (
+          <div data-testid="spending-mix" className="card space-y-2.5">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
+              <h3 className="text-sm font-semibold text-slate-200">Spending mix</h3>
+            </div>
+            <div className="flex h-2.5 rounded-full overflow-hidden bg-slate-800">
+              <div className="h-full bg-amber-500" style={{ width: `${fixedPct}%` }} />
+              <div className="h-full bg-indigo-500" style={{ width: `${100 - fixedPct}%` }} />
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="flex items-center gap-1.5 text-slate-400">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                Fixed
+                <span className="text-slate-300 font-medium tabular-nums">{formatCurrency(fixedMonthlyExpense)}/mo</span>
+              </span>
+              <span className="flex items-center gap-1.5 text-slate-400">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+                Discretionary
+                <span className="text-slate-300 font-medium tabular-nums">{formatCurrency(discretionarySpend)}</span>
+              </span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -199,6 +249,7 @@ export function DashboardContent(props: DashboardContentProps) {
               data={dailyData}
               labelEvery={isMonthView ? undefined : 1}
               emptyMessage={isMonthView ? undefined : "No transactions in this period"}
+              showCumulative={!isMonthView}
             />
           </Suspense>
           <div className="flex gap-4 mt-2 justify-center">
@@ -210,9 +261,28 @@ export function DashboardContent(props: DashboardContentProps) {
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
               Income
             </div>
+            {!isMonthView && (
+              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                <span className="w-2.5 h-0.5 rounded-full bg-amber-500" />
+                Balance
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Income vs expense bars + monthly spend — wider (year / all-time) views */}
+      {!isMonthView && (
+        <div className="card">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
+            <h3 className="text-sm font-semibold text-slate-200">Income vs Expenses by Month</h3>
+          </div>
+          <Suspense fallback={<div className="h-[200px] rounded-xl bg-slate-800 animate-pulse" />}>
+            <MonthlyBarChart data={dailyData} emptyMessage="No transactions in this period" />
+          </Suspense>
+        </div>
+      )}
 
       {/* Budget overview — month view only (budgets are monthly limits) */}
       {isMonthView && budgets.length > 0 && (
