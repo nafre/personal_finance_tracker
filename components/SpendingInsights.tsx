@@ -89,7 +89,12 @@ export function SpendingInsights({
           return (
             <div key={cat.name} className="mb-3 last:mb-0">
               <div className="flex justify-between text-xs mb-1.5">
-                <span className="text-slate-300 font-medium">{cat.name}</span>
+                <span className="text-slate-300 font-medium">
+                  {cat.name}
+                  <span className="text-slate-500 font-normal ml-1.5 tabular-nums">
+                    {pct.toFixed(0)}%
+                  </span>
+                </span>
                 <div className="flex items-center gap-2">
                   <span className="text-slate-400 tabular-nums">
                     {formatCurrency(cat.value)}

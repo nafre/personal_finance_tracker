@@ -9,6 +9,7 @@ export function StatCard({
   icon,
   momDelta,
   deltaLabel = "vs last month",
+  subtitle,
 }: {
   label: string;
   amount: number;
@@ -16,6 +17,7 @@ export function StatCard({
   icon: string;
   momDelta?: number | null;
   deltaLabel?: string;
+  subtitle?: string;
 }) {
   const isNegative = variant === "balance" && amount < 0;
   const effectiveKey: "income" | "expense" | "balance" =
@@ -99,6 +101,12 @@ export function StatCard({
           )}
         >
           {momDelta > 0 ? "▲" : "▼"} {Math.abs(momDelta).toFixed(0)}%<span className="hidden sm:inline"> {deltaLabel}</span>
+        </span>
+      )}
+
+      {momDelta == null && subtitle && (
+        <span className="text-[10px] sm:text-xs font-medium mt-1 sm:mt-2 block relative text-slate-400">
+          {subtitle}
         </span>
       )}
     </div>
