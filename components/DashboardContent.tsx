@@ -14,7 +14,7 @@ import { StatCard } from "@/components/StatCard";
 import { BudgetProgress } from "@/components/budgets/BudgetProgress";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { formatCurrency, cn } from "@/lib/utils";
-import type { Transaction, CategoryData, DailyData, RecurringTransaction, Budget } from "@/types";
+import type { Transaction, CategoryData, DailyData, RecurringTransaction, Budget, Period } from "@/types";
 
 const BudgetManager = dynamic(
   () => import("@/components/budgets/BudgetManager").then((m) => ({ default: m.BudgetManager })),
@@ -35,8 +35,12 @@ interface DashboardContentProps {
   initialTopCategory: CategoryData | null;
   initialRecurring: RecurringTransaction[];
   initialBudgets: Budget[];
+  period: Period;
   month: number;
   year: number;
+  rangeStartISO: string;
+  rangeEndISO: string;
+  deltaLabel: string;
   prevTotalExpenses: number;
   prevTotalIncome: number;
   prevCategoryData: CategoryData[];
@@ -65,6 +69,7 @@ export function DashboardContent(props: DashboardContentProps) {
     displayBalance,
     dailySpend,
     isCurrentMonth,
+    isMonthView,
     expenseDelta,
     incomeDelta,
     handleAdd,
@@ -73,7 +78,7 @@ export function DashboardContent(props: DashboardContentProps) {
     handleUpdate,
   } = useDashboardState(props);
 
-  const { month, year } = props;
+  const { period, month, year, deltaLabel } = props;
 
   const handleTransactionPosted = useCallback(
     (tx: { id: string; category: string; amount: number; type: string; note?: string | null; labels?: string[] | null; date: Date | string }) =>
@@ -88,9 +93,9 @@ export function DashboardContent(props: DashboardContentProps) {
 
   return (
     <div className="space-y-5">
-      {/* Month selector */}
+      {/* Period selector */}
       <div className="flex items-center justify-between">
-        <MonthSelector month={month} year={year} />
+        <MonthSelector period={period} month={month} year={year} />
         {topCategory && (
           <div className="hidden sm:flex items-center gap-2 text-sm text-slate-400">
             <span>Top spend:</span>
@@ -105,22 +110,26 @@ export function DashboardContent(props: DashboardContentProps) {
       {/* Offline / syncing status */}
       <SyncStatusBar />
 
-      {/* Quick input — desktop only; mobile uses FAB below */}
-      <div className="hidden md:block">
-        <ExpenseInput onAdd={handleAdd} onReplace={handleReplace} onRemove={handleDelete} recentCategories={recentCategories} />
-      </div>
+      {/* Quick input + recurring — month view only (adding/recurring are
+          month-centric concepts) */}
+      {isMonthView && (
+        <>
+          {/* Quick input — desktop only; mobile uses FAB below */}
+          <div className="hidden md:block">
+            <ExpenseInput onAdd={handleAdd} onReplace={handleReplace} onRemove={handleDelete} recentCategories={recentCategories} />
+          </div>
 
-      {/* Mobile FAB */}
-      <button
-        className="fab md:hidden"
-        onClick={() => setSheetOpen(true)}
-        aria-label="Add expense"
-      >
-        +
-      </button>
+          {/* Mobile FAB */}
+          <button
+            className="fab md:hidden"
+            onClick={() => setSheetOpen(true)}
+            aria-label="Add expense"
+          >
+            +
+          </button>
 
-      {/* Recurring transactions */}
-      <div data-testid="recurring-section" className="card">
+          {/* Recurring transactions */}
+          <div data-testid="recurring-section" className="card">
         <button
           onClick={() => setShowRecurring((v) => !v)}
           className="w-full flex items-center justify-between group"
@@ -146,22 +155,26 @@ export function DashboardContent(props: DashboardContentProps) {
           </svg>
         </button>
 
-        {showRecurring && (
-          <div className="mt-3">
-            <RecurringList
-              initialRecurring={props.initialRecurring}
-              onTransactionPosted={handleTransactionPosted}
-            />
+            {showRecurring && (
+              <div className="mt-3">
+                <RecurringList
+                  initialRecurring={props.initialRecurring}
+                  onTransactionPosted={handleTransactionPosted}
+                />
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* Summary stats */}
-      <div data-testid="stat-cards" className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Income" amount={displayIncome} variant="income" icon="📈" momDelta={incomeDelta} />
-        <StatCard label="Expenses" amount={displayExpenses} variant="expense" icon="📉" momDelta={expenseDelta} />
+      <div data-testid="stat-cards" className={cn("grid grid-cols-2 gap-3", isMonthView ? "lg:grid-cols-4" : "lg:grid-cols-3")}>
+        <StatCard label="Income" amount={displayIncome} variant="income" icon="📈" momDelta={incomeDelta} deltaLabel={deltaLabel} />
+        <StatCard label="Expenses" amount={displayExpenses} variant="expense" icon="📉" momDelta={expenseDelta} deltaLabel={deltaLabel} />
         <StatCard label="Net" amount={displayBalance} variant="balance" icon="⚖️" />
-        <StatCard label={isCurrentMonth ? "Today's Spend" : "Daily Avg"} amount={dailySpend} variant="expense" icon="📅" />
+        {isMonthView && (
+          <StatCard label={isCurrentMonth ? "Today's Spend" : "Daily Avg"} amount={dailySpend} variant="expense" icon="📅" />
+        )}
       </div>
 
       {/* Charts row */}
@@ -171,15 +184,22 @@ export function DashboardContent(props: DashboardContentProps) {
           prevCategoryData={props.prevCategoryData}
           month={month}
           year={year}
+          monthView={isMonthView}
         />
 
         <div className="card">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
-            <h3 className="text-sm font-semibold text-slate-200">Daily Trend</h3>
+            <h3 className="text-sm font-semibold text-slate-200">
+              {isMonthView ? "Daily Trend" : "Monthly Trend"}
+            </h3>
           </div>
           <Suspense fallback={<div className="h-[200px] rounded-xl bg-slate-800 animate-pulse" />}>
-            <TrendChart data={dailyData} />
+            <TrendChart
+              data={dailyData}
+              labelEvery={isMonthView ? undefined : 1}
+              emptyMessage={isMonthView ? undefined : "No transactions in this period"}
+            />
           </Suspense>
           <div className="flex gap-4 mt-2 justify-center">
             <div className="flex items-center gap-1.5 text-xs text-slate-400">
@@ -194,8 +214,8 @@ export function DashboardContent(props: DashboardContentProps) {
         </div>
       </div>
 
-      {/* Budget overview */}
-      {budgets.length > 0 && (
+      {/* Budget overview — month view only (budgets are monthly limits) */}
+      {isMonthView && budgets.length > 0 && (
         <div data-testid="budget-overview" className="card space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -225,7 +245,7 @@ export function DashboardContent(props: DashboardContentProps) {
       )}
 
       {/* Set up budgets CTA */}
-      {budgets.length === 0 && (
+      {isMonthView && budgets.length === 0 && (
         <div className="card flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-slate-300">No budgets set</p>
@@ -256,8 +276,12 @@ export function DashboardContent(props: DashboardContentProps) {
         </div>
         {mergedTransactions.length === 0 ? (
           <div className="text-center py-6">
-            <p className="text-sm text-slate-400">No transactions yet.</p>
-            <p className="text-xs text-slate-500 mt-1">Use the input above to add your first one.</p>
+            <p className="text-sm text-slate-400">
+              {isMonthView ? "No transactions yet." : "No transactions in this period."}
+            </p>
+            {isMonthView && (
+              <p className="text-xs text-slate-500 mt-1">Use the input above to add your first one.</p>
+            )}
           </div>
         ) : (
           <TransactionList

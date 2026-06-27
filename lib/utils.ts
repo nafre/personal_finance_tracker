@@ -150,6 +150,27 @@ export function getNextMonth(month: number, year: number) {
   return { month: month + 1, year };
 }
 
+// Every month touched by the [start, end] range, inclusive. Used to fill the
+// monthly trend with zero buckets for months that have no transactions.
+export function enumerateMonths(
+  start: Date,
+  end: Date
+): { year: number; month: number }[] {
+  const result: { year: number; month: number }[] = [];
+  let y = start.getFullYear();
+  let m = start.getMonth() + 1;
+  const endY = end.getFullYear();
+  const endM = end.getMonth() + 1;
+  // Guard against an inverted range producing an infinite loop.
+  let guard = 0;
+  while ((y < endY || (y === endY && m <= endM)) && guard++ < 1200) {
+    result.push({ year: y, month: m });
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return result;
+}
+
 // Generate a colour deterministically from a string (for dynamic categories)
 export function stringToColor(str: string): string {
   const palette = [

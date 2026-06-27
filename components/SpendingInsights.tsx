@@ -12,6 +12,8 @@ interface SpendingInsightsProps {
   prevCategoryData: CategoryData[];
   month: number;
   year: number;
+  // Burn rate / pace badge are month-specific; suppressed when false.
+  monthView?: boolean;
 }
 
 type PaceStatus = "under" | "over" | "on";
@@ -21,10 +23,11 @@ export function SpendingInsights({
   prevCategoryData,
   month,
   year,
+  monthView = true,
 }: SpendingInsightsProps) {
   const today = new Date();
   const isCurrentMonth =
-    today.getMonth() + 1 === month && today.getFullYear() === year;
+    monthView && today.getMonth() + 1 === month && today.getFullYear() === year;
 
   const daysInMonth = new Date(year, month, 0).getDate();
   const daysElapsed = isCurrentMonth ? today.getDate() : daysInMonth;
@@ -115,12 +118,14 @@ export function SpendingInsights({
         })
       )}
 
-      <div className="mt-4 pt-3 border-t border-slate-800 flex justify-between text-xs text-slate-500">
-        <span>Daily avg</span>
-        <span className="text-slate-300 font-medium tabular-nums">
-          {formatCurrency(dailyBurnRate)}/day
-        </span>
-      </div>
+      {monthView && (
+        <div className="mt-4 pt-3 border-t border-slate-800 flex justify-between text-xs text-slate-500">
+          <span>Daily avg</span>
+          <span className="text-slate-300 font-medium tabular-nums">
+            {formatCurrency(dailyBurnRate)}/day
+          </span>
+        </div>
+      )}
     </div>
   );
 }

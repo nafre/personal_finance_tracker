@@ -2,9 +2,9 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useSyncContext } from "@/context/SyncProvider";
-import { seedIDBFromServer, getTransactionsByMonth, deleteTransactionFromIDB } from "@/lib/idb";
+import { seedIDBFromServer, getTransactionsInRange, deleteTransactionFromIDB } from "@/lib/idb";
 import { getNextDueDate, getRecurringStatus, toMonthlyAmount, type RecurringFrequency } from "@/lib/utils";
-import type { Transaction, CategoryData, DailyData, RecurringTransaction, Budget } from "@/types";
+import type { Transaction, CategoryData, DailyData, RecurringTransaction, Budget, Period } from "@/types";
 
 // Per-transaction budget spend so an individual transaction can be excluded
 // from a specific budget via its `excludedBudgetIds`. Iterating the full month
@@ -43,8 +43,11 @@ interface UseDashboardStateProps {
   initialTopCategory: CategoryData | null;
   initialRecurring: RecurringTransaction[];
   initialBudgets: Budget[];
+  period: Period;
   month: number;
   year: number;
+  rangeStartISO: string;
+  rangeEndISO: string;
   prevTotalExpenses: number;
   prevTotalIncome: number;
   prevCategoryData: CategoryData[];
@@ -58,12 +61,19 @@ export function useDashboardState({
   initialDailyData,
   initialRecurring,
   initialBudgets,
+  period,
   month,
   year,
+  rangeStartISO,
+  rangeEndISO,
   prevTotalExpenses,
   prevTotalIncome,
 }: UseDashboardStateProps) {
   const { userId, pendingCount } = useSyncContext();
+
+  const isMonthView = period === "month";
+  const rangeStartMs = useMemo(() => new Date(rangeStartISO).getTime(), [rangeStartISO]);
+  const rangeEndMs = useMemo(() => new Date(rangeEndISO).getTime(), [rangeEndISO]);
 
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
   const [totalIncome, setTotalIncome] = useState(initialTotalIncome);
@@ -126,7 +136,7 @@ export function useDashboardState({
   // router.refresh() delivers the server-confirmed version, preventing a flash.
   useEffect(() => {
     if (!userId) return;
-    getTransactionsByMonth(userId, month, year)
+    getTransactionsInRange(userId, rangeStartISO, rangeEndISO)
       .then((localTxs) => {
         const serverIdSet = serverIdsRef.current;
         const pending = localTxs
@@ -149,7 +159,7 @@ export function useDashboardState({
         setPendingTransactions(pending);
       })
       .catch(() => {});
-  }, [userId, month, year, pendingCount]);
+  }, [userId, rangeStartISO, rangeEndISO, pendingCount]);
 
   // Merged list: pending items deduped against server list, sorted newest-first
   const mergedTransactions = useMemo(() => {
@@ -175,6 +185,9 @@ export function useDashboardState({
   const displayBalance = displayIncome - displayExpenses;
 
   const { isCurrentMonth, dailySpend } = useMemo(() => {
+    // The "Today's spend / daily avg" card is month-only; skip the computation
+    // entirely in the year / all-time views (the card is hidden there).
+    if (!isMonthView) return { isCurrentMonth: false, dailySpend: 0 };
     const today = new Date();
     const isCurrent = month === today.getMonth() + 1 && year === today.getFullYear();
     if (isCurrent) {
@@ -192,7 +205,7 @@ export function useDashboardState({
       isCurrentMonth: false,
       dailySpend: daysInMonth > 0 ? displayExpenses / daysInMonth : 0,
     };
-  }, [mergedTransactions, month, year, displayExpenses]);
+  }, [isMonthView, mergedTransactions, month, year, displayExpenses]);
 
   const recentCategories = useMemo(() => {
     const seen = new Set<string>();
@@ -231,7 +244,8 @@ export function useDashboardState({
       excludeFromStats?: boolean;
     }) => {
       const txDate = new Date(tx.date);
-      if (txDate.getMonth() + 1 !== month || txDate.getFullYear() !== year) return;
+      const txMs = txDate.getTime();
+      if (txMs < rangeStartMs || txMs > rangeEndMs) return;
 
       setTransactions((prev) => [tx, ...prev]);
 
@@ -259,7 +273,9 @@ export function useDashboardState({
         }
       }
 
-      if (!tx.excludeFromStats) {
+      // Trend buckets are keyed by day-of-month only in the month view; in the
+      // year/all-time views the chart is rebuilt from the server, so skip here.
+      if (isMonthView && !tx.excludeFromStats) {
         const txDay = txDate.getDate();
         const field = tx.type === "income" ? "income" : "expense";
         setDailyData((prev) =>
@@ -271,7 +287,7 @@ export function useDashboardState({
         );
       }
     },
-    [month, year]
+    [isMonthView, rangeStartMs, rangeEndMs]
   );
 
   const handleReplace = useCallback((tempId: string, realTx: Transaction) => {
@@ -312,7 +328,7 @@ export function useDashboardState({
       }
     }
 
-    if (!tx.excludeFromStats) {
+    if (isMonthView && !tx.excludeFromStats) {
       const delDay = new Date(tx.date).getDate();
       const delField = tx.type === "income" ? "income" : "expense";
       setDailyData((prev) =>
@@ -323,7 +339,7 @@ export function useDashboardState({
         )
       );
     }
-  }, [transactions, pendingTransactions]);
+  }, [isMonthView, transactions, pendingTransactions]);
 
   const handleUpdate = useCallback(
     (id: string, data: Partial<Transaction>) => {
@@ -394,7 +410,8 @@ export function useDashboardState({
       const newDay = new Date(data.date ? data.date : old.date).getDate();
       const newTxAmount = data.amount ?? old.amount;
       const newTxType   = data.type   ?? old.type;
-      setDailyData((prev) => {
+      // Day-keyed trend patch only applies to the month view.
+      if (isMonthView) setDailyData((prev) => {
         let updated = [...prev];
         if (!oldExcluded) {
           const oldField = old.type === "income" ? "income" : "expense";
@@ -415,7 +432,7 @@ export function useDashboardState({
         return updated;
       });
     },
-    [transactions, pendingTransactions]
+    [isMonthView, transactions, pendingTransactions]
   );
 
   const budgetSpending = useMemo(
@@ -451,6 +468,7 @@ export function useDashboardState({
     displayBalance,
     dailySpend,
     isCurrentMonth,
+    isMonthView,
     expenseDelta,
     incomeDelta,
     // Handlers

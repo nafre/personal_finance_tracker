@@ -5,8 +5,8 @@ import { getServerSession } from "next-auth";
 import { revalidatePath, updateTag, unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getNextDueDate, DEFAULT_CATEGORIES, type RecurringFrequency } from "@/lib/utils";
-import { IS_SQLITE, encodeLabels, normalizeTx, getLabelFilter, getDailyRows, normalizeBudget, encodeBudgetArray, parseLabels } from "@/lib/db-adapter";
+import { getNextDueDate, DEFAULT_CATEGORIES, enumerateMonths, type RecurringFrequency } from "@/lib/utils";
+import { IS_SQLITE, encodeLabels, normalizeTx, getLabelFilter, getTrendRows, type TrendGranularity, normalizeBudget, encodeBudgetArray, parseLabels } from "@/lib/db-adapter";
 import { transactionSchema, categorySchema, budgetSchema, recurringSchema, passwordSchema } from "@/lib/validation";
 import bcrypt from "bcryptjs";
 
@@ -145,15 +145,22 @@ export async function getTransactionIds(): Promise<string[]> {
 // Inner implementation — receives userId explicitly so it can be cached.
 // Dates in the return value are serialized to ISO strings by unstable_cache;
 // Transaction.date is typed as Date|string to handle both cached and live paths.
-async function _fetchDashboardData(userId: string, month: number, year: number) {
-  const start = new Date(year, month - 1, 1);
-  const end = new Date(year, month, 0, 23, 59, 59, 999); // last ms of month
+// Range-based dashboard fetch. `granularity` controls the trend chart buckets:
+// "day" (per-day fill within a single month) or "month" (per-month fill across
+// the range, used by the year/all-time views). `start`/`end` are Date objects;
+// unstable_cache serializes them into the cache key.
+async function _fetchDashboardData(
+  userId: string,
+  start: Date,
+  end: Date,
+  granularity: TrendGranularity
+) {
   const dateFilter = { gte: start, lte: end };
 
   // Run aggregation queries + a bounded recent-transactions query in parallel.
-  // Totals include every transaction; the category breakdown and daily trend
+  // Totals include every transaction; the category breakdown and trend
   // exclude transactions flagged `excludeFromStats` (charts-only exclusion).
-  const [transactionsRaw, typeBreakdown, categoryBreakdown, dailyRows] = await Promise.all([
+  const [transactionsRaw, typeBreakdown, categoryBreakdown, trendRows] = await Promise.all([
     db.transaction.findMany({
       where: { userId, date: dateFilter },
       orderBy: { date: "desc" },
@@ -169,7 +176,7 @@ async function _fetchDashboardData(userId: string, month: number, year: number) 
       where: { userId, date: dateFilter, type: "expense", excludeFromStats: false },
       _sum: { amount: true },
     }),
-    getDailyRows(userId, start, end),
+    getTrendRows(userId, start, end, granularity),
   ]);
 
   const transactions = transactionsRaw.map(normalizeTx);
@@ -193,34 +200,10 @@ async function _fetchDashboardData(userId: string, month: number, year: number) 
     .map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 }))
     .sort((a, b) => b.value - a.value);
 
-  // Daily aggregation — group by ISO YYYY-MM-DD then format for display
-  const dailyMap = new Map<string, { income: number; expense: number }>();
-  for (const row of dailyRows) {
-    const key =
-      typeof row.day === "string"
-        ? row.day // SQLite: already YYYY-MM-DD
-        : (() => {
-            // Postgres: Date object — format in UTC to avoid TZ drift
-            const d = new Date(row.day);
-            return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
-          })();
-    const existing = dailyMap.get(key) ?? { income: 0, expense: 0 };
-    const total = Number(row.total);
-    if (row.type === "income") existing.income += total;
-    else existing.expense += total;
-    dailyMap.set(key, existing);
-  }
-
-  const allDays = getDaysInMonth(year, month);
-  const dailyData = allDays.map((day) => {
-    const isoKey = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const val = dailyMap.get(isoKey) ?? { income: 0, expense: 0 };
-    const dateLabel = new Date(year, month - 1, day).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-    return { date: dateLabel, day, ...val };
-  });
+  const dailyData =
+    granularity === "month"
+      ? buildMonthlyTrend(start, end, trendRows)
+      : buildDailyTrend(start, trendRows);
 
   return {
     transactions,
@@ -233,9 +216,80 @@ async function _fetchDashboardData(userId: string, month: number, year: number) 
   };
 }
 
-// Cached by (userId, month, year). Invalidated via revalidateTag("transactions")
-// on any transaction mutation, ensuring past months are served from cache and
-// the current month is refreshed after writes.
+// Per-day trend within a single month (the classic month view).
+function buildDailyTrend(
+  start: Date,
+  rows: Array<{ day: string | Date; type: string; total: number | bigint }>
+) {
+  const year = start.getFullYear();
+  const month = start.getMonth() + 1;
+  const map = new Map<string, { income: number; expense: number }>();
+  for (const row of rows) {
+    const key =
+      typeof row.day === "string"
+        ? row.day // SQLite: already YYYY-MM-DD
+        : (() => {
+            const d = new Date(row.day);
+            return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+          })();
+    const existing = map.get(key) ?? { income: 0, expense: 0 };
+    const total = Number(row.total);
+    if (row.type === "income") existing.income += total;
+    else existing.expense += total;
+    map.set(key, existing);
+  }
+
+  const days = new Date(year, month, 0).getDate();
+  return Array.from({ length: days }, (_, i) => i + 1).map((day) => {
+    const isoKey = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const val = map.get(isoKey) ?? { income: 0, expense: 0 };
+    const dateLabel = new Date(year, month - 1, day).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+    return { date: dateLabel, day, ...val };
+  });
+}
+
+// Per-month trend across an arbitrary range (year / all-time views). `day` is a
+// 1-based ordinal index so the DailyData shape is reused unchanged.
+function buildMonthlyTrend(
+  start: Date,
+  end: Date,
+  rows: Array<{ day: string | Date; type: string; total: number | bigint }>
+) {
+  const map = new Map<string, { income: number; expense: number }>();
+  for (const row of rows) {
+    const key =
+      typeof row.day === "string"
+        ? row.day.slice(0, 7) // SQLite: "YYYY-MM"
+        : (() => {
+            const d = new Date(row.day);
+            return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+          })();
+    const existing = map.get(key) ?? { income: 0, expense: 0 };
+    const total = Number(row.total);
+    if (row.type === "income") existing.income += total;
+    else existing.expense += total;
+    map.set(key, existing);
+  }
+
+  const months = enumerateMonths(start, end);
+  const multiYear = start.getFullYear() !== end.getFullYear();
+  return months.map(({ year, month }, i) => {
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    const val = map.get(key) ?? { income: 0, expense: 0 };
+    const d = new Date(year, month - 1, 1);
+    const dateLabel = multiYear
+      ? `${d.toLocaleDateString("en-US", { month: "short" })} '${String(year).slice(2)}`
+      : d.toLocaleDateString("en-US", { month: "short" });
+    return { date: dateLabel, day: i + 1, ...val };
+  });
+}
+
+// Cached by (userId, start, end, granularity). Invalidated via
+// revalidateTag("transactions") on any transaction mutation, so past
+// periods are served from cache and the live period refreshes after writes.
 const _getDashboardDataCached = unstable_cache(
   _fetchDashboardData,
   ["dashboard-data"],
@@ -244,12 +298,32 @@ const _getDashboardDataCached = unstable_cache(
 
 export async function getDashboardData(month: number, year: number) {
   const userId = await getAuthenticatedUserId();
-  return _getDashboardDataCached(userId, month, year);
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 0, 23, 59, 59, 999); // last ms of month
+  return _getDashboardDataCached(userId, start, end, "day");
 }
 
-function getDaysInMonth(year: number, month: number): number[] {
-  const days = new Date(year, month, 0).getDate();
-  return Array.from({ length: days }, (_, i) => i + 1);
+// Range variant for the year / all-time views. Accepts ISO strings so the
+// caller (a server component) can pass plain serializable values.
+export async function getRangeDashboardData(
+  startISO: string,
+  endISO: string,
+  granularity: TrendGranularity
+) {
+  const userId = await getAuthenticatedUserId();
+  return _getDashboardDataCached(userId, new Date(startISO), new Date(endISO), granularity);
+}
+
+// Earliest transaction date for the user (bounds the all-time range so the
+// monthly trend fill is proportional to actual data). Returns null when empty.
+export async function getEarliestTransactionDate(): Promise<string | null> {
+  const userId = await getAuthenticatedUserId();
+  const row = await db.transaction.findFirst({
+    where: { userId },
+    orderBy: { date: "asc" },
+    select: { date: true },
+  });
+  return row ? new Date(row.date).toISOString() : null;
 }
 
 // ─── Transactions page ────────────────────────────────────────────────────────

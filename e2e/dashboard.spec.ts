@@ -156,4 +156,60 @@ test.describe("Dashboard", () => {
       animations: "disabled",
     });
   });
+
+  // ── Period selector ───────────────────────────────────────────────────────
+
+  test("period selector — month / year / all-time toggle", async ({ page }) => {
+    const selector = page.locator('[data-testid="period-selector"]');
+    await expect(selector).toHaveScreenshot("period-selector.png", {
+      animations: "disabled",
+      // Emoji-free, but the date label varies with the current month — mask it
+      maxDiffPixelRatio: 0.2,
+    });
+  });
+});
+
+// ── Year view ─────────────────────────────────────────────────────────────
+// Wider period mode: monthly trend, category breakdown, no month-only widgets
+// (quick-add / recurring / budgets / daily-avg card are hidden).
+
+test.describe("Dashboard — year view", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/dashboard?period=year");
+    await waitForReady(page);
+  });
+
+  test("full page layout", async ({ page }) => {
+    await expect(page).toHaveScreenshot("year-full-page.png", {
+      fullPage: true,
+      animations: "disabled",
+      mask: amountMasks(page),
+    });
+  });
+
+  test("stat cards — three cards, YoY badge, no daily-avg card", async ({ page }) => {
+    const cards = page.locator('[data-testid="stat-cards"]');
+    await expect(cards).toHaveScreenshot("year-stat-cards.png", {
+      animations: "disabled",
+      mask: amountMasks(page),
+    });
+  });
+});
+
+// ── All-time view ───────────────────────────────────────────────────────────
+// Earliest transaction → now, no comparison deltas, monthly trend.
+
+test.describe("Dashboard — all-time view", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/dashboard?period=all");
+    await waitForReady(page);
+  });
+
+  test("full page layout", async ({ page }) => {
+    await expect(page).toHaveScreenshot("all-time-full-page.png", {
+      fullPage: true,
+      animations: "disabled",
+      mask: amountMasks(page),
+    });
+  });
 });
