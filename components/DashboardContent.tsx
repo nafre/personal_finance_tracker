@@ -249,7 +249,7 @@ export function DashboardContent(props: DashboardContentProps) {
               data={dailyData}
               labelEvery={isMonthView ? undefined : 1}
               emptyMessage={isMonthView ? undefined : "No transactions in this period"}
-              showCumulative
+              showCumulative={!isMonthView}
             />
           </Suspense>
           <div className="flex gap-4 mt-2 justify-center">
@@ -261,10 +261,12 @@ export function DashboardContent(props: DashboardContentProps) {
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
               Income
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-400">
-              <span className="w-2.5 h-0.5 rounded-full bg-amber-500" />
-              Balance
-            </div>
+            {!isMonthView && (
+              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                <span className="w-2.5 h-0.5 rounded-full bg-amber-500" />
+                Balance
+              </div>
+            )}
           </div>
         </div>
       </div>
