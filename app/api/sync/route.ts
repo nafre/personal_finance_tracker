@@ -15,6 +15,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 
+  // Session version check — rejects stale JWTs after password change,
+  // mirroring getAuthenticatedUserId() in lib/actions.ts
+  const dbUser = await db.user.findUnique({
+    where: { id: userId },
+    select: { sessionVersion: true },
+  });
+  if (!dbUser || dbUser.sessionVersion !== (session.user.sessionVersion ?? 1)) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
   let body: { op: string; id?: string; payload?: Record<string, unknown> };
   try {
     body = await req.json();

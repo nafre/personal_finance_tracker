@@ -12,7 +12,9 @@ import bcrypt from "bcryptjs";
 
 // ─── Auth helpers ──────────────────────────────────────────────────────────────
 
-async function getAuthenticatedUserId(): Promise<string> {
+// cache() dedupes the sessionVersion DB lookup across the multiple server
+// actions invoked within a single request (e.g. a dashboard render calls four).
+const getAuthenticatedUserId = cache(async (): Promise<string> => {
   const session = await getServerSession(authOptions);
   if (!session?.user) throw new Error("Unauthorized");
   const userId = session.user.userId;
@@ -29,7 +31,7 @@ async function getAuthenticatedUserId(): Promise<string> {
   }
 
   return userId;
-}
+});
 
 async function requireAdmin(): Promise<string> {
   const session = await getServerSession(authOptions);

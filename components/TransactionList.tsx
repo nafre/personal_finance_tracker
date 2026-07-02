@@ -29,6 +29,7 @@ interface TransactionListProps {
   transactions: Transaction[];
   onDelete?: (id: string) => void;
   onUpdate?: (id: string, data: Partial<Transaction>) => void;
+  onRestore?: (tx: Transaction) => void;
   compact?: boolean;
   budgets?: BudgetOption[];
 }
@@ -182,6 +183,7 @@ function TransactionRow({
   tx,
   onDelete,
   onUpdate,
+  onRestore,
   compact,
   categories,
   budgets,
@@ -189,6 +191,7 @@ function TransactionRow({
   tx: Transaction;
   onDelete: (id: string) => void;
   onUpdate: (id: string, data: Partial<Transaction>) => void;
+  onRestore: (tx: Transaction) => void;
   compact?: boolean;
   categories: CategoryMeta[];
   budgets: BudgetOption[];
@@ -289,10 +292,11 @@ function TransactionRow({
       return;
     }
 
-    // Optimistic: remove from UI immediately, fire server call in background
+    // Optimistic: remove from UI immediately, fire server call in background.
+    // On failure the transaction still exists server-side — restore the row.
     onDelete(tx.id);
     deleteTransaction(tx.id).catch(() => {
-      // Row is already removed from state; nothing to revert here
+      onRestore(tx);
     });
   }
 
@@ -510,11 +514,14 @@ export function TransactionList({
   transactions: initial,
   onDelete,
   onUpdate,
+  onRestore,
   compact = false,
   budgets = [],
 }: TransactionListProps) {
   const [txs, setTxs] = useState(initial);
   const [categories, setCategories] = useState<CategoryMeta[]>([]);
+  const [listError, setListError] = useState("");
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync local state when the parent swaps the list (e.g. month / filter change)
   useEffect(() => {
@@ -527,6 +534,12 @@ export function TransactionList({
     );
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    };
+  }, []);
+
   function handleDelete(id: string) {
     setTxs((prev) => prev.filter((t) => t.id !== id));
     onDelete?.(id);
@@ -535,6 +548,19 @@ export function TransactionList({
   function handleUpdate(id: string, data: Partial<Transaction>) {
     setTxs((prev) => prev.map((t) => (t.id === id ? { ...t, ...data } : t)));
     onUpdate?.(id, data);
+  }
+
+  // Re-insert a row whose server delete failed (it still exists remotely)
+  function handleRestore(tx: Transaction) {
+    setTxs((prev) =>
+      prev.some((t) => t.id === tx.id)
+        ? prev
+        : [...prev, tx].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    );
+    onRestore?.(tx);
+    setListError("Delete failed — transaction restored.");
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = setTimeout(() => setListError(""), 4000);
   }
 
   if (!txs.length) {
@@ -547,12 +573,16 @@ export function TransactionList({
 
   return (
     <div data-testid="transaction-list" className="space-y-0.5">
+      {listError && (
+        <p className="text-xs text-rose-400 px-1 pb-1 animate-fade-in">{listError}</p>
+      )}
       {txs.map((tx) => (
         <TransactionRow
           key={tx.id}
           tx={tx}
           onDelete={handleDelete}
           onUpdate={handleUpdate}
+          onRestore={handleRestore}
           compact={compact}
           categories={categories}
           budgets={budgets}

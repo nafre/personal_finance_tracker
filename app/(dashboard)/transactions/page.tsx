@@ -191,6 +191,17 @@ export default function TransactionsPage() {
     });
   }, []);
 
+  // Re-insert a transaction whose optimistic delete failed server-side
+  const handleRestore = useCallback((tx: Transaction) => {
+    setTransactions((prev) => {
+      if (prev.some((t) => t.id === tx.id)) return prev;
+      setTotalCount((c) => c + 1);
+      if (tx.type === "income") setTotalIncome((s) => s + tx.amount);
+      else setTotalExpenses((s) => s + tx.amount);
+      return [tx, ...prev];
+    });
+  }, []);
+
   const handleUpdate = useCallback((id: string, data: Partial<Transaction>) => {
     setTransactions((prev) => {
       const old = prev.find((t) => t.id === id);
@@ -381,6 +392,7 @@ export default function TransactionsPage() {
               transactions={transactions}
               onDelete={handleDelete}
               onUpdate={handleUpdate}
+              onRestore={handleRestore}
               budgets={budgets}
             />
             {/* Load More */}

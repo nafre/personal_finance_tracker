@@ -19,6 +19,23 @@ export { seedIDBFromServer };
 const MAX_RETRIES = 5;
 
 export async function drainQueue(): Promise<{ synced: number; failed: number }> {
+  // Web lock serialises drains across tabs and the service worker — concurrent
+  // drains can race on retry counts, temp-ID replacement, and queue deletes.
+  if (typeof navigator !== "undefined" && navigator.locks) {
+    const result = await navigator.locks.request(
+      "expense-sync-drain",
+      { ifAvailable: true },
+      async (lock) => {
+        if (!lock) return null; // another context is already draining
+        return _drainQueue();
+      }
+    );
+    return result ?? { synced: 0, failed: 0 };
+  }
+  return _drainQueue();
+}
+
+async function _drainQueue(): Promise<{ synced: number; failed: number }> {
   const ops = await getOps();
   if (ops.length === 0) return { synced: 0, failed: 0 };
 

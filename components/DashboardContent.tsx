@@ -358,6 +358,14 @@ export function DashboardContent(props: DashboardContentProps) {
             transactions={recentTransactions}
             onDelete={handleDelete}
             onUpdate={handleUpdate}
+            onRestore={(tx) =>
+              handleAdd({
+                ...tx,
+                type: tx.type as "income" | "expense",
+                note: tx.note ?? undefined,
+                labels: tx.labels ?? [],
+              })
+            }
             compact
             budgets={budgets.map((b) => ({ id: b.id, name: b.name }))}
           />

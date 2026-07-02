@@ -77,7 +77,20 @@ self.addEventListener("sync", (event) => {
   }
 });
 
+const MAX_RETRIES = 5; // keep in sync with MAX_RETRIES in lib/sync.ts
+
 async function syncQueueFromSW() {
+  // Web lock prevents draining concurrently with an open tab's drainQueue()
+  if (self.navigator && self.navigator.locks) {
+    return self.navigator.locks.request("expense-sync-drain", { ifAvailable: true }, (lock) => {
+      if (!lock) return; // another context is already draining
+      return drainQueueFromSW();
+    });
+  }
+  return drainQueueFromSW();
+}
+
+async function drainQueueFromSW() {
   const ops = await readQueueFromIDB();
   if (ops.length === 0) return;
 
@@ -85,6 +98,13 @@ async function syncQueueFromSW() {
 
   for (const op of ops) {
     const resolvedId = tempIdMap.get(op.tempId) ?? op.tempId;
+
+    // Drop permanently-failed ops to prevent queue deadlock (mirrors drainQueue)
+    if ((op.retryCount ?? 0) >= MAX_RETRIES) {
+      await deleteQueuedOpInIDB(op.queueId);
+      continue;
+    }
+
     try {
       let body;
       if (op.op === "add") {
@@ -102,9 +122,18 @@ async function syncQueueFromSW() {
         body: JSON.stringify(body),
       });
 
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (!data.success) continue;
+      // Record deleted server-side while offline — discard the stale local op
+      if (res.status === 404 && (op.op === "update" || op.op === "delete")) {
+        await deleteTransactionInIDB(resolvedId);
+        await deleteQueuedOpInIDB(op.queueId);
+        continue;
+      }
+
+      const data = res.ok ? await res.json() : { success: false };
+      if (!data.success) {
+        await updateQueuedOpInIDB({ ...op, retryCount: (op.retryCount ?? 0) + 1 });
+        break; // preserve causal ordering on failure
+      }
 
       if (op.op === "add" && data.id) {
         tempIdMap.set(op.tempId, data.id);
@@ -117,6 +146,7 @@ async function syncQueueFromSW() {
 
       await deleteQueuedOpInIDB(op.queueId);
     } catch {
+      await updateQueuedOpInIDB({ ...op, retryCount: (op.retryCount ?? 0) + 1 });
       break; // preserve causal ordering on failure
     }
   }
@@ -126,7 +156,9 @@ async function syncQueueFromSW() {
 
 function openIDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    // Open without a version: attaches at whatever version the page created.
+    // Passing an explicit lower version than the current DB throws VersionError.
+    const req = indexedDB.open(DB_NAME);
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
     // If the DB doesn't exist yet (page never loaded), just fail gracefully
@@ -145,6 +177,17 @@ function readQueueFromIDB() {
     const req = txn.objectStore("syncQueue").getAll();
     req.onsuccess = () => resolve(req.result ?? []);
     req.onerror = () => resolve([]);
+  });
+}
+
+function updateQueuedOpInIDB(op) {
+  return new Promise(async (resolve) => {
+    let db;
+    try { db = await openIDB(); } catch { resolve(); return; }
+    const txn = db.transaction("syncQueue", "readwrite");
+    txn.objectStore("syncQueue").put(op);
+    txn.oncomplete = resolve;
+    txn.onerror = resolve;
   });
 }
 
