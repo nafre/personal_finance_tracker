@@ -66,7 +66,7 @@ export function TrendChart({ data, labelEvery, emptyMessage, showCumulative }: T
 
   if (!hasData) {
     return (
-      <div className="flex items-center justify-center h-40 text-slate-500 text-sm">
+      <div className="flex items-center justify-center h-[200px] text-slate-500 text-sm">
         {emptyMessage ?? "No transactions this month"}
       </div>
     );

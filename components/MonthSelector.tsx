@@ -3,7 +3,11 @@
 import { useRouter, usePathname } from "next/navigation";
 import { getMonthName, getPrevMonth, getNextMonth } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Period } from "@/types";
+
+const STEPPER_BTN =
+  "flex items-center justify-center min-w-11 min-h-11 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed";
 
 interface MonthSelectorProps {
   period: Period;
@@ -41,7 +45,7 @@ export function MonthSelector({ period, month, year, showPeriodToggle = true }: 
   const isCurrentYear = year === now.getFullYear();
 
   return (
-    <div data-testid="period-selector" className="flex items-center gap-3">
+    <div data-testid="period-selector" className="flex items-center gap-x-3 gap-y-2 flex-wrap">
       {/* Period toggle */}
       {showPeriodToggle && (
       <div className="inline-flex rounded-lg bg-slate-800/60 p-0.5 border border-slate-700">
@@ -49,8 +53,9 @@ export function MonthSelector({ period, month, year, showPeriodToggle = true }: 
           <button
             key={opt.value}
             onClick={() => switchPeriod(opt.value)}
+            aria-pressed={period === opt.value}
             className={cn(
-              "px-2.5 py-1 text-xs font-medium rounded-md transition-colors",
+              "px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap",
               period === opt.value
                 ? "bg-indigo-500/20 text-indigo-300"
                 : "text-slate-400 hover:text-slate-200"
@@ -64,16 +69,16 @@ export function MonthSelector({ period, month, year, showPeriodToggle = true }: 
 
       {/* Stepper — month mode */}
       {period === "month" && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <button
             onClick={() => {
               const p = getPrevMonth(month, year);
               go({ period: "month", month: p.month, year: p.year });
             }}
-            className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-100 transition-colors"
+            className={STEPPER_BTN}
             aria-label="Previous month"
           >
-            ←
+            <ChevronLeft className="w-5 h-5" aria-hidden="true" />
           </button>
           <div className="text-center min-w-[120px]">
             <p className="font-semibold text-slate-100">
@@ -89,23 +94,23 @@ export function MonthSelector({ period, month, year, showPeriodToggle = true }: 
               go({ period: "month", month: n.month, year: n.year });
             }}
             disabled={isCurrentMonth}
-            className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className={STEPPER_BTN}
             aria-label="Next month"
           >
-            →
+            <ChevronRight className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
       )}
 
       {/* Stepper — year mode */}
       {period === "year" && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <button
             onClick={() => go({ period: "year", month, year: year - 1 })}
-            className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-100 transition-colors"
+            className={STEPPER_BTN}
             aria-label="Previous year"
           >
-            ←
+            <ChevronLeft className="w-5 h-5" aria-hidden="true" />
           </button>
           <div className="text-center min-w-[80px]">
             <p className="font-semibold text-slate-100">{year}</p>
@@ -116,10 +121,10 @@ export function MonthSelector({ period, month, year, showPeriodToggle = true }: 
           <button
             onClick={() => go({ period: "year", month, year: year + 1 })}
             disabled={isCurrentYear}
-            className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className={STEPPER_BTN}
             aria-label="Next year"
           >
-            →
+            <ChevronRight className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
       )}

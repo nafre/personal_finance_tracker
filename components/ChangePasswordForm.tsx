@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { signOut } from "next-auth/react";
 import { changePassword } from "@/lib/actions";
+import { Eye, EyeOff } from "lucide-react";
 
 export function ChangePasswordForm() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [currentPasswordError, setCurrentPasswordError] = useState("");
@@ -65,7 +67,7 @@ export function ChangePasswordForm() {
             disabled={isLoading}
           />
           {currentPasswordError && (
-            <p className="text-xs text-rose-400">{currentPasswordError}</p>
+            <p role="alert" className="text-xs text-rose-400">{currentPasswordError}</p>
           )}
         </div>
 
@@ -73,16 +75,30 @@ export function ChangePasswordForm() {
           <label className="block text-xs font-medium text-slate-400">
             New password
           </label>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            className="input-base w-full"
-            placeholder="Min. 8 characters"
-            required
-            autoComplete="new-password"
-            disabled={isLoading}
-          />
+          <div className="relative">
+            <input
+              type={showNewPassword ? "text" : "password"}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="input-base w-full pr-10"
+              placeholder="Min. 8 characters"
+              required
+              autoComplete="new-password"
+              disabled={isLoading}
+            />
+            <button
+              type="button"
+              onClick={() => setShowNewPassword((v) => !v)}
+              className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1.5"
+              aria-label={showNewPassword ? "Hide password" : "Show password"}
+            >
+              {showNewPassword ? (
+                <EyeOff className="w-4 h-4" aria-hidden="true" />
+              ) : (
+                <Eye className="w-4 h-4" aria-hidden="true" />
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="space-y-1">
@@ -90,7 +106,7 @@ export function ChangePasswordForm() {
             Confirm new password
           </label>
           <input
-            type="password"
+            type={showNewPassword ? "text" : "password"}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             className="input-base w-full"
@@ -102,7 +118,7 @@ export function ChangePasswordForm() {
         </div>
 
         {error && (
-          <p className="text-sm text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+          <p role="alert" className="text-sm text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
             {error}
           </p>
         )}

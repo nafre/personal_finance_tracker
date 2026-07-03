@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cn, formatCurrency, getNextDueDate, getRecurringStatus, countRemainingPayments, isPostedThisPeriod, type RecurringFrequency } from "@/lib/utils";
 import { postRecurringTransaction, deleteRecurringTransaction, skipRecurringTransaction } from "@/lib/actions";
 import { RecurringForm } from "./RecurringForm";
+import { Check, Pencil, Trash2 } from "lucide-react";
 
 interface RecurringTransaction {
   id: string;
@@ -67,6 +68,7 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
   const [editing, setEditing] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   const [confirmingPost, setConfirmingPost] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -118,7 +120,7 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
   }
 
   function handleDelete() {
-    if (!confirm(`Delete "${rec.name}"?`)) return;
+    setConfirmingDelete(false);
     setIsDeleting(true);
     // Optimistic: remove from UI immediately, restore on failure
     onDeleted(rec.id);
@@ -184,6 +186,10 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
           <span className="text-xs text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">
             {FREQ_LABELS[rec.frequency] ?? rec.frequency}
           </span>
+          {/* Mobile: status badge lives here so the right column doesn't squeeze the name */}
+          <span className={cn("sm:hidden text-[11px] px-2 py-0.5 rounded-full border shrink-0 whitespace-nowrap", statusCls)}>
+            {statusLabel}
+          </span>
           {rec.note && (
             <span className="text-xs text-slate-500 truncate hidden sm:inline">{rec.note}</span>
           )}
@@ -204,9 +210,9 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
         </div>
       </div>
 
-      {/* Status badge */}
+      {/* Status badge — desktop position (mobile shows it inline with the name) */}
       <span className={cn(
-        "text-xs px-2 py-1 rounded-lg border shrink-0 hidden sm:inline",
+        "hidden sm:inline text-xs px-2 py-1 rounded-full border shrink-0 whitespace-nowrap",
         statusCls
       )}>
         {statusLabel}
@@ -215,8 +221,8 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
       {/* Actions */}
       <div className="flex items-center gap-1 shrink-0">
         {postedThisPeriod && status !== "ended" && (
-          <span className="text-xs px-2 py-1 rounded-lg border border-emerald-700/40 bg-emerald-900/20 text-emerald-500 shrink-0">
-            Posted ✓
+          <span className="text-[11px] sm:text-xs px-2 py-0.5 sm:py-1 rounded-full border border-emerald-700/40 bg-emerald-900/20 text-emerald-500 shrink-0 inline-flex items-center gap-1">
+            Posted <Check className="w-3 h-3" aria-hidden="true" />
           </span>
         )}
         {canSkip && (
@@ -224,7 +230,7 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
             onClick={handleSkip}
             disabled={isSkipping || isPosting}
             title="Skip this occurrence"
-            className="text-xs px-2 py-1.5 rounded-lg font-medium transition-colors border border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-xs px-2.5 py-2 [@media(hover:none)]:min-h-11 rounded-lg font-medium transition-colors border border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-400 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSkipping ? "Skipping…" : "Skip"}
           </button>
@@ -237,12 +243,12 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
                 disabled={isPosting}
                 title="Confirm post"
                 className={cn(
-                  "text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+                  "text-xs px-2.5 py-2 [@media(hover:none)]:min-h-11 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
                   status === "overdue"
                     ? "bg-rose-600 hover:bg-rose-500 text-white"
                     : status === "due"
                     ? "bg-amber-600 hover:bg-amber-500 text-white"
-                    : "border border-zinc-600 text-zinc-300 hover:bg-zinc-700"
+                    : "border border-slate-600 text-slate-300 hover:bg-slate-700"
                 )}
               >
                 {isPosting ? "Posting…" : "Confirm?"}
@@ -250,7 +256,7 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
               <button
                 onClick={() => setConfirmingPost(false)}
                 disabled={isPosting}
-                className="text-xs text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50"
+                className="text-xs text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50 px-2 py-2 [@media(hover:none)]:min-h-11"
               >
                 Cancel
               </button>
@@ -261,49 +267,66 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
               disabled={isPosting || isSkipping}
               title="Post now"
               className={cn(
-                "text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+                "text-xs px-2.5 py-2 [@media(hover:none)]:min-h-11 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
                 status === "overdue"
                   ? "bg-rose-600 hover:bg-rose-500 text-white"
                   : status === "due"
                   ? "bg-amber-600 hover:bg-amber-500 text-white"
-                  : "border border-zinc-600 text-zinc-300 hover:bg-zinc-700"
+                  : "border border-slate-600 text-slate-300 hover:bg-slate-700"
               )}
             >
               Post
             </button>
           )
         )}
-        <button
-          onClick={() => setEditing(true)}
-          disabled={isPosting || isSkipping || isDeleting}
-          title="Edit"
-          className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors rounded disabled:opacity-50"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-        </button>
-        <button
-          onClick={handleDelete}
-          disabled={isDeleting || isPosting || isSkipping}
-          title={isDeleting ? "Deleting…" : "Delete"}
-          className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors rounded disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isDeleting ? (
-            <svg className="animate-spin h-3.5 w-3.5 text-rose-400" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          )}
-        </button>
+        {confirmingDelete ? (
+          <>
+            <button
+              onClick={handleDelete}
+              className="text-xs px-2.5 py-2 [@media(hover:none)]:min-h-11 rounded-lg font-medium bg-rose-600 hover:bg-rose-500 text-white transition-colors"
+            >
+              Delete?
+            </button>
+            <button
+              onClick={() => setConfirmingDelete(false)}
+              className="text-xs text-slate-400 hover:text-slate-200 transition-colors px-2 py-2 [@media(hover:none)]:min-h-11"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => setEditing(true)}
+              disabled={isPosting || isSkipping || isDeleting}
+              title="Edit"
+              aria-label={`Edit recurring ${rec.name}`}
+              className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors rounded-lg disabled:opacity-50 flex items-center justify-center [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
+            >
+              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              disabled={isDeleting || isPosting || isSkipping}
+              title={isDeleting ? "Deleting…" : "Delete"}
+              aria-label={`Delete recurring ${rec.name}`}
+              className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
+            >
+              {isDeleting ? (
+                <svg className="animate-spin h-3.5 w-3.5 text-rose-400" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+            </button>
+          </>
+        )}
       </div>
     </div>
     {postError && (
-      <p className="text-xs text-rose-400 px-3 pb-1">{postError}</p>
+      <p role="alert" className="text-xs text-rose-400 px-3 pb-1">{postError}</p>
     )}
     </>
   );

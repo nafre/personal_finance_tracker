@@ -85,7 +85,7 @@ export function CategoryCombobox({
   return (
     <div ref={containerRef} className="relative">
       <input
-        className="input-base w-full text-sm"
+        className="input-base w-full text-base sm:text-sm"
         value={value}
         onChange={(e) => {
           onChange(e.target.value);
@@ -94,12 +94,26 @@ export function CategoryCombobox({
         onFocus={() => setIsOpen(true)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
+        role="combobox"
+        aria-expanded={isOpen && options.length > 0}
+        aria-controls="category-combobox-listbox"
+        aria-autocomplete="list"
+        aria-activedescendant={
+          highlightedIndex >= 0 ? `category-option-${highlightedIndex}` : undefined
+        }
       />
       {isOpen && options.length > 0 && (
-        <ul className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-auto max-h-48 py-1">
+        <ul
+          id="category-combobox-listbox"
+          role="listbox"
+          className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-auto max-h-48 py-1"
+        >
           {options.map((option, i) => (
             <li
               key={option.isUseOption ? `__use__:${option.name}` : option.name}
+              id={`category-option-${i}`}
+              role="option"
+              aria-selected={highlightedIndex === i}
               onMouseDown={(e) => {
                 e.preventDefault();
                 select(option);

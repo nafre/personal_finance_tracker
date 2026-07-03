@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { getBudgets, saveBudget, deleteBudget, getCategories, getUsedLabels } from "@/lib/actions";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { useDialogBehavior } from "@/hooks/useDialogBehavior";
+import { Trash2, X } from "lucide-react";
 import type { Budget, BudgetType } from "@/types";
 
 interface Category {
@@ -57,6 +59,7 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
   const [formExcluded, setFormExcluded] = useState<string[]>(EMPTY_FORM.formExcluded);
   const [formLabels, setFormLabels] = useState<string[]>(EMPTY_FORM.formLabels);
   const [editingId, setEditingId] = useState<string | null>(EMPTY_FORM.editingId);
+  const dialogRef = useDialogBehavior(true, onClose);
 
   useEffect(() => {
     Promise.all([getBudgets(), getCategories(), getUsedLabels()])
@@ -156,6 +159,10 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="budget-manager-title"
         className="card w-full sm:max-w-lg max-h-[90dvh] flex flex-col rounded-b-none sm:rounded-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
@@ -163,15 +170,14 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
         <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-slate-700/50 shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
-            <h2 className="text-sm font-semibold text-slate-200">Manage Budgets</h2>
+            <h2 id="budget-manager-title" className="text-sm font-semibold text-slate-200">Manage Budgets</h2>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-500 hover:text-slate-300 transition-colors p-1"
+            aria-label="Close budget manager"
+            className="text-slate-500 hover:text-slate-300 transition-colors p-2 -m-1 flex items-center justify-center [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
@@ -188,13 +194,23 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
               {budgets.map((b) => (
                 <div
                   key={b.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={editingId === b.id ? `Stop editing ${b.name}` : `Edit budget ${b.name}`}
                   className={cn(
-                    "flex items-center justify-between py-2.5 px-3 rounded-lg transition-colors",
+                    "flex items-center justify-between py-2.5 px-3 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500/70 focus:outline-none",
                     editingId === b.id
                       ? "bg-slate-700/60 ring-1 ring-indigo-500/40"
                       : "hover:bg-slate-700/40 cursor-pointer"
                   )}
                   onClick={() => editingId === b.id ? resetForm() : startEdit(b)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      if (editingId === b.id) resetForm();
+                      else startEdit(b);
+                    }
+                  }}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <TypeBadge type={b.budgetType} />
@@ -216,12 +232,11 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
                     <span className="text-xs text-slate-400 tabular-nums">{formatCurrency(b.amount)}/mo</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDelete(b.id); }}
-                      className="text-xs text-rose-400 hover:text-rose-300 transition-colors p-1"
+                      className="text-rose-400 hover:text-rose-300 transition-colors p-2 -m-1 flex items-center justify-center [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
                       title="Delete"
+                      aria-label={`Delete budget ${b.name}`}
                     >
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -254,8 +269,9 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
                       key={t}
                       onClick={() => !disabled && handleTypeChange(t)}
                       title={disabled ? "Overall budget already exists" : meta.desc}
+                      aria-pressed={formType === t}
                       className={cn(
-                        "text-xs px-3 py-1.5 rounded-full border transition-all",
+                        "text-xs px-3 py-2 rounded-full border transition-all",
                         formType === t
                           ? meta.color + " font-semibold"
                           : "text-slate-400 border-slate-600 hover:border-slate-500",
@@ -279,7 +295,7 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
                 <select
                   value={formCategory}
                   onChange={(e) => handleCategorySelect(e.target.value)}
-                  className="input-base w-full text-sm"
+                  className="input-base w-full text-base sm:text-sm"
                 >
                   <option value="">Select category…</option>
                   {categories
@@ -306,9 +322,10 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
                       {cat}
                       <button
                         onClick={() => setFormExcluded((prev) => prev.filter((c) => c !== cat))}
-                        className="hover:text-amber-100"
+                        className="hover:text-amber-100 p-1 -m-1"
+                        aria-label={`Remove ${cat}`}
                       >
-                        ×
+                        <X className="w-3 h-3" aria-hidden="true" />
                       </button>
                     </span>
                   ))}
@@ -348,9 +365,10 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
                       #{lbl}
                       <button
                         onClick={() => setFormLabels((prev) => prev.filter((l) => l !== lbl))}
-                        className="hover:text-violet-100"
+                        className="hover:text-violet-100 p-1 -m-1"
+                        aria-label={`Remove label ${lbl}`}
                       >
-                        ×
+                        <X className="w-3 h-3" aria-hidden="true" />
                       </button>
                     </span>
                   ))}
@@ -399,7 +417,7 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
                 }
                 readOnly={formType === "overall"}
                 className={cn(
-                  "input-base w-full text-sm",
+                  "input-base w-full text-base sm:text-sm",
                   formType === "overall" && "opacity-50 cursor-default"
                 )}
               />
@@ -415,15 +433,15 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
                 placeholder="0.00"
                 min="0"
                 step="0.01"
-                className="input-base w-full text-sm tabular-nums"
+                className="input-base w-full text-base sm:text-sm tabular-nums"
               />
             </div>
 
-            {error && <p className="text-xs text-rose-400">{error}</p>}
+            {error && <p role="alert" className="text-xs text-rose-400">{error}</p>}
 
             <div className="flex gap-2">
               {editingId && (
-                <button onClick={resetForm} className="flex-1 text-sm py-2 rounded-lg border border-slate-600 text-slate-400 hover:text-slate-300 transition-colors">
+                <button onClick={resetForm} className="btn-ghost flex-1 text-sm border border-slate-700">
                   Cancel
                 </button>
               )}

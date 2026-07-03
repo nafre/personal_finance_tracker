@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createUser, deleteUser, adminResetPassword } from "@/lib/actions";
 import { stringToColor } from "@/lib/utils";
+import { Eye, EyeOff, KeyRound, Trash2 } from "lucide-react";
 
 export interface UserRecord {
   id: string;
@@ -186,15 +187,15 @@ export function UserManager({ initialUsers, currentUserId }: UserManagerProps) {
                       setExpandedResetId((prev) => (prev === user.id ? null : user.id))
                     }
                     title="Reset password"
-                    className={`p-1.5 rounded-lg transition-colors ${
+                    aria-label={`Reset password for ${user.name}`}
+                    aria-expanded={isExpanded}
+                    className={`p-1.5 rounded-lg transition-colors flex items-center justify-center [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11 ${
                       isExpanded
                         ? "text-indigo-400 bg-indigo-500/10"
                         : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
                     }`}
                   >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                    </svg>
+                    <KeyRound className="w-4 h-4" aria-hidden="true" />
                   </button>
 
                   {/* Delete button */}
@@ -202,21 +203,20 @@ export function UserManager({ initialUsers, currentUserId }: UserManagerProps) {
                     onClick={() => !cannotDelete && handleDelete(user.id)}
                     disabled={cannotDelete || deletingIds.has(user.id)}
                     title={deleteTitle}
-                    className={`p-1.5 rounded-lg transition-colors ${
+                    aria-label={deleteTitle}
+                    className={`p-1.5 rounded-lg transition-colors flex items-center justify-center [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11 ${
                       cannotDelete
                         ? "text-slate-600 cursor-not-allowed opacity-40"
                         : "text-slate-400 hover:text-rose-400 hover:bg-rose-500/10"
                     }`}
                   >
                     {deletingIds.has(user.id) ? (
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                       </svg>
                     ) : (
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
+                      <Trash2 className="w-4 h-4" aria-hidden="true" />
                     )}
                   </button>
                 </div>
@@ -232,38 +232,33 @@ export function UserManager({ initialUsers, currentUserId }: UserManagerProps) {
                           setResetPasswords((prev) => ({ ...prev, [user.id]: e.target.value }))
                         }
                         placeholder="New password (min. 8 chars)"
-                        className="input-base w-full text-sm pr-9"
+                        className="input-base w-full text-base sm:text-sm pr-9"
                       />
                       <button
                         type="button"
                         onClick={() =>
                           setShowResetPassword((prev) => ({ ...prev, [user.id]: !prev[user.id] }))
                         }
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-                        tabIndex={-1}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1.5"
+                        aria-label={showResetPassword[user.id] ? "Hide password" : "Show password"}
                       >
                         {showResetPassword[user.id] ? (
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                          </svg>
+                          <EyeOff className="w-4 h-4" aria-hidden="true" />
                         ) : (
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
+                          <Eye className="w-4 h-4" aria-hidden="true" />
                         )}
                       </button>
                     </div>
                     <button
                       onClick={() => handleResetPassword(user.id)}
                       disabled={resettingIds.has(user.id) || !resetPasswords[user.id]}
-                      className="btn-primary text-xs px-3 py-1.5 disabled:opacity-50"
+                      className="btn-primary text-xs px-3 py-2 disabled:opacity-50"
                     >
                       {resettingIds.has(user.id) ? "Saving…" : "Save"}
                     </button>
                     <button
                       onClick={() => setExpandedResetId(null)}
-                      className="btn-ghost text-xs px-3 py-1.5"
+                      className="btn-ghost text-xs px-3 py-2"
                     >
                       Cancel
                     </button>
@@ -277,12 +272,12 @@ export function UserManager({ initialUsers, currentUserId }: UserManagerProps) {
 
       {/* Feedback */}
       {error && (
-        <p className="text-sm text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+        <p role="alert" className="text-sm text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
           {error}
         </p>
       )}
       {success && (
-        <p className="text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+        <p role="status" className="text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
           {success}
         </p>
       )}
@@ -291,58 +286,71 @@ export function UserManager({ initialUsers, currentUserId }: UserManagerProps) {
       <div className="card">
         <h3 className="text-sm font-semibold text-slate-300 mb-4">Add user</h3>
         <form onSubmit={handleCreate} className="space-y-3">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Full name"
-            className="input-base w-full"
-            required
-          />
-          <input
-            type="email"
-            value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            placeholder="Email address"
-            className="input-base w-full"
-            required
-          />
-          <div className="relative">
+          <div>
+            <label htmlFor="new-user-name" className="text-xs text-slate-400 mb-1 block">Full name</label>
             <input
-              type={showNewPassword ? "text" : "password"}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Password (min. 8 characters)"
-              className="input-base w-full pr-10"
+              id="new-user-name"
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="e.g. Jane Tan"
+              className="input-base w-full"
+              autoComplete="off"
               required
             />
-            <button
-              type="button"
-              onClick={() => setShowNewPassword((v) => !v)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-              tabIndex={-1}
-            >
-              {showNewPassword ? (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-              )}
-            </button>
           </div>
-          <select
-            value={newRole}
-            onChange={(e) => setNewRole(e.target.value as "user" | "admin" | "demo")}
-            className="input-base w-full"
-          >
-            <option value="user">User</option>
-            <option value="admin">Admin</option>
-            <option value="demo">Demo</option>
-          </select>
+          <div>
+            <label htmlFor="new-user-email" className="text-xs text-slate-400 mb-1 block">Email address</label>
+            <input
+              id="new-user-email"
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              placeholder="name@example.com"
+              className="input-base w-full"
+              autoComplete="off"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="new-user-password" className="text-xs text-slate-400 mb-1 block">Password (min. 8 characters)</label>
+            <div className="relative">
+              <input
+                id="new-user-password"
+                type={showNewPassword ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="input-base w-full pr-10"
+                autoComplete="new-password"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword((v) => !v)}
+                className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1.5"
+                aria-label={showNewPassword ? "Hide password" : "Show password"}
+              >
+                {showNewPassword ? (
+                  <EyeOff className="w-4 h-4" aria-hidden="true" />
+                ) : (
+                  <Eye className="w-4 h-4" aria-hidden="true" />
+                )}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label htmlFor="new-user-role" className="text-xs text-slate-400 mb-1 block">Role</label>
+            <select
+              id="new-user-role"
+              value={newRole}
+              onChange={(e) => setNewRole(e.target.value as "user" | "admin" | "demo")}
+              className="input-base w-full"
+            >
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+              <option value="demo">Demo</option>
+            </select>
+          </div>
           <button
             type="submit"
             disabled={isCreating || !newName.trim() || !newEmail.trim() || !newPassword}

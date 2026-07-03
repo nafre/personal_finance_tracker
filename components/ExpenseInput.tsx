@@ -155,7 +155,7 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, aut
     <div data-testid="expense-input" className="card">
       <div className="flex items-center gap-2 mb-1">
         <span className="text-slate-400 text-sm font-medium">Quick add</span>
-        <span className="text-xs text-slate-600">• Type and press Enter</span>
+        <span className="text-xs text-slate-500">• Type and press Enter</span>
       </div>
 
       <div className="flex gap-2 items-start">
@@ -223,9 +223,11 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, aut
           onClick={handleSubmit}
           disabled={isSubmitting || !value.trim()}
           className="btn-primary px-4 flex items-center gap-1.5 shrink-0 disabled:opacity-50 self-start"
+          aria-label="Add transaction"
+          aria-busy={isSubmitting}
         >
           {isSubmitting ? (
-            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
@@ -240,7 +242,7 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, aut
 
       {/* Error */}
       {error && (
-        <p className="text-rose-400 text-xs mt-2">{error}</p>
+        <p role="alert" className="text-rose-400 text-xs mt-2">{error}</p>
       )}
 
       {/* Recent category chips */}
@@ -256,7 +258,7 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, aut
                 setPreview(parseExpenseInput(next));
                 inputRef.current?.focus();
               }}
-              className="shrink-0 text-xs py-1 px-2.5 bg-slate-800 border border-slate-700
+              className="shrink-0 text-xs py-2 px-3 min-h-[36px] [@media(hover:none)]:min-h-11 bg-slate-800 border border-slate-700
                          hover:border-indigo-500 text-slate-300 rounded-full transition-colors"
             >
               {cat}
@@ -280,7 +282,7 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, aut
               setPreview(parseExpenseInput(item.example));
               inputRef.current?.focus();
             }}
-            className="text-xs text-slate-600 hover:text-indigo-400 transition-colors font-mono
+            className="text-xs text-slate-500 hover:text-indigo-400 transition-colors font-mono
                        py-2 px-3 min-h-[44px] rounded-lg hover:bg-slate-800 flex items-center"
           >
             {item.example}

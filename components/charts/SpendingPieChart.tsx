@@ -60,7 +60,7 @@ function CustomLegend({ payload }: any) {
 export function SpendingPieChart({ data }: SpendingPieChartProps) {
   if (!data.length) {
     return (
-      <div className="flex items-center justify-center h-48 text-slate-500 text-sm">
+      <div className="flex items-center justify-center h-[280px] text-slate-500 text-sm">
         No expense data this month
       </div>
     );

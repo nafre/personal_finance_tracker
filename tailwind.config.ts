@@ -10,12 +10,11 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Custom dark palette
-        surface: {
-          DEFAULT: "#0f172a",   // page bg
-          card: "#1e293b",       // card bg
-          hover: "#334155",      // hover state
-          border: "#334155",     // border
+        // Brand gradient endpoints — keep in sync with any inline gradients
+        brand: {
+          DEFAULT: "#4f46e5", // indigo-600
+          light: "#6366f1",   // indigo-500
+          violet: "#7c3aed",  // violet-600
         },
       },
       fontFamily: {

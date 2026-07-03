@@ -88,7 +88,7 @@ export function RecurringList({ initialRecurring, onTransactionPosted }: Recurri
         <p className="text-sm text-slate-500 mb-3">No recurring transactions yet.</p>
         <button
           onClick={() => setShowForm(true)}
-          className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors font-medium"
+          className="w-full py-2.5 text-sm text-slate-500 hover:text-indigo-400 transition-colors border border-dashed border-slate-700 hover:border-indigo-500 rounded-xl"
         >
           + Add recurring
         </button>
@@ -99,7 +99,7 @@ export function RecurringList({ initialRecurring, onTransactionPosted }: Recurri
   return (
     <div className="space-y-2">
       {deleteError && (
-        <p className="text-xs text-rose-400 px-3 pb-1">{deleteError}</p>
+        <p role="alert" className="text-xs text-rose-400 px-3 pb-1">{deleteError}</p>
       )}
       {activeItems.map((rec) => (
         <RecurringRow
@@ -123,7 +123,7 @@ export function RecurringList({ initialRecurring, onTransactionPosted }: Recurri
       ) : (
         <button
           onClick={() => setShowForm(true)}
-          className="w-full py-2 text-sm text-slate-500 hover:text-indigo-400 transition-colors border border-dashed border-slate-700 hover:border-indigo-500 rounded-xl"
+          className="w-full py-2.5 text-sm text-slate-500 hover:text-indigo-400 transition-colors border border-dashed border-slate-700 hover:border-indigo-500 rounded-xl"
         >
           + Add recurring
         </button>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { addCategory, deleteCategory, addDefaultCategories, updateCategory } from "@/lib/actions";
+import { Pencil, Trash2 } from "lucide-react";
 
 interface Category {
   id: string;
@@ -11,9 +12,17 @@ interface Category {
   isDefault: boolean;
 }
 
-const PRESET_COLORS = [
-  "#6366f1", "#8b5cf6", "#ec4899", "#ef4444", "#f97316",
-  "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#64748b",
+const PRESET_COLORS: { hex: string; name: string }[] = [
+  { hex: "#6366f1", name: "Indigo" },
+  { hex: "#8b5cf6", name: "Violet" },
+  { hex: "#ec4899", name: "Pink" },
+  { hex: "#ef4444", name: "Red" },
+  { hex: "#f97316", name: "Orange" },
+  { hex: "#eab308", name: "Yellow" },
+  { hex: "#22c55e", name: "Green" },
+  { hex: "#14b8a6", name: "Teal" },
+  { hex: "#3b82f6", name: "Blue" },
+  { hex: "#64748b", name: "Grey" },
 ];
 
 export function CategoryManager({ initialCategories }: { initialCategories: Category[] }) {
@@ -185,7 +194,7 @@ export function CategoryManager({ initialCategories }: { initialCategories: Cate
       </div>
 
       {error && (
-        <p className="text-sm text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+        <p role="alert" className="text-sm text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
           {error}
         </p>
       )}
@@ -220,28 +229,31 @@ export function CategoryManager({ initialCategories }: { initialCategories: Cate
             <span className="text-xs text-slate-500 shrink-0">Color:</span>
             {PRESET_COLORS.map((c) => (
               <button
-                key={c}
+                key={c.hex}
                 type="button"
-                onClick={() => setColor(c)}
-                className="w-5 h-5 rounded-full transition-transform hover:scale-110 focus:outline-none"
+                onClick={() => setColor(c.hex)}
+                className="w-7 h-7 rounded-full transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 style={{
-                  backgroundColor: c,
-                  outline: color === c ? `2px solid ${c}` : "none",
+                  backgroundColor: c.hex,
+                  outline: color === c.hex ? `2px solid ${c.hex}` : "none",
                   outlineOffset: "2px",
                 }}
-                aria-label={c}
+                aria-label={`Select color: ${c.name}`}
+                aria-pressed={color === c.hex}
               />
             ))}
             <input
               type="color"
               value={color}
               onChange={(e) => setColor(e.target.value)}
-              className="w-5 h-5 rounded-full cursor-pointer bg-transparent border-0 p-0 overflow-hidden"
+              className="w-7 h-7 rounded-full cursor-pointer bg-transparent border-0 p-0 overflow-hidden"
               title="Custom color"
+              aria-label="Pick a custom color"
             />
             <div
-              className="w-5 h-5 rounded-full border border-slate-600 shrink-0"
+              className="w-7 h-7 rounded-full border border-slate-600 shrink-0"
               style={{ backgroundColor: color }}
+              aria-hidden="true"
             />
           </div>
 
@@ -307,38 +319,40 @@ function CategoryRow({
           <span className="text-xs text-slate-500 shrink-0">Color:</span>
           {PRESET_COLORS.map((c) => (
             <button
-              key={c}
+              key={c.hex}
               type="button"
-              onClick={() => setEditForm((f) => ({ ...f, color: c }))}
-              className="w-5 h-5 rounded-full transition-transform hover:scale-110 focus:outline-none"
+              onClick={() => setEditForm((f) => ({ ...f, color: c.hex }))}
+              className="w-7 h-7 rounded-full transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
               style={{
-                backgroundColor: c,
-                outline: editForm.color === c ? `2px solid ${c}` : "none",
+                backgroundColor: c.hex,
+                outline: editForm.color === c.hex ? `2px solid ${c.hex}` : "none",
                 outlineOffset: "2px",
               }}
-              aria-label={c}
+              aria-label={`Select color: ${c.name}`}
+              aria-pressed={editForm.color === c.hex}
             />
           ))}
           <input
             type="color"
             value={editForm.color}
             onChange={(e) => setEditForm((f) => ({ ...f, color: e.target.value }))}
-            className="w-5 h-5 rounded-full cursor-pointer bg-transparent border-0 p-0 overflow-hidden"
+            className="w-7 h-7 rounded-full cursor-pointer bg-transparent border-0 p-0 overflow-hidden"
             title="Custom color"
+            aria-label="Pick a custom color"
           />
         </div>
         <div className="flex gap-2">
           <button
             onClick={onSaveEdit}
             disabled={isSavingEdit || !editForm.name.trim()}
-            className="btn-primary text-xs px-3 py-1.5 disabled:opacity-50"
+            className="btn-primary text-xs px-3 py-2 disabled:opacity-50"
           >
             {isSavingEdit ? "Saving…" : "Save"}
           </button>
           <button
             onClick={onCancelEdit}
             disabled={isSavingEdit}
-            className="text-xs text-slate-400 hover:text-slate-200 transition-colors px-3 py-1.5"
+            className="btn-ghost text-xs px-3 py-2"
           >
             Cancel
           </button>
@@ -362,28 +376,24 @@ function CategoryRow({
         <div className="flex items-center gap-1">
           <button
             onClick={() => onStartEdit(cat)}
-            className="text-slate-500 hover:text-indigo-400 transition-colors p-1 rounded"
+            className="text-slate-500 hover:text-indigo-400 transition-colors p-1.5 rounded-lg flex items-center justify-center [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
             aria-label={`Edit ${cat.name}`}
           >
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-            </svg>
+            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
           <button
             onClick={() => onDelete(cat.id)}
             disabled={deletingId === cat.id}
-            className="text-slate-500 hover:text-rose-400 transition-colors disabled:opacity-40 p-1 rounded"
+            className="text-slate-500 hover:text-rose-400 transition-colors disabled:opacity-40 p-1.5 rounded-lg flex items-center justify-center [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
             aria-label={`Delete ${cat.name}`}
           >
             {deletingId === cat.id ? (
-              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
             ) : (
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
             )}
           </button>
         </div>

@@ -255,71 +255,80 @@ export default function TransactionsPage() {
               value={searchInput}
               onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Search notes…"
-              className="input-base w-full pl-8 text-sm"
+              aria-label="Search notes"
+              className="input-base w-full pl-8 text-base sm:text-sm"
             />
           </div>
           {/* Month selector — hidden when date range is active */}
           {!hasDateRange && <MonthSelector period="month" month={month} year={year} showPeriodToggle={false} />}
         </div>
 
-        {/* Row 2: category + label + date range */}
-        <div className="flex flex-wrap gap-2 items-center">
-          <div className="flex-1 min-w-[140px]">
-            <select
-              value={categoryFilter}
-              onChange={(e) => setFilter("category", e.target.value)}
-              className="input-base w-full text-sm"
-            >
-              <option value="">All categories</option>
-              {usedCategories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex-1 min-w-[140px]">
-            <select
-              value={labelFilter}
-              onChange={(e) => setFilter("label", e.target.value)}
-              className="input-base w-full text-sm"
-            >
-              <option value="">All labels</option>
-              {usedLabels.map((l) => (
-                <option key={l} value={l}>{l}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Date range */}
-          <input
-            type="date"
-            value={fromFilter}
-            onChange={(e) => setFilter("from", e.target.value)}
-            className="input-base text-sm w-auto"
-            title="From date"
-          />
-          <input
-            type="date"
-            value={toFilter}
-            onChange={(e) => setFilter("to", e.target.value)}
-            className="input-base text-sm w-auto"
-            title="To date"
-          />
-
-          {hasFilter && (
-            <button
-              onClick={clearAllFilters}
-              className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors shrink-0"
-            >
-              Clear all
-            </button>
-          )}
-          <button
-            onClick={handleExport}
-            className="text-xs text-slate-400 hover:text-slate-200 transition-colors shrink-0 border border-slate-700 hover:border-slate-500 px-2.5 py-1.5 rounded-lg"
+        {/* Row 2: category + label — 2-up grid on mobile, inline row from sm up */}
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+          <select
+            value={categoryFilter}
+            onChange={(e) => setFilter("category", e.target.value)}
+            aria-label="Filter by category"
+            className="input-base w-full sm:w-auto sm:flex-1 sm:min-w-[140px] text-base sm:text-sm"
           >
-            Export CSV ↓
-          </button>
+            <option value="">All categories</option>
+            {usedCategories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+
+          <select
+            value={labelFilter}
+            onChange={(e) => setFilter("label", e.target.value)}
+            aria-label="Filter by label"
+            className="input-base w-full sm:w-auto sm:flex-1 sm:min-w-[140px] text-base sm:text-sm"
+          >
+            <option value="">All labels</option>
+            {usedLabels.map((l) => (
+              <option key={l} value={l}>{l}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Row 3: date range + actions */}
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
+          <div>
+            <label htmlFor="filter-from" className="text-[11px] text-slate-500 mb-0.5 block">From</label>
+            <input
+              id="filter-from"
+              type="date"
+              value={fromFilter}
+              onChange={(e) => setFilter("from", e.target.value)}
+              className="input-base text-base sm:text-sm w-full sm:w-40"
+            />
+          </div>
+          <div>
+            <label htmlFor="filter-to" className="text-[11px] text-slate-500 mb-0.5 block">To</label>
+            <input
+              id="filter-to"
+              type="date"
+              value={toFilter}
+              onChange={(e) => setFilter("to", e.target.value)}
+              className="input-base text-base sm:text-sm w-full sm:w-40"
+            />
+          </div>
+
+          <div className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:ml-auto">
+            {hasFilter && (
+              <button
+                onClick={clearAllFilters}
+                className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors shrink-0 px-2 py-2"
+              >
+                Clear all
+              </button>
+            )}
+            <button
+              onClick={handleExport}
+              className="text-xs text-slate-400 hover:text-slate-200 transition-colors shrink-0 border border-slate-700 hover:border-slate-500 px-3 py-2 rounded-lg ml-auto sm:ml-0"
+            >
+              Export CSV ↓
+            </button>
+          </div>
         </div>
       </div>
 
@@ -334,7 +343,8 @@ export default function TransactionsPage() {
             {labelFilter}
             <button
               onClick={() => setFilter("label", "")}
-              className="opacity-60 hover:opacity-100"
+              className="opacity-60 hover:opacity-100 p-1 -m-1"
+              aria-label={`Clear label filter ${labelFilter}`}
             >
               ×
             </button>

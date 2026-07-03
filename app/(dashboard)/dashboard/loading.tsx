@@ -10,7 +10,7 @@ export default function DashboardLoading() {
       <div className="animate-pulse bg-slate-800 rounded-xl h-12 hidden md:block" />
 
       {/* Recurring card */}
-      <div className="animate-pulse bg-slate-800 rounded-xl h-14" />
+      <div className="animate-pulse bg-slate-800 rounded-2xl h-14" />
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -21,12 +21,12 @@ export default function DashboardLoading() {
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="animate-pulse bg-slate-800 rounded-xl h-48" />
-        <div className="animate-pulse bg-slate-800 rounded-xl h-48" />
+        <div className="animate-pulse bg-slate-800 rounded-2xl h-48" />
+        <div className="animate-pulse bg-slate-800 rounded-2xl h-48" />
       </div>
 
       {/* Budget card */}
-      <div className="animate-pulse bg-slate-800 rounded-xl h-20" />
+      <div className="animate-pulse bg-slate-800 rounded-2xl h-20" />
 
       {/* Recent transactions */}
       <div className="space-y-1">

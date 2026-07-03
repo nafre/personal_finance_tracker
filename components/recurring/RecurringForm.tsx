@@ -110,7 +110,7 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
         <div className="col-span-2">
           <label className="text-xs text-slate-400 mb-1 block">Name</label>
           <input
-            className="input-base w-full text-sm"
+            className="input-base w-full text-base sm:text-sm"
             placeholder="Monthly Salary"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -130,7 +130,7 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
         <div>
           <label className="text-xs text-slate-400 mb-1 block">Amount (RM)</label>
           <input
-            className="input-base w-full text-sm"
+            className="input-base w-full text-base sm:text-sm"
             type="number"
             min="0.01"
             step="0.01"
@@ -148,6 +148,7 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
                 key={t}
                 type="button"
                 onClick={() => setType(t)}
+                aria-pressed={type === t}
                 className={cn(
                   "flex-1 py-2 transition-colors capitalize",
                   type === t
@@ -166,7 +167,7 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
         <div>
           <label className="text-xs text-slate-400 mb-1 block">Frequency</label>
           <select
-            className="input-base w-full text-sm"
+            className="input-base w-full text-base sm:text-sm"
             value={frequency}
             onChange={(e) => setFrequency(e.target.value as Frequency)}
           >
@@ -180,7 +181,7 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
         <div>
           <label className="text-xs text-slate-400 mb-1 block">Start date</label>
           <input
-            className="input-base w-full text-sm"
+            className="input-base w-full text-base sm:text-sm"
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
@@ -190,7 +191,7 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
         <div>
           <label className="text-xs text-slate-400 mb-1 block">End date (optional)</label>
           <input
-            className="input-base w-full text-sm"
+            className="input-base w-full text-base sm:text-sm"
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
@@ -200,7 +201,7 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
         <div className="col-span-2">
           <label className="text-xs text-slate-400 mb-1 block">Note (optional)</label>
           <input
-            className="input-base w-full text-sm"
+            className="input-base w-full text-base sm:text-sm"
             placeholder="e.g. EPF deducted"
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -208,13 +209,13 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
         </div>
       </div>
 
-      {error && <p className="text-rose-400 text-xs">{error}</p>}
+      {error && <p role="alert" className="text-rose-400 text-xs">{error}</p>}
 
       <div className="flex gap-2 justify-end">
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+          className="btn-ghost px-4 py-2 text-sm"
         >
           Cancel
         </button>

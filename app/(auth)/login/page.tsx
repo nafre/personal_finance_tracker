@@ -3,6 +3,7 @@
 import { Suspense, useState, useTransition } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 
 function LoginForm() {
   const router = useRouter();
@@ -41,8 +42,8 @@ function LoginForm() {
         {/* Logo / title */}
         <div className="text-center mb-8">
           <div
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 text-3xl"
-            style={{ background: "linear-gradient(135deg, #4f46e5, #7c3aed)", boxShadow: "0 8px 28px rgba(99,102,241,0.5)" }}
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 text-3xl bg-gradient-to-br from-brand to-brand-violet shadow-[0_8px_28px_rgba(99,102,241,0.5)]"
+            aria-hidden="true"
           >
             💸
           </div>
@@ -85,7 +86,7 @@ function LoginForm() {
             </div>
 
             {error && (
-              <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 text-sm px-3 py-2 rounded-lg">
+              <div role="alert" className="bg-rose-500/10 border border-rose-500/30 text-rose-400 text-sm px-3 py-2 rounded-lg">
                 {error}
               </div>
             )}
@@ -104,7 +105,10 @@ function LoginForm() {
                   Signing in…
                 </>
               ) : (
-                "Sign in →"
+                <>
+                  Sign in
+                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                </>
               )}
             </button>
           </form>

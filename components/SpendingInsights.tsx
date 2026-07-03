@@ -1,6 +1,7 @@
 "use client";
 
 import { cn, formatCurrency } from "@/lib/utils";
+import { ArrowDown, ArrowUp } from "lucide-react";
 
 interface CategoryData {
   name: string;
@@ -56,7 +57,7 @@ export function SpendingInsights({
   const paceConfig: Record<PaceStatus, { label: string; className: string }> = {
     over: { label: "Overpacing", className: "bg-rose-500/20 text-rose-400" },
     under: { label: "Underpacing", className: "bg-emerald-500/20 text-emerald-400" },
-    on: { label: "On pace", className: "bg-slate-700 text-slate-400" },
+    on: { label: "On pace", className: "bg-slate-700 text-slate-300" },
   };
 
   return (
@@ -104,12 +105,17 @@ export function SpendingInsights({
                   {momDelta != null && isFinite(momDelta) && (
                     <span
                       className={cn(
-                        "font-medium",
+                        "font-medium inline-flex items-center",
                         momDelta > 0 ? "text-rose-400" : "text-emerald-400"
                       )}
                     >
-                      {momDelta > 0 ? "▲" : "▼"}
+                      {momDelta > 0 ? (
+                        <ArrowUp className="w-3 h-3" aria-hidden="true" />
+                      ) : (
+                        <ArrowDown className="w-3 h-3" aria-hidden="true" />
+                      )}
                       {Math.abs(momDelta).toFixed(0)}%
+                      <span className="sr-only"> vs last month</span>
                     </span>
                   )}
                 </div>

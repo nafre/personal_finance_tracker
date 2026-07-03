@@ -1,6 +1,8 @@
 "use client";
 
 import { formatCurrency, cn } from "@/lib/utils";
+import { ArrowDown, ArrowUp } from "lucide-react";
+import type { ReactNode } from "react";
 
 export function StatCard({
   label,
@@ -14,7 +16,7 @@ export function StatCard({
   label: string;
   amount: number;
   variant: "income" | "expense" | "balance";
-  icon: string;
+  icon: ReactNode;
   momDelta?: number | null;
   deltaLabel?: string;
   subtitle?: string;
@@ -79,14 +81,21 @@ export function StatCard({
           {label}
         </span>
         <div
-          className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-xs sm:text-sm shrink-0"
+          className={cn(
+            "w-6 h-6 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0",
+            colorMap[effectiveKey]
+          )}
           style={{ background: iconBgMap[effectiveKey] }}
+          aria-hidden="true"
         >
           {icon}
         </div>
       </div>
 
-      <p className={cn("text-lg sm:text-3xl font-bold tabular-nums truncate relative", colorMap[effectiveKey])}>
+      <p
+        title={`${variant === "balance" && amount < 0 ? "-" : ""}${formatCurrency(Math.abs(amount))}`}
+        className={cn("text-lg sm:text-3xl font-bold tabular-nums truncate relative", colorMap[effectiveKey])}
+      >
         {variant === "balance" && amount < 0 ? "-" : ""}
         {formatCurrency(Math.abs(amount))}
       </p>
@@ -94,13 +103,20 @@ export function StatCard({
       {momDelta != null && isFinite(momDelta) && (
         <span
           className={cn(
-            "text-[10px] sm:text-xs font-medium mt-1 sm:mt-2 block relative",
+            "text-[10px] sm:text-xs font-medium mt-1 sm:mt-2 flex items-center gap-0.5 relative",
             variant === "expense"
               ? momDelta > 0 ? "text-rose-400" : "text-emerald-400"
               : momDelta > 0 ? "text-emerald-400" : "text-rose-400"
           )}
         >
-          {momDelta > 0 ? "▲" : "▼"} {Math.abs(momDelta).toFixed(0)}%<span className="hidden sm:inline"> {deltaLabel}</span>
+          {momDelta > 0 ? (
+            <ArrowUp className="w-3 h-3 shrink-0" aria-hidden="true" />
+          ) : (
+            <ArrowDown className="w-3 h-3 shrink-0" aria-hidden="true" />
+          )}
+          {Math.abs(momDelta).toFixed(0)}%
+          <span className="hidden sm:inline"> {deltaLabel}</span>
+          <span className="sr-only sm:hidden">{deltaLabel}</span>
         </span>
       )}
 

@@ -6,6 +6,7 @@ import { applyLocalMutation } from "@/lib/sync";
 import { CategoryCombobox } from "@/components/CategoryCombobox";
 import { useSyncContext } from "@/context/SyncProvider";
 import { formatCurrency, formatDate, cn, stringToColor } from "@/lib/utils";
+import { ChevronDown, Pencil, Trash2, X } from "lucide-react";
 
 interface Transaction {
   id: string;
@@ -91,9 +92,10 @@ function LabelEditor({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onChange(value.filter((l) => l !== label)); }}
-              className="opacity-60 hover:opacity-100 leading-none"
+              className="opacity-60 hover:opacity-100 leading-none p-1 -m-1"
+              aria-label={`Remove label ${label}`}
             >
-              ×
+              <X className="w-3 h-3" aria-hidden="true" />
             </button>
           </span>
         );
@@ -105,7 +107,7 @@ function LabelEditor({
         onKeyDown={handleKeyDown}
         onBlur={() => { if (input.trim()) addLabel(input); }}
         placeholder={value.length === 0 ? "Add labels… (Enter to confirm)" : ""}
-        className="bg-transparent outline-none text-sm text-slate-200 placeholder:text-slate-600 flex-1 min-w-[120px]"
+        className="bg-transparent outline-none text-base sm:text-sm text-slate-200 placeholder:text-slate-500 flex-1 min-w-[120px]"
       />
     </div>
   );
@@ -146,10 +148,12 @@ function BudgetExcludeSelect({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="input-base w-full text-sm text-left flex items-center justify-between"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className="input-base w-full text-base sm:text-sm text-left flex items-center justify-between"
       >
         <span className={cn(count === 0 ? "text-slate-500" : "text-slate-200")}>{summary}</span>
-        <span className="text-slate-500 text-xs ml-2">▾</span>
+        <ChevronDown className="w-4 h-4 text-slate-500 ml-2 shrink-0" aria-hidden="true" />
       </button>
       {open && (
         <div className="absolute z-10 mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-lg max-h-48 overflow-auto py-1">
@@ -216,6 +220,7 @@ function TransactionRow({
   const [rowError, setRowError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const { isOnline, userId, refreshPendingCount } = useSyncContext();
 
   function handleSave() {
@@ -274,7 +279,7 @@ function TransactionRow({
   }
 
   function handleDelete() {
-    if (!confirm("Delete this transaction?")) return;
+    setConfirmingDelete(false);
     setRowError("");
     setIsDeleting(true);
 
@@ -306,7 +311,7 @@ function TransactionRow({
   if (editing) {
     return (
       <div className={cn("bg-slate-800 rounded-xl p-4 space-y-3 animate-fade-in", isSaving && "opacity-50 pointer-events-none")}>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div>
             <label className="text-xs text-slate-400 mb-1 block">Category</label>
             <CategoryCombobox
@@ -319,7 +324,7 @@ function TransactionRow({
             <label className="text-xs text-slate-400 mb-1 block">Amount</label>
             <input
               type="number"
-              className="input-base w-full text-sm"
+              className="input-base w-full text-base sm:text-sm"
               value={editAmount}
               onChange={(e) => setEditAmount(e.target.value)}
               min="0"
@@ -330,7 +335,7 @@ function TransactionRow({
             <label className="text-xs text-slate-400 mb-1 block">Date</label>
             <input
               type="date"
-              className="input-base w-full text-sm"
+              className="input-base w-full text-base sm:text-sm"
               value={editDate}
               onChange={(e) => setEditDate(e.target.value)}
             />
@@ -339,7 +344,7 @@ function TransactionRow({
         <div>
           <label className="text-xs text-slate-400 mb-1 block">Note</label>
           <input
-            className="input-base w-full text-sm"
+            className="input-base w-full text-base sm:text-sm"
             value={editNote}
             onChange={(e) => setEditNote(e.target.value)}
             placeholder="Optional note"
@@ -348,7 +353,7 @@ function TransactionRow({
         <div>
           <label className="text-xs text-slate-400 mb-1 block">Labels</label>
           <LabelEditor value={editLabels} onChange={setEditLabels} />
-          <p className="text-[11px] text-slate-600 mt-1">Press Enter or comma to add · Backspace to remove</p>
+          <p className="text-[11px] text-slate-500 mt-1">Press Enter or comma to add · Backspace to remove</p>
         </div>
         {editType === "expense" && budgets.length > 0 && (
           <div>
@@ -358,7 +363,7 @@ function TransactionRow({
               value={editExcludedBudgetIds}
               onChange={setEditExcludedBudgetIds}
             />
-            <p className="text-[11px] text-slate-600 mt-1">This transaction won&apos;t count toward the selected budgets.</p>
+            <p className="text-[11px] text-slate-500 mt-1">This transaction won&apos;t count toward the selected budgets.</p>
           </div>
         )}
         <div>
@@ -371,7 +376,7 @@ function TransactionRow({
             />
             <span className="text-xs text-slate-300">Exclude from charts</span>
           </label>
-          <p className="text-[11px] text-slate-600 mt-1">Hidden from the spending breakdown and daily trend, but still counted in totals.</p>
+          <p className="text-[11px] text-slate-500 mt-1">Hidden from the spending breakdown and daily trend, but still counted in totals.</p>
         </div>
         <div>
           <label className="text-xs text-slate-400 mb-1 block">Type</label>
@@ -380,8 +385,9 @@ function TransactionRow({
               <button
                 key={t}
                 onClick={() => setEditType(t)}
+                aria-pressed={editType === t}
                 className={cn(
-                  "flex-1 py-1.5 rounded-lg text-sm font-medium transition-colors capitalize",
+                  "flex-1 py-2 rounded-lg text-sm font-medium transition-colors capitalize",
                   editType === t
                     ? t === "income"
                       ? "bg-emerald-600 text-white"
@@ -400,14 +406,14 @@ function TransactionRow({
         <div className="flex gap-2 justify-end">
           <button
             onClick={() => setEditing(false)}
-            className="btn-ghost text-sm px-3 py-1.5"
+            className="btn-ghost text-sm px-3 py-2"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="btn-primary text-sm px-4 py-1.5 disabled:opacity-50"
+            className="btn-primary text-sm px-4 py-2 disabled:opacity-50"
           >
             {isSaving ? "Saving…" : "Save"}
           </button>
@@ -477,30 +483,49 @@ function TransactionRow({
           {isIncome ? "+" : "−"}
           {formatCurrency(tx.amount)}
         </span>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
+        {confirmingDelete ? (
+          <div className="flex items-center gap-1.5 animate-fade-in">
+            <button
+              onClick={handleDelete}
+              className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-medium transition-colors [@media(hover:none)]:min-h-11"
+            >
+              Delete
+            </button>
+            <button
+              onClick={() => setConfirmingDelete(false)}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-medium transition-colors [@media(hover:none)]:min-h-11"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
           <button
             onClick={() => setEditing(true)}
-            className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-500 hover:text-slate-300 transition-colors text-xs"
+            className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
             title="Edit"
+            aria-label={`Edit ${tx.category} transaction`}
           >
-            ✏️
+            <Pencil className="w-4 h-4" aria-hidden="true" />
           </button>
           <button
-            onClick={handleDelete}
+            onClick={() => setConfirmingDelete(true)}
             disabled={isDeleting}
-            className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition-colors text-xs disabled:opacity-40"
+            className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition-colors disabled:opacity-40 flex items-center justify-center [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
             title="Delete"
+            aria-label={`Delete ${tx.category} transaction`}
           >
             {isDeleting ? (
-              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
             ) : (
-              <span>🗑️</span>
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
             )}
           </button>
         </div>
+        )}
       </div>
     </div>
     {rowError && (

@@ -13,10 +13,9 @@ export default function DashboardLayout({
     <SidebarProvider>
       <div className="flex flex-col min-h-dvh">
         <TopLoadingBar />
-        <DemoBanner />
         <div className="flex flex-1">
           <NavBar />
-          <MainWrapper>{children}</MainWrapper>
+          <MainWrapper banner={<DemoBanner />}>{children}</MainWrapper>
         </div>
       </div>
     </SidebarProvider>

@@ -102,7 +102,7 @@ When `DATABASE_URL` is set, all `POSTGRES_*` variables are ignored and the app u
 
 ## Architecture
 
-**Stack:** Next.js 16 App Router · React 18 · Prisma 6 (PostgreSQL/Supabase or SQLite) · NextAuth v4 · SWR 2 · Recharts · Tailwind CSS · IndexedDB (`idb@8`) · `bcryptjs` (password hashing) · `zod` (input validation) · `clsx` + `tailwind-merge` (`cn()` helper)
+**Stack:** Next.js 16 App Router · React 18 · Prisma 6 (PostgreSQL/Supabase or SQLite) · NextAuth v4 · SWR 2 · Recharts · Tailwind CSS · `lucide-react` (icons) · IndexedDB (`idb@8`) · `bcryptjs` (password hashing) · `zod` (input validation) · `clsx` + `tailwind-merge` (`cn()` helper)
 
 ### Data flow
 
@@ -199,13 +199,14 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `context/SyncProvider.tsx` | React context: online state, pending count, failed count, sync trigger, SW registration. Exposes `{ isOnline, pendingCount, failedCount, isSyncing, syncNow, refreshPendingCount, userId }`. Runs `reconcileAfterSync` on first load while online. Must be inside `SessionProvider`. |
 | `hooks/useDashboardState.ts` | All dashboard state, effects, memos, and handlers extracted from `DashboardContent`. Returns everything the JSX needs including `handleAdd`, `handleReplace`, `handleDelete`, `handleUpdate`. |
 | `hooks/useOnlineStatus.ts` | Thin hook: `navigator.onLine` + `online`/`offline` events. |
+| `hooks/useDialogBehavior.ts` | Shared modal/sheet behavior: Escape-to-close, body scroll lock, focus-on-open/restore-on-close. Used by `BudgetManager` and `QuickAddSheet` — apply it (plus `role="dialog"` / `aria-modal`) to any new dialog. |
 | `app/api/sync/route.ts` | REST endpoint for SW background sync. Mirrors `lib/actions.ts` ownership checks. Uses upsert on `clientId` for add-op deduplication. |
 | `app/api/export/route.ts` | GET endpoint for CSV export. Accepts `month`, `year`, `category`, `label`, `q` query params. Returns `text/csv` attachment scoped to the authenticated user. |
 | `public/sw.js` | Service worker: static caching + BackgroundSync drain. Plain JS, raw IDB cursor API. |
 | `components/DashboardContent.tsx` | Thin client orchestrator: calls `useDashboardState(props)` and renders JSX. No state or logic lives here directly. |
 | `components/StatCard.tsx` | Standalone stat card with gradient background, MoM delta badge, and income/expense/balance colour variants. |
 | `components/ExpenseInput.tsx` | Quick-add input with Exp/Inc type toggle pill. Offline-aware: routes to `applyLocalMutation` when offline. |
-| `components/TransactionList.tsx` | Renders rows with label badges, amber "Pending" badge for unsynced items, and a grey "Off-chart" badge when `excludeFromStats` is set; inline edit/delete are offline-aware. The inline edit form includes a `LabelEditor`, a `BudgetExcludeSelect` (per-transaction `excludedBudgetIds`, expenses only), and an "Exclude from charts" checkbox (`excludeFromStats`, all types). Delete shows spinner while in-flight; edit form dims (`opacity-50`) while saving. `CategoryCombobox` receives `CategoryOption[]` for icon display. |
+| `components/TransactionList.tsx` | Renders rows with label badges, amber "Pending" badge for unsynced items, and a grey "Off-chart" badge when `excludeFromStats` is set; inline edit/delete are offline-aware. The inline edit form includes a `LabelEditor`, a `BudgetExcludeSelect` (per-transaction `excludedBudgetIds`, expenses only), and an "Exclude from charts" checkbox (`excludeFromStats`, all types). Delete uses an inline two-step confirm (no native `confirm()`) and shows a spinner while in-flight; edit form dims (`opacity-50`) while saving. `CategoryCombobox` receives `CategoryOption[]` for icon display. |
 | `components/CategoryCombobox.tsx` | Searchable category dropdown. Accepts `categories: CategoryOption[]` — renders icon alongside name. Has "Use …" option for free-text entry. |
 | `components/CategoryManager.tsx` | Settings category list with inline edit mode for custom categories (name + icon + colour picker). Default categories show a "Default" badge; custom categories show pencil + delete icons. |
 | `components/budgets/BudgetManager.tsx` | Dashboard modal to create/edit/delete budgets. Supports the four `budgetType`s (overall / category / excluded / label). Dynamically imported. |
@@ -214,7 +215,7 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `components/MonthSelector.tsx` | Month/year navigation control used on the dashboard. |
 | `components/SpendingInsights.tsx` | Spending pace/burn-rate analysis card. |
 | `components/QuickAddSheet.tsx` | Bottom-sheet wrapper for `ExpenseInput` on mobile. |
-| `components/NavBar.tsx` | Top navigation bar. |
+| `components/NavBar.tsx` | Navigation shell: fixed desktop sidebar (collapsible, width synced via `SidebarContext`) + fixed mobile bottom nav with safe-area padding. Lucide icons. |
 | `components/Providers.tsx` | Composes `SessionProvider` + `SyncProvider` at the app root. |
 | `components/charts/SpendingPieChart.tsx` | Category spending pie chart (Recharts). |
 | `components/charts/TrendChart.tsx` | Daily income/expense area chart (Recharts). |
@@ -343,6 +344,18 @@ NextAuth v4 with credentials provider. **Multi-user app with admin-only account 
 ### Styling
 
 Tailwind with dark mode forced via `class="dark"` on `<html>`. Custom utility classes (`card`, `input-base`, `btn-primary`, `badge`, etc.) are defined in `app/globals.css`.
+
+UI conventions (established in the Jul 2026 polish pass — full details in `docs/UI_POLISH_JUL2026.md`):
+
+- **Icons**: structural UI icons come from `lucide-react`; emoji only as data (category icons, brand mark). Icon-only buttons need `aria-label`; the icon itself gets `aria-hidden`.
+- **Brand color**: use the `brand` / `brand-light` / `brand-violet` tokens from `tailwind.config.ts` (or `theme(colors.brand.*)` in CSS) — never inline `#4f46e5`/`#6366f1`/`#7c3aed`.
+- **Radius scale**: cards `rounded-2xl`, controls `rounded-xl`, badges/pills `rounded-full`, small chips `rounded-lg`; skeletons match the component they stand in for.
+- **Touch targets**: compact icon buttons get ≥44px hit areas on touch via `[@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11`.
+- **Inputs**: `text-base sm:text-sm` (16px on mobile prevents iOS focus-zoom).
+- **Destructive actions**: inline two-step confirm (see `TransactionList` / `RecurringRow`), never native `confirm()`.
+- **Dialogs**: `hooks/useDialogBehavior.ts` + `role="dialog"` + `aria-modal`. Errors: `role="alert"`; transient status: `role="status"`/`aria-live="polite"`. Cancel buttons: `.btn-ghost`. Neutrals: `slate-*` only.
+
+**Dev gotcha**: `public/sw.js` caches `/_next/static/**` cache-first, so a browser with the SW registered serves stale CSS/JS in dev even after a server restart. Unregister the SW + clear `caches` before visually verifying style changes.
 
 
 ## Auto-generated signatures

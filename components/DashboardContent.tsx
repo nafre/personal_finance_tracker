@@ -14,6 +14,7 @@ import { StatCard } from "@/components/StatCard";
 import { BudgetProgress } from "@/components/budgets/BudgetProgress";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { formatCurrency, cn } from "@/lib/utils";
+import { TrendingUp, TrendingDown, Scale, CalendarDays } from "lucide-react";
 import type { Transaction, CategoryData, DailyData, RecurringTransaction, Budget, Period } from "@/types";
 
 const BudgetManager = dynamic(
@@ -186,13 +187,13 @@ export function DashboardContent(props: DashboardContentProps) {
 
       {/* Summary stats */}
       <div data-testid="stat-cards" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Income" amount={displayIncome} variant="income" icon="📈" momDelta={incomeDelta} deltaLabel={deltaLabel} />
-        <StatCard label="Expenses" amount={displayExpenses} variant="expense" icon="📉" momDelta={expenseDelta} deltaLabel={deltaLabel} />
-        <StatCard label="Net" amount={displayBalance} variant="balance" icon="⚖️" subtitle={savingsLabel} />
+        <StatCard label="Income" amount={displayIncome} variant="income" icon={<TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />} momDelta={incomeDelta} deltaLabel={deltaLabel} />
+        <StatCard label="Expenses" amount={displayExpenses} variant="expense" icon={<TrendingDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />} momDelta={expenseDelta} deltaLabel={deltaLabel} />
+        <StatCard label="Net" amount={displayBalance} variant="balance" icon={<Scale className="w-3.5 h-3.5 sm:w-4 sm:h-4" />} subtitle={savingsLabel} />
         {isMonthView ? (
-          <StatCard label={isCurrentMonth ? "Today's Spend" : "Daily Avg"} amount={dailySpend} variant="expense" icon="📅" />
+          <StatCard label={isCurrentMonth ? "Today's Spend" : "Daily Avg"} amount={dailySpend} variant="expense" icon={<CalendarDays className="w-3.5 h-3.5 sm:w-4 sm:h-4" />} />
         ) : (
-          <StatCard label="Avg Spend / mo" amount={avgMonthlySpend} variant="expense" icon="📅" />
+          <StatCard label="Avg Spend / mo" amount={avgMonthlySpend} variant="expense" icon={<CalendarDays className="w-3.5 h-3.5 sm:w-4 sm:h-4" />} />
         )}
       </div>
 

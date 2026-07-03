@@ -6,28 +6,21 @@ import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/context/SidebarContext";
 import { useState, useEffect } from "react";
+import {
+  LayoutDashboard,
+  ReceiptText,
+  Settings,
+  LogOut,
+  ChevronLeft,
+  ChevronRight,
+  type LucideIcon,
+} from "lucide-react";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: "📊" },
-  { href: "/transactions", label: "Transactions", icon: "📋" },
-  { href: "/settings", label: "Settings", icon: "🔧" },
+const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/transactions", label: "Transactions", icon: ReceiptText },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
-
-function ChevronLeftIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="15 18 9 12 15 6" />
-    </svg>
-  );
-}
-
-function ChevronRightIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  );
-}
 
 function dispatchNavStart(href: string, currentPathname: string) {
   if (currentPathname !== href) {
@@ -51,7 +44,9 @@ export function NavBar() {
         data-testid="sidebar"
         className={cn(
           "hidden md:flex flex-col min-h-dvh bg-slate-900 border-r border-slate-800 p-3 fixed left-0 top-0 z-30",
-          "transition-[width] duration-300 ease-in-out",
+          // Suppress the width transition until after hydration so the
+          // localStorage-restored collapsed state doesn't animate on load.
+          mounted && "transition-[width] duration-300 ease-in-out",
           collapsed ? "w-16" : "w-56"
         )}
       >
@@ -61,19 +56,21 @@ export function NavBar() {
           onClick={toggle}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="absolute -right-3 top-6 z-40 w-6 h-6 rounded-full bg-slate-700 border border-slate-600 text-slate-400 hover:text-slate-100 hover:bg-slate-600 hover:border-slate-500 transition-colors flex items-center justify-center shadow-md"
+          aria-expanded={!collapsed}
+          className="absolute -right-3 top-6 z-40 w-6 h-6 rounded-full bg-slate-700 border border-slate-600 text-slate-400 hover:text-slate-100 hover:bg-slate-600 hover:border-slate-500 transition-colors flex items-center justify-center shadow-md after:absolute after:-inset-2.5 after:content-['']"
         >
-          {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+          {collapsed ? (
+            <ChevronRight className="w-4 h-4" strokeWidth={2.5} aria-hidden="true" />
+          ) : (
+            <ChevronLeft className="w-4 h-4" strokeWidth={2.5} aria-hidden="true" />
+          )}
         </button>
 
         {/* Brand */}
         <div className={cn("flex items-center mb-8 pt-1", collapsed ? "justify-center" : "gap-3 px-1")}>
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0"
-            style={{
-              background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
-              boxShadow: "0 4px 12px rgba(99,102,241,0.4)",
-            }}
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0 bg-gradient-to-br from-brand to-brand-violet shadow-[0_4px_12px_rgba(99,102,241,0.4)]"
+            aria-hidden="true"
           >
             💸
           </div>
@@ -89,11 +86,13 @@ export function NavBar() {
         <nav className="flex-1 space-y-1">
           {NAV_ITEMS.map((item) => {
             const isActive = mounted && pathname === item.href;
+            const Icon = item.icon;
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 title={collapsed ? item.label : undefined}
+                aria-label={collapsed ? item.label : undefined}
                 onClick={() => dispatchNavStart(item.href, pathname)}
                 className={cn(
                   "flex items-center rounded-lg text-sm font-medium transition-colors w-full",
@@ -104,7 +103,7 @@ export function NavBar() {
                   isActive && !collapsed && "border-l-2 border-indigo-500"
                 )}
               >
-                <span className="text-base leading-none">{item.icon}</span>
+                <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
                 {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
               </Link>
             );
@@ -116,12 +115,13 @@ export function NavBar() {
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
             title={collapsed ? "Sign out" : undefined}
+            aria-label={collapsed ? "Sign out" : undefined}
             className={cn(
               "flex items-center rounded-lg text-sm text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition-colors w-full",
               collapsed ? "justify-center py-3" : "gap-3 px-3 py-2.5"
             )}
           >
-            <span className="text-base leading-none">🚪</span>
+            <LogOut className="w-5 h-5 shrink-0" aria-hidden="true" />
             {!collapsed && <span className="whitespace-nowrap">Sign out</span>}
           </button>
         </div>
@@ -130,27 +130,30 @@ export function NavBar() {
       {/* Mobile bottom nav */}
       <nav
         data-testid="bottom-nav"
-        className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 flex"
+        className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 flex pb-[env(safe-area-inset-bottom)]"
       >
-        {NAV_ITEMS.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => dispatchNavStart(item.href, pathname)}
-            className={cn(
-              "flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors",
-              mounted && pathname === item.href ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
-            )}
-          >
-            <span className="text-lg leading-none">{item.icon}</span>
-            {item.label}
-          </Link>
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => dispatchNavStart(item.href, pathname)}
+              className={cn(
+                "flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors",
+                mounted && pathname === item.href ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
+              )}
+            >
+              <Icon className="w-5 h-5" aria-hidden="true" />
+              {item.label}
+            </Link>
+          );
+        })}
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
           className="flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium text-slate-500 hover:text-rose-400 transition-colors"
         >
-          <span className="text-lg leading-none">🚪</span>
+          <LogOut className="w-5 h-5" aria-hidden="true" />
           Sign out
         </button>
       </nav>

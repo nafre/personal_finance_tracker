@@ -32,12 +32,14 @@ export function SettingsTabs({ role, currentUserId, categories, users }: Setting
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-1 border-b border-slate-800">
+      <div role="tablist" className="flex gap-1 border-b border-slate-800">
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            role="tab"
+            aria-selected={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            className={`px-4 py-2.5 min-h-[44px] text-sm font-medium transition-colors border-b-2 -mb-px ${
               activeTab === tab.id
                 ? "border-indigo-500 text-indigo-400"
                 : "border-transparent text-slate-400 hover:text-slate-200"

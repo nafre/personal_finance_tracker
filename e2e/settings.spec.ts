@@ -16,7 +16,7 @@ test.describe("Settings", () => {
 
   test("category list", async ({ page }) => {
     // Admin users default to the Users tab — click Categories first
-    const categoriesTab = page.getByRole("button", { name: "Categories" });
+    const categoriesTab = page.getByRole("tab", { name: "Categories" });
     if (await categoriesTab.isVisible()) {
       await categoriesTab.click();
     }
