@@ -155,14 +155,17 @@ async function _fetchDashboardData(
   userId: string,
   start: Date,
   end: Date,
-  granularity: TrendGranularity
+  granularity: TrendGranularity,
+  withWealthSeries = false
 ) {
   const dateFilter = { gte: start, lte: end };
 
   // Run aggregation queries + a bounded recent-transactions query in parallel.
   // Totals include every transaction; the category breakdown and trend
   // exclude transactions flagged `excludeFromStats` (charts-only exclusion).
-  const [transactionsRaw, typeBreakdown, categoryBreakdown, trendRows] = await Promise.all([
+  // `withWealthSeries` (all-time view) adds a ledger-basis trend series — the
+  // wealth curve plots cumulative net balance, so off-chart rows must count.
+  const [transactionsRaw, typeBreakdown, categoryBreakdown, trendRows, wealthRows] = await Promise.all([
     db.transaction.findMany({
       where: { userId, date: dateFilter },
       orderBy: { date: "desc" },
@@ -179,6 +182,9 @@ async function _fetchDashboardData(
       _sum: { amount: true },
     }),
     getTrendRows(userId, start, end, granularity),
+    withWealthSeries
+      ? getTrendRows(userId, start, end, granularity, true)
+      : Promise.resolve(null),
   ]);
 
   const transactions = transactionsRaw.map(normalizeTx);
@@ -207,6 +213,12 @@ async function _fetchDashboardData(
       ? buildMonthlyTrend(start, end, trendRows)
       : buildDailyTrend(start, trendRows);
 
+  const wealthData = wealthRows
+    ? granularity === "month"
+      ? buildMonthlyTrend(start, end, wealthRows)
+      : buildDailyTrend(start, wealthRows)
+    : null;
+
   return {
     transactions,
     totalIncome,
@@ -214,6 +226,7 @@ async function _fetchDashboardData(
     netBalance: totalIncome - totalExpenses,
     categoryData,
     dailyData,
+    wealthData,
     topCategory: categoryData[0] ?? null,
   };
 }
@@ -310,10 +323,17 @@ export async function getDashboardData(month: number, year: number) {
 export async function getRangeDashboardData(
   startISO: string,
   endISO: string,
-  granularity: TrendGranularity
+  granularity: TrendGranularity,
+  withWealthSeries = false
 ) {
   const userId = await getAuthenticatedUserId();
-  return _getDashboardDataCached(userId, new Date(startISO), new Date(endISO), granularity);
+  return _getDashboardDataCached(
+    userId,
+    new Date(startISO),
+    new Date(endISO),
+    granularity,
+    withWealthSeries
+  );
 }
 
 // Earliest transaction date for the user (bounds the all-time range so the

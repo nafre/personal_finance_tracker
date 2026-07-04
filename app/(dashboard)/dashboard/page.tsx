@@ -67,11 +67,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     prevData = prev;
     deltaLabel = "vs last year";
   } else {
-    // all-time: earliest transaction → now, no comparison
+    // all-time: earliest transaction → now, no comparison. The extra wealth
+    // series is ledger-basis (includes off-chart transactions) for WealthCurve.
     const earliestISO = await getEarliestTransactionDate();
     rangeStart = earliestISO ? new Date(earliestISO) : new Date(year, 0, 1);
     rangeEnd = new Date();
-    data = await getRangeDashboardData(rangeStart.toISOString(), rangeEnd.toISOString(), "month");
+    data = await getRangeDashboardData(rangeStart.toISOString(), rangeEnd.toISOString(), "month", true);
     prevData = { totalExpenses: 0, totalIncome: 0, categoryData: [], dailyData: [] };
     deltaLabel = "";
   }
@@ -95,6 +96,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         initialTotalExpenses={data.totalExpenses}
         initialCategoryData={data.categoryData}
         initialDailyData={data.dailyData}
+        initialWealthData={data.wealthData ?? []}
         initialTopCategory={data.topCategory}
         initialRecurring={recurring}
         initialBudgets={budgets}

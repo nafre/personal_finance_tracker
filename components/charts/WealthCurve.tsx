@@ -15,7 +15,7 @@ import { cn, formatCurrency } from "@/lib/utils";
 import type { DailyData } from "@/types";
 
 interface WealthCurveProps {
-  /** All-time monthly buckets (chart basis — excludeFromStats filtered). */
+  /** All-time monthly buckets (ledger basis — includes off-chart transactions). */
   data: DailyData[];
 }
 
@@ -37,8 +37,10 @@ function WealthTooltip({ active, payload, label }: any) {
 }
 
 // Running sum of (income − expense) from the first transaction to today — the
-// all-time view's hero chart. Derived from the same chart-basis buckets as the
-// trend chart, so the endpoint matches the plotted line exactly.
+// all-time view's hero chart. Ledger basis (unlike the trend chart): excluding
+// a transaction here would offset the cumulative line permanently, so off-chart
+// rows still count. The headline derives from the plotted points, matching the
+// curve endpoint exactly.
 export function WealthCurve({ data }: WealthCurveProps) {
   const { points, finalBalance, hasNegative } = useMemo(() => {
     let running = 0;

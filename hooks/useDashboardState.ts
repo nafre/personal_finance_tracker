@@ -206,17 +206,27 @@ export function useDashboardState({
   // Savings rate: share of income kept (net / income). Null when no income.
   const savingsRate = displayIncome > 0 ? (displayBalance / displayIncome) * 100 : null;
 
+  // Chart-basis expense total: dailyData is already excludeFromStats-filtered
+  // (server-side + optimistic patches), so summing it drops off-chart rows.
+  // Pattern stats (Daily Avg, Avg Spend/mo, spending mix) use this basis so a
+  // flagged one-off purchase doesn't drown the "typical spending" signal; the
+  // ledger totals (stat cards, savings rate) still include everything.
+  const chartExpenses = useMemo(
+    () => dailyData.reduce((sum, d) => sum + d.expense, 0),
+    [dailyData]
+  );
+
   // Average spend per active month — only meaningful in the wider (year /
   // all-time) views, where dailyData holds one bucket per month.
   const avgMonthlySpend = useMemo(() => {
     if (isMonthView) return 0;
     const activeMonths = dailyData.filter((d) => d.expense > 0).length;
-    return activeMonths > 0 ? displayExpenses / activeMonths : 0;
-  }, [isMonthView, dailyData, displayExpenses]);
+    return activeMonths > 0 ? chartExpenses / activeMonths : 0;
+  }, [isMonthView, dailyData, chartExpenses]);
 
   // Fixed (recurring) vs discretionary spend for the month. Discretionary is
   // whatever's left over once the fixed commitments are covered.
-  const discretionarySpend = Math.max(0, displayExpenses - fixedMonthlyExpense);
+  const discretionarySpend = Math.max(0, chartExpenses - fixedMonthlyExpense);
 
   const { isCurrentMonth, dailySpend } = useMemo(() => {
     // The "Today's spend / daily avg" card is month-only; skip the computation
@@ -234,12 +244,14 @@ export function useDashboardState({
         .reduce((s, t) => s + t.amount, 0);
       return { isCurrentMonth: true, dailySpend: spend };
     }
+    // Past months show a Daily Avg — a pattern stat, so chart basis: off-chart
+    // one-offs would otherwise skew the "typical day" figure.
     const daysInMonth = new Date(year, month, 0).getDate();
     return {
       isCurrentMonth: false,
-      dailySpend: daysInMonth > 0 ? displayExpenses / daysInMonth : 0,
+      dailySpend: daysInMonth > 0 ? chartExpenses / daysInMonth : 0,
     };
-  }, [isMonthView, mergedTransactions, month, year, displayExpenses]);
+  }, [isMonthView, mergedTransactions, month, year, chartExpenses]);
 
   const recentCategories = useMemo(() => {
     const seen = new Set<string>();

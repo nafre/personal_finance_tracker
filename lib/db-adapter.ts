@@ -51,14 +51,20 @@ export type TrendGranularity = "day" | "month";
 
 // Aggregated income/expense totals bucketed by day or by month, depending on
 // `granularity`. The `day` field holds the bucket key: an ISO date/month string
-// on SQLite, or a truncated Date on Postgres. Always excludes `excludeFromStats`
-// rows (charts-only exclusion) on both dialects.
+// on SQLite, or a truncated Date on Postgres. Excludes `excludeFromStats` rows
+// (chart basis) unless `includeOffChart` is set — the ledger-basis variant used
+// by the wealth curve, where cumulative net balance must reflect every
+// transaction.
 export async function getTrendRows(
   userId: string,
   start: Date,
   end: Date,
-  granularity: TrendGranularity = "day"
+  granularity: TrendGranularity = "day",
+  includeOffChart = false
 ): Promise<Array<{ day: string | Date; type: string; total: number | bigint }>> {
+  // Bound as 1/0 so the same template works on both dialects: when 1, the
+  // excludeFromStats predicate is short-circuited away.
+  const all = includeOffChart ? 1 : 0;
   if (granularity === "month") {
     if (IS_SQLITE) {
       // SQLite stores DateTime as integer epoch-ms, so convert to seconds and
@@ -67,7 +73,7 @@ export async function getTrendRows(
         SELECT strftime('%Y-%m', date / 1000, 'unixepoch') AS day, type, SUM(amount) AS total
         FROM transactions
         WHERE userId = ${userId} AND date >= ${start} AND date <= ${end}
-          AND excludeFromStats = 0
+          AND (${all} = 1 OR excludeFromStats = 0)
         GROUP BY day, type
       `;
     }
@@ -75,7 +81,7 @@ export async function getTrendRows(
       SELECT date_trunc('month', date) AS day, type, SUM(amount) AS total
       FROM transactions
       WHERE "userId" = ${userId} AND date >= ${start} AND date <= ${end}
-        AND "excludeFromStats" = false
+        AND (${all} = 1 OR "excludeFromStats" = false)
       GROUP BY day, type
     `;
   }
@@ -86,7 +92,7 @@ export async function getTrendRows(
       SELECT strftime('%Y-%m-%d', date / 1000, 'unixepoch') AS day, type, SUM(amount) AS total
       FROM transactions
       WHERE userId = ${userId} AND date >= ${start} AND date <= ${end}
-        AND excludeFromStats = 0
+        AND (${all} = 1 OR excludeFromStats = 0)
       GROUP BY day, type
     `;
   }
@@ -94,7 +100,7 @@ export async function getTrendRows(
     SELECT date_trunc('day', date) AS day, type, SUM(amount) AS total
     FROM transactions
     WHERE "userId" = ${userId} AND date >= ${start} AND date <= ${end}
-      AND "excludeFromStats" = false
+      AND (${all} = 1 OR "excludeFromStats" = false)
     GROUP BY day, type
   `;
 }

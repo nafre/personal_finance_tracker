@@ -56,6 +56,8 @@ interface DashboardContentProps {
   initialTotalExpenses: number;
   initialCategoryData: CategoryData[];
   initialDailyData: DailyData[];
+  /** Ledger-basis monthly buckets for WealthCurve (all-time view only; empty otherwise). */
+  initialWealthData: DailyData[];
   initialTopCategory: CategoryData | null;
   initialRecurring: RecurringTransaction[];
   initialBudgets: Budget[];
@@ -259,10 +261,11 @@ export function DashboardContent(props: DashboardContentProps) {
         );
       })()}
 
-      {/* Wealth curve — all-time hero: running net balance since day one */}
+      {/* Wealth curve — all-time hero: running net balance since day one.
+          Ledger basis: off-chart transactions still count, since real money moved. */}
       {period === "all" && (
         <DashboardErrorBoundary section="Wealth curve">
-          <WealthCurve data={dailyData} />
+          <WealthCurve data={props.initialWealthData} />
         </DashboardErrorBoundary>
       )}
 
