@@ -22,11 +22,11 @@ A full-app UI review (visual inspection of Playwright snapshots at 390/768/1280p
 
 ### Foundation
 - `tailwind.config.ts` — removed the unused `surface` palette (it contradicted actual usage); added `brand` color tokens.
-- `app/globals.css` — `.btn-primary`/`.fab` gradients now reference `theme(colors.brand.*)`; removed unused `--radius` var; FAB offset is safe-area aware (`calc(80px + env(safe-area-inset-bottom))`).
+- `app/globals.css` — `.btn-primary`/`.fab` gradients now reference `theme(colors.brand.*)`; removed unused `--radius` var; FAB offset is safe-area aware (`calc(80px + var(--safe-bottom))`). `--safe-bottom` resolves to `env(safe-area-inset-bottom)` only in installed-PWA mode (`display-mode: standalone`/`fullscreen`) and `0px` in browser tabs — Firefox on Android leaks its dynamic toolbar height into the inset, which showed as a big dead strip under the bottom nav at scroll-top.
 - `app/layout.tsx` — removed `maximumScale: 1` from the viewport export (pinch-zoom re-enabled, WCAG).
 
 ### Navigation shell
-- `components/NavBar.tsx` — emoji nav icons → lucide (`LayoutDashboard`, `ReceiptText`, `Settings`, `LogOut`); mobile bottom nav gets `pb-[env(safe-area-inset-bottom)]`; collapse toggle has an extended hit area + `aria-expanded`; sidebar width transition is suppressed until after hydration (no more collapse animation on page load); collapsed-mode links get `aria-label`s.
+- `components/NavBar.tsx` — emoji nav icons → lucide (`LayoutDashboard`, `ReceiptText`, `Settings`, `LogOut`); mobile bottom nav gets `pb-[var(--safe-bottom)]` (PWA-only safe-area padding, see Foundation); collapse toggle has an extended hit area + `aria-expanded`; sidebar width transition is suppressed until after hydration (no more collapse animation on page load); collapsed-mode links get `aria-label`s.
 - `components/MainWrapper.tsx` / `app/(dashboard)/layout.tsx` / `components/DemoBanner.tsx` — DemoBanner moved into the content column as a rounded card (a fixed sidebar previously overlapped it) and passed as a `banner` prop since it's a server component inside a client wrapper.
 
 ### Dashboard widgets

@@ -3,6 +3,19 @@
 @tailwind utilities;
 
 @layer base {
+  /* Bottom safe-area inset, applied only in installed-PWA mode. In a regular
+     browser tab the browser manages its own bottom chrome, and Firefox on
+     Android leaks its dynamic toolbar height into env(safe-area-inset-bottom)
+     — producing a large dead strip under fixed-bottom elements at scroll-top. */
+  :root {
+    --safe-bottom: 0px;
+  }
+  @media (display-mode: standalone), (display-mode: fullscreen) {
+    :root {
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+  }
+
   * {
     box-sizing: border-box;
     padding: 0;
@@ -40,7 +53,7 @@
     @apply fixed z-40 flex items-center justify-center
            w-14 h-14 rounded-full text-white text-2xl
            active:scale-95 transition-all;
-    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(80px + var(--safe-bottom));
     right: 1.25rem;
     background: linear-gradient(135deg, theme(colors.brand.DEFAULT), theme(colors.brand.violet));
     box-shadow: 0 8px 24px rgba(99,102,241,0.45), 0 2px 8px rgba(0,0,0,0.3);
@@ -54,7 +67,7 @@
     @apply fixed bottom-0 left-0 right-0 z-50 bg-slate-900
            border-t border-slate-800 rounded-t-2xl
            transition-transform duration-300;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: var(--safe-bottom);
   }
 
   .bottom-sheet-handle {

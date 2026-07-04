@@ -130,7 +130,7 @@ export function NavBar() {
       {/* Mobile bottom nav */}
       <nav
         data-testid="bottom-nav"
-        className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 flex pb-[env(safe-area-inset-bottom)]"
+        className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 flex pb-[var(--safe-bottom)]"
       >
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
