@@ -18,6 +18,9 @@ interface SyncContextValue {
   pendingCount: number;
   failedCount: number;
   isSyncing: boolean;
+  /** Bumped each time a reconcile purges stale IDB records — consumers that
+   *  merge IDB data into React state re-read when it changes. */
+  reconcileCount: number;
   syncNow: () => Promise<void>;
   refreshPendingCount: () => Promise<void>;
   userId: string;
@@ -28,6 +31,7 @@ const SyncContext = createContext<SyncContextValue>({
   pendingCount: 0,
   failedCount: 0,
   isSyncing: false,
+  reconcileCount: 0,
   syncNow: async () => {},
   refreshPendingCount: async () => {},
   userId: "",
@@ -46,6 +50,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const [pendingCount, setPendingCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [reconcileCount, setReconcileCount] = useState(0);
 
   // useRef mutex so rapid calls (e.g. two "online" events) can't start parallel drains
   const isSyncingRef = useRef(false);
@@ -84,6 +89,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       let reconciled = 0;
       if (userId) {
         reconciled = await reconcileAfterSync(userId);
+      }
+      if (reconciled > 0) {
+        setReconcileCount((c) => c + 1);
       }
       if (synced > 0 || reconciled > 0) {
         router.refresh();
@@ -140,13 +148,17 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId) return;
     if (typeof navigator !== "undefined" && navigator.onLine) {
-      void reconcileAfterSync(userId);
+      void reconcileAfterSync(userId).then((deleted) => {
+        // Signal consumers that captured IDB rows into state before this
+        // reconcile finished (e.g. the dashboard's pending merge) to re-read.
+        if (deleted > 0) setReconcileCount((c) => c + 1);
+      });
     }
   }, [userId]);
 
   return (
     <SyncContext.Provider
-      value={{ isOnline, pendingCount, failedCount, isSyncing, syncNow, refreshPendingCount, userId }}
+      value={{ isOnline, pendingCount, failedCount, isSyncing, reconcileCount, syncNow, refreshPendingCount, userId }}
     >
       {children}
     </SyncContext.Provider>

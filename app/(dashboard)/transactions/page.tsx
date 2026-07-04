@@ -230,6 +230,12 @@ export default function TransactionsPage() {
   const hasDateRange = !!(fromFilter && toFilter);
   const hasFilter = !!(categoryFilter || labelFilter || qFilter || fromFilter || toFilter);
 
+  // Icon/color chips for the quick-add category picker
+  const categoryOptions = useMemo(
+    () => categories.map((c) => ({ name: c.name, icon: c.icon, color: c.color })),
+    [categories]
+  );
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -239,7 +245,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Quick add */}
-      <ExpenseInput onAdd={handleAdd} />
+      <ExpenseInput onAdd={handleAdd} categories={categoryOptions} />
 
       {/* Filters */}
       <div data-testid="filter-bar" className="space-y-2">

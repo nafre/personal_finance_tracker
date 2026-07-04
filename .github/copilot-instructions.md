@@ -255,15 +255,6 @@ props BudgetProgressProps
 export BudgetProgress
 ```
 
-### components\charts\SpendingPieChart.tsx
-```
-component CustomTooltip
-component CustomLegend
-component SpendingPieChart
-props SpendingPieChartProps
-export SpendingPieChart
-```
-
 ### components\charts\TrendChart.tsx
 ```
 component CustomTooltip

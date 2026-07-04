@@ -113,7 +113,7 @@ The dashboard uses a **hybrid render pattern**:
 2. `DashboardContent` is a thin client orchestrator — it calls `useDashboardState(props)` and renders pure JSX. All state, effects, memos, and mutation handlers live in `hooks/useDashboardState.ts`.
 3. After a mutation completes, the handlers in `useDashboardState` update all affected state slices (`transactions`, `totalIncome`, `totalExpenses`, `categoryData`, `dailyData`) so the UI reflects changes without waiting for a server re-render.
 
-Props passed to `DashboardContent`: `initialTransactions`, `initialTotalIncome`, `initialTotalExpenses`, `initialCategoryData`, `initialDailyData`, `initialTopCategory`, `initialRecurring`, `initialBudgets`, `month`, `year`, `prevTotalExpenses`, `prevTotalIncome`, `prevCategoryData`.
+Props passed to `DashboardContent`: `initialTransactions`, `initialTotalIncome`, `initialTotalExpenses`, `initialCategoryData`, `initialDailyData`, `initialTopCategory`, `initialRecurring`, `initialBudgets`, `initialCategories`, `month`, `year`, `prevTotalExpenses`, `prevTotalIncome`, `prevCategoryData`.
 
 The transactions page (`/transactions`) is a **fully client-side** page. It fetches data via the `getTransactions` server action through **SWR**, keyed by a serialized filter object (`month`, `year`, `category`, `label`, `q`, `from`, `to`) — re-visiting a previously-seen filter returns cached data instantly while revalidating in the background. Cursor-based "Load more" pagination appends pages outside SWR; categories and budgets are fetched once on mount. A drop in `pendingCount` (sync completed) triggers a silent `mutate()` to clear "Pending" badges.
 
@@ -138,7 +138,7 @@ The app is offline-capable. Mutations made without network connectivity are queu
 
 3. **`app/api/sync/route.ts`** — `POST /api/sync`. REST endpoint used by the service worker (which cannot call server actions). Accepts `{ op, id?, payload? }`, validates session cookie, applies the same ownership checks as `lib/actions.ts`. Returns `{ success: true, id? }`. For `add` ops uses upsert on `clientId` (the temp ID) to safely deduplicate retries.
 
-4. **`context/SyncProvider.tsx`** — React context wrapping the whole app (inside `SessionProvider`). Exposes `{ isOnline, pendingCount, failedCount, isSyncing, syncNow, refreshPendingCount, userId }` (`failedCount` = local records carrying a `syncError`). Registers `/sw.js`, listens for `online`/`offline` events, auto-calls `syncNow()` on reconnect. Registers the `"expense-sync"` BackgroundSync tag whenever `pendingCount > 0`.
+4. **`context/SyncProvider.tsx`** — React context wrapping the whole app (inside `SessionProvider`). Exposes `{ isOnline, pendingCount, failedCount, isSyncing, reconcileCount, syncNow, refreshPendingCount, userId }` (`failedCount` = local records carrying a `syncError`; `reconcileCount` bumps whenever a reconcile purges stale IDB records — consumers that merge IDB rows into React state re-read on change). Registers `/sw.js`, listens for `online`/`offline` events, auto-calls `syncNow()` on reconnect. Registers the `"expense-sync"` BackgroundSync tag whenever `pendingCount > 0`.
 
 5. **`public/sw.js`** — service worker (plain JS, no bundler):
    - Cache-first for `/_next/static/**` and `/icons/**`.
@@ -196,7 +196,7 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `lib/parser.ts` | Parses natural-language input into `{category, amount, type, note, labels}`. Type inferred from `INCOME_KEYWORDS`. Labels parsed from `#tag` tokens (e.g. `food 20 #date`). |
 | `lib/utils.ts` | `cn`, `formatCurrency`, `formatDate`, `formatDateShort`, `getMonthName`, `getCurrentMonthYear`, `getPrevMonth`, `getNextMonth`, `getNextDueDate`, `getRecurringStatus`, `isPostedThisPeriod`, `toMonthlyAmount`, `countRemainingPayments`, `stringToColor`. Also exports `DEFAULT_CATEGORIES` (used server-side only — do not import in client components to avoid Turbopack module boundary conflicts). |
 | `lib/auth.ts` | NextAuth config. JWT callback stores `sessionVersion` alongside `userId`/`role`. Bootstrap path seeds default categories for the admin user on first login. |
-| `context/SyncProvider.tsx` | React context: online state, pending count, failed count, sync trigger, SW registration. Exposes `{ isOnline, pendingCount, failedCount, isSyncing, syncNow, refreshPendingCount, userId }`. Runs `reconcileAfterSync` on first load while online. Must be inside `SessionProvider`. |
+| `context/SyncProvider.tsx` | React context: online state, pending count, failed count, sync trigger, SW registration. Exposes `{ isOnline, pendingCount, failedCount, isSyncing, reconcileCount, syncNow, refreshPendingCount, userId }`. Runs `reconcileAfterSync` on first load while online and bumps `reconcileCount` when it purges records. Must be inside `SessionProvider`. |
 | `hooks/useDashboardState.ts` | All dashboard state, effects, memos, and handlers extracted from `DashboardContent`. Returns everything the JSX needs including `handleAdd`, `handleReplace`, `handleDelete`, `handleUpdate`. |
 | `hooks/useOnlineStatus.ts` | Thin hook: `navigator.onLine` + `online`/`offline` events. |
 | `hooks/useDialogBehavior.ts` | Shared modal/sheet behavior: Escape-to-close, body scroll lock, focus-on-open/restore-on-close. Used by `BudgetManager` and `QuickAddSheet` — apply it (plus `role="dialog"` / `aria-modal`) to any new dialog. |
@@ -205,8 +205,8 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `public/sw.js` | Service worker: static caching + BackgroundSync drain. Plain JS, raw IDB cursor API. |
 | `components/DashboardContent.tsx` | Thin client orchestrator: calls `useDashboardState(props)` and renders JSX. No state or logic lives here directly. |
 | `components/StatCard.tsx` | Standalone stat card with gradient background, MoM delta badge, and income/expense/balance colour variants. |
-| `components/ExpenseInput.tsx` | Quick-add input with Exp/Inc type toggle pill. Offline-aware: routes to `applyLocalMutation` when offline. |
-| `components/TransactionList.tsx` | Renders rows with label badges, amber "Pending" badge for unsynced items, and a grey "Off-chart" badge when `excludeFromStats` is set; inline edit/delete are offline-aware. The inline edit form includes a `LabelEditor`, a `BudgetExcludeSelect` (per-transaction `excludedBudgetIds`, expenses only), and an "Exclude from charts" checkbox (`excludeFromStats`, all types). Delete uses an inline two-step confirm (no native `confirm()`) and shows a spinner while in-flight; edit form dims (`opacity-50`) while saving. `CategoryCombobox` receives `CategoryOption[]` for icon display. |
+| `components/ExpenseInput.tsx` | Quick-add input with Exp/Inc type toggle pill and a visual category chip row (`categories: CategoryOption[]` prop — icon + colour tint, recently-used first; tap pre-fills the category token). Offline-aware: routes to `applyLocalMutation` when offline. |
+| `components/TransactionList.tsx` | Renders rows with label badges, amber "Pending" badge for unsynced items, and a grey "Off-chart" badge when `excludeFromStats` is set; inline edit/delete are offline-aware, and their online paths write through to the IDB mirror (`patchTransaction` / `deleteTransactionFromIDB` after server success) so other pages can't resurrect stale copies. The inline edit form includes a `LabelEditor`, a `BudgetExcludeSelect` (per-transaction `excludedBudgetIds`, expenses only), and an "Exclude from charts" checkbox (`excludeFromStats`, all types). Delete uses an inline two-step confirm (no native `confirm()`) and shows a spinner while in-flight; edit form dims (`opacity-50`) while saving. `CategoryCombobox` receives `CategoryOption[]` for icon display. |
 | `components/CategoryCombobox.tsx` | Searchable category dropdown. Accepts `categories: CategoryOption[]` — renders icon alongside name. Has "Use …" option for free-text entry. |
 | `components/CategoryManager.tsx` | Settings category list with inline edit mode for custom categories (name + icon + colour picker). Default categories show a "Default" badge; custom categories show pencil + delete icons. |
 | `components/budgets/BudgetManager.tsx` | Dashboard modal to create/edit/delete budgets. Supports the four `budgetType`s (overall / category / excluded / label). Dynamically imported. |
@@ -217,7 +217,6 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `components/QuickAddSheet.tsx` | Bottom-sheet wrapper for `ExpenseInput` on mobile. |
 | `components/NavBar.tsx` | Navigation shell: fixed desktop sidebar (collapsible, width synced via `SidebarContext`) + fixed mobile bottom nav with safe-area padding. Lucide icons. |
 | `components/Providers.tsx` | Composes `SessionProvider` + `SyncProvider` at the app root. |
-| `components/charts/SpendingPieChart.tsx` | Category spending pie chart (Recharts). |
 | `components/charts/TrendChart.tsx` | Daily income/expense area chart (Recharts). |
 | `components/recurring/RecurringList.tsx` | Client component owning recurring state. Syncs from `initialRecurring` via `useEffect`. |
 | `components/recurring/RecurringRow.tsx` | Individual recurring row: status badge, Post/Skip/Edit/Delete. Uses plain async/await (not startTransition). |
@@ -594,15 +593,6 @@ handler onUpdate
 component BudgetProgress
 props BudgetProgressProps
 export BudgetProgress
-```
-
-### components\charts\SpendingPieChart.tsx
-```
-component CustomTooltip
-component CustomLegend
-component SpendingPieChart
-props SpendingPieChartProps
-export SpendingPieChart
 ```
 
 ### components\charts\TrendChart.tsx

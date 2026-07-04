@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { memo, useState, useEffect, useRef, useCallback } from "react";
 import { updateTransaction, deleteTransaction, getCategories } from "@/lib/actions";
 import { applyLocalMutation } from "@/lib/sync";
+import { patchTransaction, deleteTransactionFromIDB } from "@/lib/idb";
 import { CategoryCombobox } from "@/components/CategoryCombobox";
 import { useSyncContext } from "@/context/SyncProvider";
 import { formatCurrency, formatDate, cn, stringToColor } from "@/lib/utils";
@@ -183,7 +184,9 @@ interface CategoryMeta {
   color: string;
 }
 
-function TransactionRow({
+// Memoized so list-level re-renders (e.g. a sibling row's optimistic update)
+// skip unchanged rows — parents must pass identity-stable callbacks and arrays.
+const TransactionRow = memo(function TransactionRow({
   tx,
   onDelete,
   onUpdate,
@@ -271,11 +274,29 @@ function TransactionRow({
 
     // Background server sync — on failure revert state and re-open the form
     // so the user can see the error and retry with their values still filled in
-    updateTransaction(tx.id, { ...updateData, date: new Date(editDate) }).catch(() => {
-      onUpdate(tx.id, snapshot);
-      setEditing(true);
-      setRowError("Update failed — please try again.");
-    });
+    updateTransaction(tx.id, { ...updateData, date: new Date(editDate) })
+      .then((updated) => {
+        // Write through to the IDB mirror so other pages don't resurrect the
+        // old values. No-ops when the record isn't mirrored; must never break
+        // the UI on IDB failure.
+        void patchTransaction(tx.id, {
+          category: updated.category,
+          amount: updated.amount,
+          type: updated.type as "income" | "expense",
+          note: updated.note ?? undefined,
+          labels: updated.labels ?? [],
+          excludedBudgetIds: updated.excludedBudgetIds ?? [],
+          excludeFromStats: updated.excludeFromStats ?? false,
+          date: new Date(updated.date).toISOString(),
+          syncStatus: "synced",
+          syncError: undefined,
+        }).catch(() => {});
+      })
+      .catch(() => {
+        onUpdate(tx.id, snapshot);
+        setEditing(true);
+        setRowError("Update failed — please try again.");
+      });
   }
 
   function handleDelete() {
@@ -300,9 +321,15 @@ function TransactionRow({
     // Optimistic: remove from UI immediately, fire server call in background.
     // On failure the transaction still exists server-side — restore the row.
     onDelete(tx.id);
-    deleteTransaction(tx.id).catch(() => {
-      onRestore(tx);
-    });
+    deleteTransaction(tx.id)
+      .then(() => {
+        // Remove the IDB mirror copy too, or the dashboard's pending-load
+        // merge resurrects the row as a ghost until the next reconcile.
+        void deleteTransactionFromIDB(tx.id).catch(() => {});
+      })
+      .catch(() => {
+        onRestore(tx);
+      });
   }
 
   const isIncome = tx.type === "income";
@@ -533,7 +560,7 @@ function TransactionRow({
     )}
     </>
   );
-}
+});
 
 export function TransactionList({
   transactions: initial,
@@ -565,18 +592,20 @@ export function TransactionList({
     };
   }, []);
 
-  function handleDelete(id: string) {
+  // Identity-stable handlers so the memoized rows don't re-render on every
+  // list render.
+  const handleDelete = useCallback((id: string) => {
     setTxs((prev) => prev.filter((t) => t.id !== id));
     onDelete?.(id);
-  }
+  }, [onDelete]);
 
-  function handleUpdate(id: string, data: Partial<Transaction>) {
+  const handleUpdate = useCallback((id: string, data: Partial<Transaction>) => {
     setTxs((prev) => prev.map((t) => (t.id === id ? { ...t, ...data } : t)));
     onUpdate?.(id, data);
-  }
+  }, [onUpdate]);
 
   // Re-insert a row whose server delete failed (it still exists remotely)
-  function handleRestore(tx: Transaction) {
+  const handleRestore = useCallback((tx: Transaction) => {
     setTxs((prev) =>
       prev.some((t) => t.id === tx.id)
         ? prev
@@ -586,7 +615,7 @@ export function TransactionList({
     setListError("Delete failed — transaction restored.");
     if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
     errorTimerRef.current = setTimeout(() => setListError(""), 4000);
-  }
+  }, [onRestore]);
 
   if (!txs.length) {
     return (

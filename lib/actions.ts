@@ -671,7 +671,14 @@ export async function deleteBudget(id: string) {
 
 export async function getUsedLabels(): Promise<string[]> {
   const userId = await getAuthenticatedUserId();
-  const rows = await db.transaction.findMany({ where: { userId }, select: { labels: true } });
+  // Practical upper bound — dedupes labels from the most recent transactions
+  // without scanning an unbounded history.
+  const rows = await db.transaction.findMany({
+    where: { userId },
+    select: { labels: true },
+    orderBy: { date: "desc" },
+    take: 10000,
+  });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const all = rows.flatMap((r) => parseLabels(r.labels as any));
   return [...new Set(all)].sort();

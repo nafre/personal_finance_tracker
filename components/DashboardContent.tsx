@@ -15,7 +15,7 @@ import { BudgetProgress } from "@/components/budgets/BudgetProgress";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { formatCurrency, cn } from "@/lib/utils";
 import { TrendingUp, TrendingDown, Scale, CalendarDays } from "lucide-react";
-import type { Transaction, CategoryData, DailyData, RecurringTransaction, Budget, Period } from "@/types";
+import type { Transaction, CategoryData, DailyData, RecurringTransaction, Budget, CategoryOption, Period } from "@/types";
 
 const BudgetManager = dynamic(
   () => import("@/components/budgets/BudgetManager").then((m) => ({ default: m.BudgetManager })),
@@ -41,6 +41,7 @@ interface DashboardContentProps {
   initialTopCategory: CategoryData | null;
   initialRecurring: RecurringTransaction[];
   initialBudgets: Budget[];
+  initialCategories: CategoryOption[];
   period: Period;
   month: number;
   year: number;
@@ -58,6 +59,7 @@ export function DashboardContent(props: DashboardContentProps) {
     dailyData,
     budgets,
     budgetSpending,
+    budgetOptions,
     showBudgetManager,
     setShowBudgetManager,
     sheetOpen,
@@ -112,13 +114,13 @@ export function DashboardContent(props: DashboardContentProps) {
   return (
     <div className="space-y-5">
       {/* Period selector */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-y-2">
         <MonthSelector period={period} month={month} year={year} />
         {topCategory && (
-          <div className="hidden sm:flex items-center gap-2 text-sm text-slate-400">
+          <div className="flex items-center gap-2 text-sm text-slate-400">
             <span>Top spend:</span>
             <span className="text-slate-200 font-medium">{topCategory.name}</span>
-            <span className="text-rose-400 font-semibold">
+            <span className="text-rose-400 font-semibold tabular-nums">
               {formatCurrency(topCategory.value)}
             </span>
           </div>
@@ -134,7 +136,13 @@ export function DashboardContent(props: DashboardContentProps) {
         <>
           {/* Quick input — desktop only; mobile uses FAB below */}
           <div className="hidden md:block">
-            <ExpenseInput onAdd={handleAdd} onReplace={handleReplace} onRemove={handleDelete} recentCategories={recentCategories} />
+            <ExpenseInput
+              onAdd={handleAdd}
+              onReplace={handleReplace}
+              onRemove={handleDelete}
+              recentCategories={recentCategories}
+              categories={props.initialCategories}
+            />
           </div>
 
           {/* Mobile FAB */}
@@ -359,16 +367,9 @@ export function DashboardContent(props: DashboardContentProps) {
             transactions={recentTransactions}
             onDelete={handleDelete}
             onUpdate={handleUpdate}
-            onRestore={(tx) =>
-              handleAdd({
-                ...tx,
-                type: tx.type as "income" | "expense",
-                note: tx.note ?? undefined,
-                labels: tx.labels ?? [],
-              })
-            }
+            onRestore={handleTransactionPosted}
             compact
-            budgets={budgets.map((b) => ({ id: b.id, name: b.name }))}
+            budgets={budgetOptions}
           />
         )}
       </div>
@@ -381,6 +382,7 @@ export function DashboardContent(props: DashboardContentProps) {
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
         recentCategories={recentCategories}
+        categories={props.initialCategories}
         onAdd={handleAdd}
         onReplace={handleReplace}
         onRemove={handleDelete}

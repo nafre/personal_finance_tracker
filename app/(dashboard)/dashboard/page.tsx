@@ -4,6 +4,7 @@ import {
   getEarliestTransactionDate,
   getRecurringTransactions,
   getBudgets,
+  getCategories,
 } from "@/lib/actions";
 import { getCurrentMonthYear, getPrevMonth } from "@/lib/utils";
 import { DashboardContent } from "@/components/DashboardContent";
@@ -70,10 +71,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     deltaLabel = "";
   }
 
-  const [recurring, budgets] = await Promise.all([
+  const [recurring, budgets, categories] = await Promise.all([
     getRecurringTransactions(),
     getBudgets(),
+    getCategories(),
   ]);
+  const categoryOptions = categories.map((c) => ({
+    name: c.name,
+    icon: c.icon,
+    color: c.color,
+  }));
 
   return (
     <DashboardErrorBoundary>
@@ -86,6 +93,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         initialTopCategory={data.topCategory}
         initialRecurring={recurring}
         initialBudgets={budgets}
+        initialCategories={categoryOptions}
         period={period}
         month={month}
         year={year}

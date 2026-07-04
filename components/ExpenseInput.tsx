@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { parseExpenseInput } from "@/lib/parser";
+import type { CategoryOption } from "@/types";
 import { addTransaction } from "@/lib/actions";
 import { putTransaction } from "@/lib/idb";
 import { applyLocalMutation } from "@/lib/sync";
@@ -24,10 +25,11 @@ interface ExpenseInputProps {
   onReplace?: (tempId: string, realTx: AddedTx) => void;
   onRemove?: (tempId: string) => void;
   recentCategories?: string[];
+  categories?: CategoryOption[];
   autoFocus?: boolean;
 }
 
-export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, autoFocus }: ExpenseInputProps) {
+export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, categories, autoFocus }: ExpenseInputProps) {
   const [value, setValue] = useState("");
   const [preview, setPreview] = useState<ReturnType<typeof parseExpenseInput>>(null);
   const [error, setError] = useState("");
@@ -37,6 +39,31 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, aut
   const { isOnline, userId, refreshPendingCount } = useSyncContext();
 
   const effectiveType = manualTypeOverride ?? preview?.type ?? "expense";
+
+  // Unified chip row: recently-used categories first (resolved to their
+  // icon/color when a matching category exists — free-text ones stay plain),
+  // then the remaining categories in server order. Deduped case-insensitively
+  // because the parser capitalizes ("food" → "Food") while custom category
+  // names keep whatever casing they were created with.
+  const categoryChips = useMemo<CategoryOption[]>(() => {
+    const all = categories ?? [];
+    const byLowerName = new Map(all.map((c) => [c.name.toLowerCase(), c]));
+    const seen = new Set<string>();
+    const chips: CategoryOption[] = [];
+    for (const name of recentCategories ?? []) {
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      chips.push(byLowerName.get(key) ?? { name });
+    }
+    for (const c of all) {
+      const key = c.name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      chips.push(c);
+    }
+    return chips;
+  }, [recentCategories, categories]);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const v = e.target.value;
@@ -245,23 +272,29 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, aut
         <p role="alert" className="text-rose-400 text-xs mt-2">{error}</p>
       )}
 
-      {/* Recent category chips */}
-      {recentCategories && recentCategories.length > 0 && (
-        <div className="flex gap-2 mt-2 overflow-x-auto pb-1 scrollbar-none">
-          {recentCategories.map((cat) => (
+      {/* Category picker chips — recently used first, then all categories */}
+      {categoryChips.length > 0 && (
+        <div data-testid="category-chip-row" className="flex gap-2 mt-2 overflow-x-auto pb-1 scrollbar-none">
+          {categoryChips.map((cat) => (
             <button
-              key={cat}
+              key={cat.name}
               type="button"
               onClick={() => {
-                const next = cat + " ";
+                const next = cat.name + " ";
                 setValue(next);
                 setPreview(parseExpenseInput(next));
                 inputRef.current?.focus();
               }}
-              className="shrink-0 text-xs py-2 px-3 min-h-[36px] [@media(hover:none)]:min-h-11 bg-slate-800 border border-slate-700
+              className="shrink-0 inline-flex items-center gap-1.5 text-xs py-2 px-3 min-h-[36px] [@media(hover:none)]:min-h-11 bg-slate-800 border border-slate-700
                          hover:border-indigo-500 text-slate-300 rounded-full transition-colors"
+              style={
+                cat.color
+                  ? { borderColor: `${cat.color}55`, backgroundColor: `${cat.color}14` }
+                  : undefined
+              }
             >
-              {cat}
+              {cat.icon && <span aria-hidden="true">{cat.icon}</span>}
+              {cat.name}
             </button>
           ))}
         </div>

@@ -19,17 +19,15 @@ Add multi-select checkboxes to `TransactionList`, a "Delete selected" action, an
 - Start: `components/TransactionList.tsx` `handleDelete` — stash the deleted record in a ref, show toast, cancel deletion on undo.
 - Works without a new library: a simple `<div>` toast in the component tree.
 
-### 1g — Visual Category Picker in Quick-Add (M, medium)
-Surface `Category.icon` and `Category.color` as a horizontal chip row above `ExpenseInput`.
-- Start: `components/ExpenseInput.tsx` — add a horizontally-scrollable row of category chips, click to pre-fill the category token.
-- Fetch categories on mount (or accept as prop from parent).
+### ~~1g — Visual Category Picker in Quick-Add~~ DONE
+Implemented as a unified chip row in `ExpenseInput` (icon + colour tint, recently-used first, then all categories). Categories are fetched server-side on the dashboard page and passed down as `CategoryOption[]`; the transactions page reuses its existing on-mount fetch.
 
 ### 1h — Duplicate Detection (S, medium)
 On add, check if a transaction with the same amount + category was created in the last 60 seconds and show an inline "looks like a duplicate" confirm.
 - Start: `components/ExpenseInput.tsx` — in `handleSubmit`, check the most recent transactions list before calling `addTransaction`.
 
-### 1i — Mobile Polish (S, medium) — PARTIALLY DONE
-- Make the top-category card visible on mobile (currently `hidden sm:flex` in `DashboardContent.tsx`) — still open.
+### ~~1i — Mobile Polish~~ DONE
+- ~~Top-category label on mobile~~ DONE: the "Top spend" header label now renders at all widths (wraps below the month selector at 390px).
 - ~~Month selector at 390px~~ DONE (Jul 2026 UI polish pass): no longer wraps; chevron icons, 44px arrow targets, `whitespace-nowrap` toggle. See `docs/UI_POLISH_JUL2026.md` for the full pass (icons, touch targets, dialog a11y, filter bar, safe areas).
 
 ### 1j — Recurring Upgrades (M, medium)
@@ -42,22 +40,17 @@ On add, check if a transaction with the same amount + category was created in th
 
 ## Performance
 
-### 2d — Memoize Remaining Hot Paths (S, medium)
-Dashboard state was extracted to `hooks/useDashboardState.ts`. Some derived values (`recentCategories`) could still benefit from `useMemo`. Also consider wrapping `TransactionRow` in `React.memo`.
-- Start: `hooks/useDashboardState.ts`.
-- From the Jul 2026 review: `TransactionRow` renders in a list but isn't memoized, and `TransactionList`'s `handleDelete`/`handleUpdate`/`handleRestore` are recreated every render — wrap the row in `React.memo` **and** the handlers in `useCallback` together, or the memo is defeated by changing prop references. Start: `components/TransactionList.tsx`.
+### ~~2d — Memoize Remaining Hot Paths~~ DONE
+`TransactionRow` is wrapped in `React.memo` and `TransactionList`'s `handleDelete`/`handleUpdate`/`handleRestore` in `useCallback`. On the dashboard side, `recentTransactions` and a `budgetOptions` id/name list are memoized in `useDashboardState`, and `DashboardContent` reuses the stable `handleTransactionPosted` for `onRestore` — so row memoization holds at both call sites. (`recentCategories` was already memoized.)
 
-### 2g — Batch Prop-Sync Effects in useDashboardState (S, low)
-Six separate `useEffect` blocks each sync one `initial*` prop into state (`setTransactions(initialTransactions)` etc.), so a single server refresh triggers multiple render cycles. Merge into one effect (or derive state during render where possible).
-- Start: `hooks/useDashboardState.ts` (~lines 87–92).
+### ~~2g — Batch Prop-Sync Effects in useDashboardState~~ DONE
+The six prop-sync effects are merged into a single `useEffect` — one batched re-render per server refresh.
 
-### 2h — Consolidate initialRecurring Loops (S, low)
-Three separate `useMemo` blocks (`dueCount`, `fixedAvailableCash`, `fixedMonthlyExpense`) each iterate `initialRecurring`. Compute all three in one pass returning an object.
-- Start: `hooks/useDashboardState.ts` (~lines 98–130).
+### ~~2h — Consolidate initialRecurring Loops~~ DONE
+`dueCount`, `fixedAvailableCash`, and `fixedMonthlyExpense` are computed in one `useMemo` pass (due date + status evaluated once per rule).
 
-### 2i — Bound getUsedLabels() (S, medium)
-`getUsedLabels()` fetches **every** transaction (`select: { labels: true }`, no `take`) just to dedupe label strings — O(n) memory with transaction count. Add a `take` bound (e.g. 10,000 most recent) or a grouped/raw query.
-- Start: `lib/actions.ts` `getUsedLabels`.
+### ~~2i — Bound getUsedLabels()~~ DONE
+`getUsedLabels()` now scans only the 10,000 most recent transactions (`orderBy date desc, take: 10000`), matching the `getTransactionIds` bounded-query precedent.
 
 ### 2j — Bound SQLite Label-Filter Path in getTransactions (S, low — dev-only)
 When `IS_SQLITE` and a label filter is active, `getTransactions` fetches **all** matching rows then filters in JS with no limit (the Postgres path filters and paginates in SQL). Fetch in bounded chunks or cap the scan.
@@ -66,9 +59,8 @@ When `IS_SQLITE` and a label filter is active, `getTransactions` fetches **all**
 ### ~~2e — `getTransactionIds` Select-Only~~ DONE
 `lib/actions.ts:getTransactionIds` now uses `select: { id: true }` — only IDs are fetched.
 
-### 2f — Lazy-Load SpendingPieChart (S, medium)
-`SpendingPieChart` is not dynamically imported — if re-introduced on the dashboard it would ship Recharts (~300KB) on the critical path.
-- Wrap in `dynamic({ ssr: false })` like `TrendChart` and `BudgetManager`. Add a skeleton placeholder.
+### ~~2f — Lazy-Load SpendingPieChart~~ DONE (removed as dead code)
+`SpendingPieChart` was imported nowhere (the dashboard's category breakdown is `SpendingInsights`, no Recharts), so the component was deleted instead of lazy-wrapped. If a pie chart is ever re-introduced, follow the `dynamic(... , { ssr: false })` pattern used by `TrendChart`.
 
 ---
 
@@ -89,6 +81,9 @@ The transactions page's `loadMore()` appends the next cursor page without checki
 ### 3d — Toast Notifications (S, medium)
 No global toast system. Mutation failures are silent (except inline form errors).
 - Add `sonner` (tiny) or build a minimal `ToastContext` with a queue and auto-dismiss.
+
+### ~~3f — Stale IDB Ghost After Cross-Page Delete~~ DONE
+Fixed in two halves: (1) `TransactionList`'s online edit/delete now write through to the IDB mirror (`patchTransaction` with the server-canonical record / `deleteTransactionFromIDB` after server success), so cross-page mutations can no longer orphan mirror records; (2) `SyncProvider` exposes `reconcileCount`, bumped whenever `reconcileAfterSync` purges stale records — the dashboard's pending-load effect depends on it, so ghosts captured into React state before a reconcile finished are dropped without a reload.
 
 ---
 

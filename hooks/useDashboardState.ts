@@ -69,7 +69,7 @@ export function useDashboardState({
   prevTotalExpenses,
   prevTotalIncome,
 }: UseDashboardStateProps) {
-  const { userId, pendingCount } = useSyncContext();
+  const { userId, pendingCount, reconcileCount } = useSyncContext();
 
   const isMonthView = period === "month";
   const rangeStartMs = useMemo(() => new Date(rangeStartISO).getTime(), [rangeStartISO]);
@@ -84,50 +84,54 @@ export function useDashboardState({
   const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>(initialBudgets);
 
-  useEffect(() => { setTransactions(initialTransactions); }, [initialTransactions]);
-  useEffect(() => { setTotalIncome(initialTotalIncome); }, [initialTotalIncome]);
-  useEffect(() => { setTotalExpenses(initialTotalExpenses); }, [initialTotalExpenses]);
-  useEffect(() => { setCategoryData(initialCategoryData); }, [initialCategoryData]);
-  useEffect(() => { setDailyData(initialDailyData); }, [initialDailyData]);
-  useEffect(() => { setBudgets(initialBudgets); }, [initialBudgets]);
+  // Re-sync all server-derived slices in one effect — the setters are batched,
+  // so a server refresh triggers a single re-render instead of one per slice.
+  useEffect(() => {
+    setTransactions(initialTransactions);
+    setTotalIncome(initialTotalIncome);
+    setTotalExpenses(initialTotalExpenses);
+    setCategoryData(initialCategoryData);
+    setDailyData(initialDailyData);
+    setBudgets(initialBudgets);
+  }, [
+    initialTransactions,
+    initialTotalIncome,
+    initialTotalExpenses,
+    initialCategoryData,
+    initialDailyData,
+    initialBudgets,
+  ]);
   const [showBudgetManager, setShowBudgetManager] = useState(false);
 
   // Derived from categoryData so it stays current after mutations
   const topCategory = useMemo(() => categoryData[0] ?? null, [categoryData]);
 
-  const dueCount = useMemo(() => initialRecurring.filter((r) => {
-    const nextDue = getNextDueDate(
-      r.frequency as RecurringFrequency,
-      new Date(r.startDate),
-      r.lastRun ? new Date(r.lastRun) : null
-    );
-    const status = getRecurringStatus(nextDue, r.endDate ? new Date(r.endDate) : null);
-    return status === "due" || status === "overdue";
-  }).length, [initialRecurring]);
-
-  const fixedAvailableCash = useMemo(() => initialRecurring.reduce((sum, r) => {
-    const nextDue = getNextDueDate(
-      r.frequency as RecurringFrequency,
-      new Date(r.startDate),
-      r.lastRun ? new Date(r.lastRun) : null
-    );
-    if (getRecurringStatus(nextDue, r.endDate ? new Date(r.endDate) : null) === "ended") return sum;
-    const monthly = toMonthlyAmount(r.frequency as RecurringFrequency, r.amount);
-    return r.type === "income" ? sum + monthly : sum - monthly;
-  }, 0), [initialRecurring]);
-
-  // Monthly-normalized sum of active recurring *expense* commitments — the
-  // "fixed" half of the fixed-vs-discretionary split (month view only).
-  const fixedMonthlyExpense = useMemo(() => initialRecurring.reduce((sum, r) => {
-    if (r.type !== "expense") return sum;
-    const nextDue = getNextDueDate(
-      r.frequency as RecurringFrequency,
-      new Date(r.startDate),
-      r.lastRun ? new Date(r.lastRun) : null
-    );
-    if (getRecurringStatus(nextDue, r.endDate ? new Date(r.endDate) : null) === "ended") return sum;
-    return sum + toMonthlyAmount(r.frequency as RecurringFrequency, r.amount);
-  }, 0), [initialRecurring]);
+  // One pass over the recurring rules (due-date + status computed once per
+  // rule) yields all three aggregates:
+  // - dueCount: rules currently due or overdue.
+  // - fixedAvailableCash: net monthly-normalized cash flow of active rules.
+  // - fixedMonthlyExpense: monthly-normalized sum of active recurring
+  //   *expense* commitments — the "fixed" half of the fixed-vs-discretionary
+  //   split (month view only).
+  const { dueCount, fixedAvailableCash, fixedMonthlyExpense } = useMemo(() => {
+    let dueCount = 0;
+    let fixedAvailableCash = 0;
+    let fixedMonthlyExpense = 0;
+    for (const r of initialRecurring) {
+      const nextDue = getNextDueDate(
+        r.frequency as RecurringFrequency,
+        new Date(r.startDate),
+        r.lastRun ? new Date(r.lastRun) : null
+      );
+      const status = getRecurringStatus(nextDue, r.endDate ? new Date(r.endDate) : null);
+      if (status === "due" || status === "overdue") dueCount++;
+      if (status === "ended") continue;
+      const monthly = toMonthlyAmount(r.frequency as RecurringFrequency, r.amount);
+      fixedAvailableCash += r.type === "income" ? monthly : -monthly;
+      if (r.type === "expense") fixedMonthlyExpense += monthly;
+    }
+    return { dueCount, fixedAvailableCash, fixedMonthlyExpense };
+  }, [initialRecurring]);
 
   const [showRecurring, setShowRecurring] = useState(dueCount > 0);
 
@@ -172,7 +176,9 @@ export function useDashboardState({
         setPendingTransactions(pending);
       })
       .catch(() => {});
-  }, [userId, rangeStartISO, rangeEndISO, pendingCount]);
+    // reconcileCount: re-read after a reconcile purges stale IDB records, so
+    // ghosts captured into state before it finished are dropped.
+  }, [userId, rangeStartISO, rangeEndISO, pendingCount, reconcileCount]);
 
   // Merged list: pending items deduped against server list, sorted newest-first
   const mergedTransactions = useMemo(() => {
@@ -256,7 +262,7 @@ export function useDashboardState({
       ? ((displayIncome - prevTotalIncome) / prevTotalIncome) * 100
       : null;
 
-  const recentTransactions = mergedTransactions.slice(0, 6);
+  const recentTransactions = useMemo(() => mergedTransactions.slice(0, 6), [mergedTransactions]);
 
   // Optimistic add — instant UI, server already saved in ExpenseInput
   const handleAdd = useCallback(
@@ -472,12 +478,20 @@ export function useDashboardState({
     [budgets, mergedTransactions]
   );
 
+  // Stable id/name list for TransactionList's BudgetExcludeSelect — keeps the
+  // memoized rows from re-rendering on unrelated dashboard state changes.
+  const budgetOptions = useMemo(
+    () => budgets.map((b) => ({ id: b.id, name: b.name })),
+    [budgets]
+  );
+
   return {
     // State
     categoryData,
     dailyData,
     budgets,
     budgetSpending,
+    budgetOptions,
     showBudgetManager,
     setShowBudgetManager,
     sheetOpen,

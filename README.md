@@ -302,7 +302,6 @@ components/
     BudgetManager.tsx    # Budget list + create/edit form
     BudgetProgress.tsx   # Progress bar with remaining/over-budget label
   charts/
-    SpendingPieChart.tsx # Category spending pie chart
     TrendChart.tsx       # Daily income/expense area chart
   recurring/
     RecurringList.tsx    # Recurring rules list, owns local state
