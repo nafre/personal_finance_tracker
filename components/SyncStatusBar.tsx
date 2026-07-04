@@ -56,7 +56,7 @@ export function SyncStatusBar() {
           {failedCount === 1 ? "change" : "changes"} failed to sync
         </span>
         <button
-          onClick={syncNow}
+          onClick={() => syncNow({ force: true })}
           className="ml-auto shrink-0 font-medium text-rose-300 hover:text-rose-100 underline underline-offset-2 transition-colors cursor-pointer p-2 -m-2"
         >
           Retry
@@ -77,7 +77,7 @@ export function SyncStatusBar() {
           unsynced {pendingCount === 1 ? "change" : "changes"}
         </span>
         <button
-          onClick={syncNow}
+          onClick={() => syncNow({ force: true })}
           className="ml-auto shrink-0 font-medium text-amber-300 hover:text-amber-100 underline underline-offset-2 transition-colors cursor-pointer p-2 -m-2"
         >
           Sync now

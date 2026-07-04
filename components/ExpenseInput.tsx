@@ -7,6 +7,7 @@ import { addTransaction } from "@/lib/actions";
 import { putTransaction } from "@/lib/idb";
 import { applyLocalMutation } from "@/lib/sync";
 import { useSyncContext } from "@/context/SyncProvider";
+import { useToast } from "@/context/ToastContext";
 import { cn, formatCurrency } from "@/lib/utils";
 
 export interface AddedTx {
@@ -37,6 +38,7 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, cat
   const [manualTypeOverride, setManualTypeOverride] = useState<"income" | "expense" | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { isOnline, userId, refreshPendingCount } = useSyncContext();
+  const { showToast } = useToast();
 
   const effectiveType = manualTypeOverride ?? preview?.type ?? "expense";
 
@@ -174,7 +176,9 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, cat
       })
       .catch(() => {
         onRemove?.(tempId);
-        setError("Failed to save. Please try again.");
+        // Toast, not inline error: the input is already cleared, and on mobile
+        // the QuickAddSheet has closed by now — an inline message is never seen.
+        showToast("Failed to save transaction — please try again.", "error");
       });
   }
 

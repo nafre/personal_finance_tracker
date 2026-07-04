@@ -30,6 +30,13 @@ On add, check if a transaction with the same amount + category was created in th
 - ~~Top-category label on mobile~~ DONE: the "Top spend" header label now renders at all widths (wraps below the month selector at 390px).
 - ~~Month selector at 390px~~ DONE (Jul 2026 UI polish pass): no longer wraps; chevron icons, 44px arrow targets, `whitespace-nowrap` toggle. See `docs/UI_POLISH_JUL2026.md` for the full pass (icons, touch targets, dialog a11y, filter bar, safe areas).
 
+### 1k — Transaction Templates / Favorites (M, high)
+One-tap re-add for complete frequent transactions (category + amount + note + labels) — goes beyond the recently-used *category* chips, which still require typing the amount.
+- Phase 1 (derived, no schema change): compute the top repeated `(category, amount, note)` tuples from recent transactions (client-side, `hooks/useDashboardState.ts`) and render a template chip row in `ExpenseInput`; tapping pre-fills the input text so the user can confirm/tweak before submit.
+- Phase 2 (optional): explicit "Save as template" action on a `TransactionList` row — needs a small `Template` model (or pinned flag) + CRUD in `lib/actions.ts`.
+- The add path must stay offline-aware: reuse the existing submit flow (`applyLocalMutation` when offline).
+- Start: `components/ExpenseInput.tsx`, `hooks/useDashboardState.ts`.
+
 ### 1j — Recurring Upgrades (M, medium)
 - "Backfill" button to create past instances when adding a rule mid-period.
 - Duplicate-rule action.
@@ -66,21 +73,18 @@ When `IS_SQLITE` and a label filter is active, `getTransactions` fetches **all**
 
 ## Reliability
 
-### 3b — Service Worker Retry/Backoff (S, medium) — PARTIALLY DONE
-As of Jul 2026 the SW sync handler increments `retryCount`, stops on first failure (preserving causal order), and drops ops after `MAX_RETRIES = 5` — matching `lib/sync.ts`. Still open: exponential backoff between attempts (currently retries happen whenever the next sync event fires).
-- Start: `public/sw.js` `drainQueueFromSW`.
+### ~~3b — Service Worker Retry/Backoff~~ DONE
+Failed ops now carry `nextRetryAt` (exponential: 30s → 1m → 2m → 4m → 8m, base kept in sync between `lib/sync.ts` and `public/sw.js`). Drains stop at an op still inside its backoff window (causal order preserved); the SW rejects the sync event when ops remain so the browser reschedules with its own backoff. User-initiated syncs (`syncNow({ force: true })` — SyncStatusBar buttons, reconnect flush) bypass the window.
 
 ### 3e — Pagination Dedup in loadMore (S, low)
 The transactions page's `loadMore()` appends the next cursor page without checking for IDs already in the list — if data changes server-side between pages, rows can duplicate. Filter appended results against existing IDs.
 - Start: `app/(dashboard)/transactions/page.tsx` `loadMore`.
 
-### 3c — Error Boundaries (S, medium)
-`DashboardErrorBoundary` exists at `components/DashboardErrorBoundary.tsx` but coverage is partial — an IDB seed failure could still crash individual sections.
-- Wrap each dashboard section (charts, recurring, budgets) in its own boundary.
+### ~~3c — Error Boundaries~~ DONE
+`DashboardErrorBoundary` now takes an optional `section` prop rendering a compact card fallback with "Try again"; `DashboardContent` wraps each section (quick add, recurring, spending insights, trend chart, monthly chart, budgets, recent transactions) in its own boundary. The page-level boundary remains as the outer catch-all.
 
-### 3d — Toast Notifications (S, medium)
-No global toast system. Mutation failures are silent (except inline form errors).
-- Add `sonner` (tiny) or build a minimal `ToastContext` with a queue and auto-dismiss.
+### ~~3d — Toast Notifications~~ DONE
+Minimal `context/ToastContext.tsx` (no new dependency): `useToast().showToast(message, type)` with queue (max 3), 5s auto-dismiss, manual dismiss, `role="alert"` for errors. Mounted in `Providers`. Used for the failures that were invisible before: background add failure after `QuickAddSheet` closes (`ExpenseInput`), delete-failed-restored (`TransactionList`), recurring delete failure (`RecurringList`).
 
 ### ~~3f — Stale IDB Ghost After Cross-Page Delete~~ DONE
 Fixed in two halves: (1) `TransactionList`'s online edit/delete now write through to the IDB mirror (`patchTransaction` with the server-canonical record / `deleteTransactionFromIDB` after server success), so cross-page mutations can no longer orphan mirror records; (2) `SyncProvider` exposes `reconcileCount`, bumped whenever `reconcileAfterSync` purges stale records — the dashboard's pending-load effect depends on it, so ghosts captured into React state before a reconcile finished are dropped without a reload.
@@ -127,6 +131,7 @@ From the Jul 2026 review. Each is its own project; **do not bundle**:
 - **TypeScript 5.6 → 6.0** — lowest risk, mostly stricter checks.
 
 ### 5e — Align mcp-server zod Version (S, low)
+
 `mcp-server/package.json` pins `zod ^3.x` while the main app uses `^4.x`. Harmless while the two share no code, but a footgun if validation logic is ever shared. Bump mcp-server to zod 4 and adjust any v3-only API usage.
 - Start: `mcp-server/package.json`.
 
@@ -150,3 +155,55 @@ No production error visibility. Sentry's free tier covers a single-user app.
 ### 6c — Backup / Export (S, low)
 Monthly "Download backup JSON" button in settings (or a scheduled email).
 - Server action `exportAllData()` that returns JSON of all transactions, categories, and recurring rules.
+
+---
+
+## Visualizations
+
+New charts scoped in Jul 2026. Each is tagged with the view it belongs to (month / year / all-time / general). All must respect the `excludeFromStats: false` filter — deriving from the already-filtered `dailyData`/`categoryData` gets this for free.
+
+### ~~7a — Cumulative Spend Pace Line~~ DONE — month view
+`components/charts/PaceChart.tsx` (lazy-loaded): cumulative spend vs last month's curve (muted) vs a straight even-pace line to the month's spending cap, with an "RM X ahead of / under pace" badge. The cap prefers an `overall` budget, falling back to an `excluded`-type budget's amount (overall-minus-categories is still a month-wide cap); `category`/`label` budgets never draw the line. Spend is chart-basis (excludeFromStats filtered), consistent with `SpendingInsights`' burn rate. No extra fetch was needed — the prev-month `getDashboardData` call already returned `dailyData`; it's now passed down as the `prevDailyData` prop. In the current month the spend line stops at today. Snapshot note: the current-month plot changes daily, so the month full-page e2e test masks the whole card and the dedicated test uses a fixed past month.
+
+### 7b — Category Month-over-Month Comparison (S, high) — month view
+Horizontal paired/diverging bars per category: this month vs last, delta labelled ("Food +RM120"). The stat cards' MoM delta covers only the total — this shows which category moved.
+- Cheapest win: `prevCategoryData` is **already passed as a prop** to `DashboardContent` and only used for the top-level delta today.
+- Start: toggle inside `components/SpendingInsights.tsx` (no new data fetch).
+
+### 7c — Cash-Flow Waterfall (M, medium) — month view
+Income on the left, stepping down through top expense categories, ending at the month's balance — the month's story as one narrative. Recharts has no native waterfall; use the stacked-bar-with-transparent-base trick.
+- Data: `categoryData` + income total, already in props.
+- Start: new `components/charts/WaterfallChart.tsx`.
+
+### 7d — Stacked Monthly Bars by Category (M, medium) — year view
+Twelve bars stacked by top-5 categories + "Other", consistent colours across months. Shows composition drift ("subscriptions doubled since March"), which the year trend line hides.
+- Needs a per-month `groupBy(["category"])` in the year branch of `_fetchDashboardData` with the `excludeFromStats: false` filter.
+- Start: `lib/actions.ts`, new `components/charts/StackedMonthlyChart.tsx`.
+
+### 7e — Savings Rate Trend (S, medium) — year view
+Line of `(income − expenses) / income` per month with a 0% reference line. The rate tracks financial health better than absolute numbers; no current view computes it.
+- Pure client-side arithmetic over the year view's existing monthly totals. Could render as a sparkline inside the balance stat card instead of a full chart.
+- Start: `hooks/useDashboardState.ts` (or the year-view equivalent), `components/StatCard.tsx`.
+
+### 7f — Fixed vs Variable Split (M, medium) — year view
+Stacked area per month: spend from recurring rules (rent, subscriptions) vs everything else — shows what portion of spending is actually controllable. Approximation is fine: sum `toMonthlyAmount()` over active rules as the fixed band, or match transactions to rules by category + amount tolerance.
+- Start: `lib/utils.ts` (`toMonthlyAmount` already exported), new chart component.
+
+### ~~7g — Cumulative Net Balance "Wealth Curve"~~ DONE — all-time view
+`components/charts/WealthCurve.tsx` (lazy-loaded): running net balance over the all-time monthly buckets, rendered as the hero chart directly below the stat cards in `?period=all`. Headline figure is derived from the plotted (chart-basis) data so it always matches the curve's endpoint; a dashed zero reference line appears if the balance ever goes negative.
+
+### 7h — Year-over-Year Overlay (M, low — until 2+ years of data) — all-time view
+Cumulative spend per year plotted Jan→Dec as overlaid lines (current year brighter). Catches seasonal comparisons ("am I spending more than last year at this point?") that MoM deltas miss.
+- Same monthly data, pivoted by year client-side. Defer until a second year of data exists.
+
+### 7i — Budget Burndown Mini-Chart (S, medium) — cross-view
+Small sparkline of remaining budget through the period inside each `BudgetProgress`. The bar says "70% used"; the burndown says "used it all in the first ten days."
+- Budget spend is already computed client-side in `computeBudgetSpent` — derive the daily series with the same loop plus a date bucket.
+- Start: `hooks/useDashboardState.ts`, `components/budgets/BudgetProgress.tsx`.
+
+### 7j — Day-of-Week Spending Profile (S, low) — general
+Seven bars: average spend Mon–Sun over the selected period. Surfaces habits invisible in a list ("weekends cost 2×"). Weak on a single month's sample — fit it to year/all-time views or `SpendingInsights` with a ≥3-month window.
+- Client-side from transaction dates.
+
+### ~~7k — Category Pie Chart~~ DONE — month view
+Rebuilt as `components/charts/SpendingPieChart.tsx` (lazy-loaded, `ssr: false`): donut of top-6 categories + "Other", each category's stored colour (fallback `stringToColor`), HTML centre label with the chart-basis total (maskable via `amountMasks`). Slice **and** legend click (keyboard-accessible buttons) → `/transactions?month=&year=&category=X`. Rendered beside `PaceChart` in a second month-view charts row.

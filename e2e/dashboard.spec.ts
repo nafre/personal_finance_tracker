@@ -13,7 +13,9 @@ test.describe("Dashboard", () => {
     await expect(page).toHaveScreenshot("full-page.png", {
       fullPage: true,
       animations: "disabled",
-      mask: amountMasks(page),
+      // The pace chart's "this month" line ends at *today*, so its plot (and
+      // pace badge) change daily — mask the whole card to keep this stable.
+      mask: [...amountMasks(page), page.locator('[data-testid="pace-chart"]')],
     });
   });
 
@@ -157,6 +159,33 @@ test.describe("Dashboard", () => {
     });
   });
 
+  // ── Category donut + pace chart ───────────────────────────────────────────
+  // Both use a fixed past month with data (May 2026): historical data never
+  // changes, and the current month's pace line moves daily (ends at *today*),
+  // which would break a current-month baseline every day.
+
+  test("category donut — slices, centre total, legend", async ({ page }) => {
+    await page.goto("/dashboard?month=5&year=2026");
+    await waitForReady(page);
+
+    const donut = page.locator('[data-testid="category-donut"]');
+    await expect(donut).toHaveScreenshot("category-donut.png", {
+      animations: "disabled",
+      mask: amountMasks(page),
+    });
+  });
+
+  test("spending pace chart — past month layout", async ({ page }) => {
+    await page.goto("/dashboard?month=5&year=2026");
+    await waitForReady(page);
+
+    const chart = page.locator('[data-testid="pace-chart"]');
+    await expect(chart).toHaveScreenshot("pace-chart.png", {
+      animations: "disabled",
+      mask: amountMasks(page),
+    });
+  });
+
   // ── Period selector ───────────────────────────────────────────────────────
 
   test("period selector — month / year / all-time toggle", async ({ page }) => {
@@ -208,6 +237,14 @@ test.describe("Dashboard — all-time view", () => {
   test("full page layout", async ({ page }) => {
     await expect(page).toHaveScreenshot("all-time-full-page.png", {
       fullPage: true,
+      animations: "disabled",
+      mask: amountMasks(page),
+    });
+  });
+
+  test("wealth curve — hero chart with running balance", async ({ page }) => {
+    const curve = page.locator('[data-testid="wealth-curve"]');
+    await expect(curve).toHaveScreenshot("wealth-curve.png", {
       animations: "disabled",
       mask: amountMasks(page),
     });

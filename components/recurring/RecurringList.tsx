@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { RecurringRow } from "./RecurringRow";
 import { RecurringForm } from "./RecurringForm";
+import { useToast } from "@/context/ToastContext";
 import { getNextDueDate, getRecurringStatus, type RecurringFrequency } from "@/lib/utils";
 
 interface RecurringTransaction {
@@ -40,7 +41,7 @@ interface RecurringListProps {
 export function RecurringList({ initialRecurring, onTransactionPosted }: RecurringListProps) {
   const [items, setItems] = useState<RecurringTransaction[]>(initialRecurring);
   const [showForm, setShowForm] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   // Sync state when server sends fresh data (after revalidatePath)
   useEffect(() => {
@@ -53,7 +54,6 @@ export function RecurringList({ initialRecurring, onTransactionPosted }: Recurri
 
   function handleDeleted(id: string) {
     setItems((prev) => prev.filter((r) => r.id !== id));
-    setDeleteError(null);
   }
 
   function handleRestored(rec: RecurringTransaction) {
@@ -98,9 +98,6 @@ export function RecurringList({ initialRecurring, onTransactionPosted }: Recurri
 
   return (
     <div className="space-y-2">
-      {deleteError && (
-        <p role="alert" className="text-xs text-rose-400 px-3 pb-1">{deleteError}</p>
-      )}
       {activeItems.map((rec) => (
         <RecurringRow
           key={rec.id}
@@ -109,7 +106,7 @@ export function RecurringList({ initialRecurring, onTransactionPosted }: Recurri
           onSkipped={handleSkipped}
           onDeleted={handleDeleted}
           onRestored={handleRestored}
-          onDeleteError={setDeleteError}
+          onDeleteError={(msg) => showToast(msg, "error")}
           onUpdated={handleUpdated}
           onTransactionPosted={onTransactionPosted}
         />

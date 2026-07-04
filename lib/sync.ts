@@ -17,8 +17,17 @@ import { getTransactionIds } from "@/lib/actions";
 export { seedIDBFromServer };
 
 const MAX_RETRIES = 5;
+// Exponential backoff between retry attempts: 30s → 1m → 2m → 4m → 8m.
+// Keep in sync with public/sw.js.
+const BASE_RETRY_DELAY_MS = 30_000;
 
-export async function drainQueue(): Promise<{ synced: number; failed: number }> {
+function nextRetryDelay(retryCount: number): number {
+  return BASE_RETRY_DELAY_MS * 2 ** retryCount;
+}
+
+export async function drainQueue(
+  options?: { force?: boolean }
+): Promise<{ synced: number; failed: number }> {
   // Web lock serialises drains across tabs and the service worker — concurrent
   // drains can race on retry counts, temp-ID replacement, and queue deletes.
   if (typeof navigator !== "undefined" && navigator.locks) {
@@ -27,15 +36,15 @@ export async function drainQueue(): Promise<{ synced: number; failed: number }> 
       { ifAvailable: true },
       async (lock) => {
         if (!lock) return null; // another context is already draining
-        return _drainQueue();
+        return _drainQueue(options?.force ?? false);
       }
     );
     return result ?? { synced: 0, failed: 0 };
   }
-  return _drainQueue();
+  return _drainQueue(options?.force ?? false);
 }
 
-async function _drainQueue(): Promise<{ synced: number; failed: number }> {
+async function _drainQueue(force: boolean): Promise<{ synced: number; failed: number }> {
   const ops = await getOps();
   if (ops.length === 0) return { synced: 0, failed: 0 };
 
@@ -56,6 +65,11 @@ async function _drainQueue(): Promise<{ synced: number; failed: number }> {
       failed++;
       continue;
     }
+
+    // Backoff gate: this op failed recently — wait out its delay before the
+    // next attempt. Stop the whole drain (later ops must preserve causal
+    // order). User-initiated syncs (force) skip the wait.
+    if (!force && op.nextRetryAt && Date.now() < op.nextRetryAt) break;
 
     try {
       if (op.op === "add") {
@@ -121,8 +135,13 @@ async function _drainQueue(): Promise<{ synced: number; failed: number }> {
     } catch (error) {
       console.error("[sync] Failed to sync op", { op: op.op, resolvedId, error });
       await patchTransaction(resolvedId, { syncError: String(error) });
-      // Increment retry count before breaking to preserve causal order
-      await updateQueuedOp({ ...op, retryCount: (op.retryCount ?? 0) + 1 });
+      // Increment retry count and schedule the exponential-backoff window
+      // before breaking to preserve causal order
+      await updateQueuedOp({
+        ...op,
+        retryCount: (op.retryCount ?? 0) + 1,
+        nextRetryAt: Date.now() + nextRetryDelay(op.retryCount ?? 0),
+      });
       failed++;
       break; // Stop draining to preserve causal order
     }

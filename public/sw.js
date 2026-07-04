@@ -78,6 +78,9 @@ self.addEventListener("sync", (event) => {
 });
 
 const MAX_RETRIES = 5; // keep in sync with MAX_RETRIES in lib/sync.ts
+// Exponential backoff between retry attempts: 30s → 1m → 2m → 4m → 8m.
+// Keep in sync with BASE_RETRY_DELAY_MS in lib/sync.ts.
+const BASE_RETRY_DELAY_MS = 30000;
 
 async function syncQueueFromSW() {
   // Web lock prevents draining concurrently with an open tab's drainQueue()
@@ -95,6 +98,9 @@ async function drainQueueFromSW() {
   if (ops.length === 0) return;
 
   const tempIdMap = new Map();
+  // Set when the drain stops early (backoff window or failure) — rejecting the
+  // sync event's waitUntil makes the browser reschedule it with its own backoff.
+  let blocked = false;
 
   for (const op of ops) {
     const resolvedId = tempIdMap.get(op.tempId) ?? op.tempId;
@@ -103,6 +109,13 @@ async function drainQueueFromSW() {
     if ((op.retryCount ?? 0) >= MAX_RETRIES) {
       await deleteQueuedOpInIDB(op.queueId);
       continue;
+    }
+
+    // Backoff gate: this op failed recently — wait out its exponential delay.
+    // Stop the whole drain (later ops must preserve causal order).
+    if (op.nextRetryAt && Date.now() < op.nextRetryAt) {
+      blocked = true;
+      break;
     }
 
     try {
@@ -131,7 +144,12 @@ async function drainQueueFromSW() {
 
       const data = res.ok ? await res.json() : { success: false };
       if (!data.success) {
-        await updateQueuedOpInIDB({ ...op, retryCount: (op.retryCount ?? 0) + 1 });
+        await updateQueuedOpInIDB({
+          ...op,
+          retryCount: (op.retryCount ?? 0) + 1,
+          nextRetryAt: Date.now() + BASE_RETRY_DELAY_MS * 2 ** (op.retryCount ?? 0),
+        });
+        blocked = true;
         break; // preserve causal ordering on failure
       }
 
@@ -146,9 +164,20 @@ async function drainQueueFromSW() {
 
       await deleteQueuedOpInIDB(op.queueId);
     } catch {
-      await updateQueuedOpInIDB({ ...op, retryCount: (op.retryCount ?? 0) + 1 });
+      await updateQueuedOpInIDB({
+        ...op,
+        retryCount: (op.retryCount ?? 0) + 1,
+        nextRetryAt: Date.now() + BASE_RETRY_DELAY_MS * 2 ** (op.retryCount ?? 0),
+      });
+      blocked = true;
       break; // preserve causal ordering on failure
     }
+  }
+
+  if (blocked) {
+    // Ops remain — fail the sync event so the browser retries it later with
+    // its own backoff instead of waiting for the next manual registration.
+    throw new Error("expense-sync incomplete — ops remain in queue");
   }
 }
 

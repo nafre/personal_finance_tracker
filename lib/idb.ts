@@ -23,6 +23,7 @@ export interface QueuedOp {
   payload: Record<string, unknown>;
   createdAt: string;
   retryCount?: number; // incremented on each failed drain attempt; op dropped at MAX_RETRIES
+  nextRetryAt?: number; // epoch ms — exponential-backoff gate; drains skip the queue until this passes
 }
 
 interface ExpenseTrackerDB extends DBSchema {

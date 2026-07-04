@@ -60,7 +60,7 @@ The dev server must be running (`npm run dev`) before using these tools. The MCP
 | File | What it covers |
 |------|----------------|
 | `e2e/login.spec.ts` | Login layout, error state |
-| `e2e/dashboard.spec.ts` | Full page, stat cards, quick-add, transaction list, recurring section, navigation |
+| `e2e/dashboard.spec.ts` | Full page, stat cards, quick-add, transaction list, recurring section, navigation, category donut, pace chart (fixed past month), wealth curve (all-time) |
 | `e2e/transactions.spec.ts` | Full page, filter bar, summary strip, transaction list, category filter |
 | `e2e/settings.spec.ts` | Settings page: categories tab, account tab, users tab (admin) |
 
@@ -72,6 +72,7 @@ Snapshots live in `e2e/snapshots/<project>/<spec>/<test>.png` and are committed 
 
 - **Currency amounts** are masked via `.tabular-nums` — they never break the snapshot.
 - **Dates and category names** appear in snapshots. Update baselines with `npm run test:ui:update` if data changes substantially.
+- **Pace chart** — the current month's cumulative line ends at *today*, so its plot changes daily. The month full-page test masks the whole `[data-testid="pace-chart"]` card; the dedicated pace/donut tests navigate to a fixed past month (historical data is stable).
 
 ### One-time setup required
 
@@ -113,7 +114,7 @@ The dashboard uses a **hybrid render pattern**:
 2. `DashboardContent` is a thin client orchestrator — it calls `useDashboardState(props)` and renders pure JSX. All state, effects, memos, and mutation handlers live in `hooks/useDashboardState.ts`.
 3. After a mutation completes, the handlers in `useDashboardState` update all affected state slices (`transactions`, `totalIncome`, `totalExpenses`, `categoryData`, `dailyData`) so the UI reflects changes without waiting for a server re-render.
 
-Props passed to `DashboardContent`: `initialTransactions`, `initialTotalIncome`, `initialTotalExpenses`, `initialCategoryData`, `initialDailyData`, `initialTopCategory`, `initialRecurring`, `initialBudgets`, `initialCategories`, `month`, `year`, `prevTotalExpenses`, `prevTotalIncome`, `prevCategoryData`.
+Props passed to `DashboardContent`: `initialTransactions`, `initialTotalIncome`, `initialTotalExpenses`, `initialCategoryData`, `initialDailyData`, `initialTopCategory`, `initialRecurring`, `initialBudgets`, `initialCategories`, `month`, `year`, `prevTotalExpenses`, `prevTotalIncome`, `prevCategoryData`, `prevDailyData` (prev period's daily buckets — consumed by `PaceChart`; empty array in the all-time view).
 
 The transactions page (`/transactions`) is a **fully client-side** page. It fetches data via the `getTransactions` server action through **SWR**, keyed by a serialized filter object (`month`, `year`, `category`, `label`, `q`, `from`, `to`) — re-visiting a previously-seen filter returns cached data instantly while revalidating in the background. Cursor-based "Load more" pagination appends pages outside SWR; categories and budgets are fetched once on mount. A drop in `pendingCount` (sync completed) triggers a silent `mutate()` to clear "Pending" badges.
 
@@ -127,23 +128,23 @@ The app is offline-capable. Mutations made without network connectivity are queu
 
 1. **`lib/idb.ts`** — singleton IndexedDB wrapper (`idb` library). Two stores (DB version 2):
    - `transactions` — local mirror of server records plus pending items. Each record has `syncStatus: "synced" | "pending" | "pending-update" | "pending-delete"`.
-   - `syncQueue` — ordered queue of pending mutations (`op: "add" | "update" | "delete"`, autoIncrement `queueId` preserves causal order). Each entry has an optional `retryCount` for failure tracking.
+   - `syncQueue` — ordered queue of pending mutations (`op: "add" | "update" | "delete"`, autoIncrement `queueId` preserves causal order). Each entry has an optional `retryCount` for failure tracking and `nextRetryAt` (epoch ms) as the exponential-backoff gate.
    - Never pass a DB handle around — all exported functions lazy-open the singleton internally.
 
 2. **`lib/sync.ts`** — pure client-side logic (no React):
    - `applyLocalMutation(op, data)` — writes to IDB + enqueues when offline. For `add`, generates a `pending_${timestamp}_${random}` temp ID. For pending-adds that are subsequently edited, updates the queue entry in-place rather than adding a second UPDATE op.
-   - `drainQueue()` — processes `syncQueue` in insertion order, POST-ing each op to `/api/sync`. Drops ops that have hit `MAX_RETRIES = 5`. On `add` success, calls `replaceTempId` to swap the temp ID for the real server ID (atomic IDB transaction that also remaps any subsequent queue entries referencing the old temp ID). Stops on first failure to preserve ordering.
+   - `drainQueue(options?)` — processes `syncQueue` in insertion order, POST-ing each op to `/api/sync`. Drops ops that have hit `MAX_RETRIES = 5`. On failure sets `nextRetryAt` (exponential backoff: 30s → 1m → 2m → 4m → 8m, `BASE_RETRY_DELAY_MS` kept in sync with `public/sw.js`); a drain stops when it reaches an op still inside its backoff window, unless `{ force: true }` (user-initiated retry). On `add` success, calls `replaceTempId` to swap the temp ID for the real server ID (atomic IDB transaction that also remaps any subsequent queue entries referencing the old temp ID). Stops on first failure to preserve ordering.
    - `seedIDBFromServer(transactions, userId)` — upserts server data into IDB as `synced`; never overwrites pending records.
    - `reconcileAfterSync(userId)` — calls `getTransactionIds()` (server action) then `reconcileWithServer()` (IDB) to delete any local IDB records whose IDs no longer exist on the server. Called by `SyncProvider` on first load when online.
 
 3. **`app/api/sync/route.ts`** — `POST /api/sync`. REST endpoint used by the service worker (which cannot call server actions). Accepts `{ op, id?, payload? }`, validates session cookie, applies the same ownership checks as `lib/actions.ts`. Returns `{ success: true, id? }`. For `add` ops uses upsert on `clientId` (the temp ID) to safely deduplicate retries.
 
-4. **`context/SyncProvider.tsx`** — React context wrapping the whole app (inside `SessionProvider`). Exposes `{ isOnline, pendingCount, failedCount, isSyncing, reconcileCount, syncNow, refreshPendingCount, userId }` (`failedCount` = local records carrying a `syncError`; `reconcileCount` bumps whenever a reconcile purges stale IDB records — consumers that merge IDB rows into React state re-read on change). Registers `/sw.js`, listens for `online`/`offline` events, auto-calls `syncNow()` on reconnect. Registers the `"expense-sync"` BackgroundSync tag whenever `pendingCount > 0`.
+4. **`context/SyncProvider.tsx`** — React context wrapping the whole app (inside `SessionProvider`). Exposes `{ isOnline, pendingCount, failedCount, isSyncing, reconcileCount, syncNow, refreshPendingCount, userId }` (`failedCount` = local records carrying a `syncError`; `reconcileCount` bumps whenever a reconcile purges stale IDB records — consumers that merge IDB rows into React state re-read on change). Registers `/sw.js`, listens for `online`/`offline` events, auto-calls `syncNow({ force: true })` on reconnect (`force` bypasses the retry-backoff window — also used by SyncStatusBar's Retry/Sync now buttons). Registers the `"expense-sync"` BackgroundSync tag whenever `pendingCount > 0`.
 
 5. **`public/sw.js`** — service worker (plain JS, no bundler):
    - Cache-first for `/_next/static/**` and `/icons/**`.
    - Network-first with cache fallback for page navigations.
-   - `sync` event handler (`"expense-sync"`) drains `syncQueue` from IDB via raw cursor API and POSTs each op to `/api/sync`.
+   - `sync` event handler (`"expense-sync"`) drains `syncQueue` from IDB via raw cursor API and POSTs each op to `/api/sync`. Honours the same `nextRetryAt` backoff gate as `lib/sync.ts`, and rejects the event's `waitUntil` when ops remain so the browser reschedules the sync with its own backoff.
 
 **Offline mutation flow:**
 
@@ -196,7 +197,8 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `lib/parser.ts` | Parses natural-language input into `{category, amount, type, note, labels}`. Type inferred from `INCOME_KEYWORDS`. Labels parsed from `#tag` tokens (e.g. `food 20 #date`). |
 | `lib/utils.ts` | `cn`, `formatCurrency`, `formatDate`, `formatDateShort`, `getMonthName`, `getCurrentMonthYear`, `getPrevMonth`, `getNextMonth`, `getNextDueDate`, `getRecurringStatus`, `isPostedThisPeriod`, `toMonthlyAmount`, `countRemainingPayments`, `stringToColor`. Also exports `DEFAULT_CATEGORIES` (used server-side only — do not import in client components to avoid Turbopack module boundary conflicts). |
 | `lib/auth.ts` | NextAuth config. JWT callback stores `sessionVersion` alongside `userId`/`role`. Bootstrap path seeds default categories for the admin user on first login. |
-| `context/SyncProvider.tsx` | React context: online state, pending count, failed count, sync trigger, SW registration. Exposes `{ isOnline, pendingCount, failedCount, isSyncing, reconcileCount, syncNow, refreshPendingCount, userId }`. Runs `reconcileAfterSync` on first load while online and bumps `reconcileCount` when it purges records. Must be inside `SessionProvider`. |
+| `context/SyncProvider.tsx` | React context: online state, pending count, failed count, sync trigger, SW registration. Exposes `{ isOnline, pendingCount, failedCount, isSyncing, reconcileCount, syncNow, refreshPendingCount, userId }` (`syncNow(opts?)` accepts `{ force?: boolean }` to bypass retry backoff). Runs `reconcileAfterSync` on first load while online and bumps `reconcileCount` when it purges records. Must be inside `SessionProvider`. |
+| `context/ToastContext.tsx` | Global toast system (no external dependency). `useToast().showToast(message, type?)` — types `"success" \| "error" \| "info"`, max 3 visible, 5s auto-dismiss, manual dismiss, `role="alert"` for errors. Container renders above the mobile bottom nav. Mounted in `Providers` (above `SyncProvider`). Used for mutation failures that inline errors can't reach (e.g. background add failure after `QuickAddSheet` closes, delete-failed-restored). |
 | `hooks/useDashboardState.ts` | All dashboard state, effects, memos, and handlers extracted from `DashboardContent`. Returns everything the JSX needs including `handleAdd`, `handleReplace`, `handleDelete`, `handleUpdate`. |
 | `hooks/useOnlineStatus.ts` | Thin hook: `navigator.onLine` + `online`/`offline` events. |
 | `hooks/useDialogBehavior.ts` | Shared modal/sheet behavior: Escape-to-close, body scroll lock, focus-on-open/restore-on-close. Used by `BudgetManager` and `QuickAddSheet` — apply it (plus `role="dialog"` / `aria-modal`) to any new dialog. |
@@ -216,12 +218,15 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `components/SpendingInsights.tsx` | Spending pace/burn-rate analysis card. |
 | `components/QuickAddSheet.tsx` | Bottom-sheet wrapper for `ExpenseInput` on mobile. |
 | `components/NavBar.tsx` | Navigation shell: fixed desktop sidebar (collapsible, width synced via `SidebarContext`) + fixed mobile bottom nav with safe-area padding. Lucide icons. |
-| `components/Providers.tsx` | Composes `SessionProvider` + `SyncProvider` at the app root. |
+| `components/Providers.tsx` | Composes `SessionProvider` + `ToastProvider` + `SyncProvider` at the app root. |
 | `components/charts/TrendChart.tsx` | Daily income/expense area chart (Recharts). |
+| `components/charts/PaceChart.tsx` | Month-view cumulative spend vs last month's curve vs an even-pace line to the month's cap (an `overall` budget, else an `excluded`-type budget's amount; category/label budgets never draw the line). Spend is chart-basis, consistent with `SpendingInsights`. Consumes `dailyData` (optimistically patched) + `prevDailyData` prop. In the current month the spend line stops at today — e2e masks the whole card in the month full-page snapshot; the dedicated test uses a fixed past month. Lazy-loaded. |
+| `components/charts/SpendingPieChart.tsx` | Month-view donut of top-6 categories + "Other" using stored category colours (fallback `stringToColor`). HTML centre total (`tabular-nums`, maskable). Slice/legend click → `/transactions?month=&year=&category=X`. Lazy-loaded. |
+| `components/charts/WealthCurve.tsx` | All-time hero chart (`?period=all` only): running net balance over the monthly buckets. Headline derives from the plotted chart-basis data so it matches the curve endpoint (off-chart transactions are excluded here, unlike the Net stat card). Lazy-loaded. |
 | `components/recurring/RecurringList.tsx` | Client component owning recurring state. Syncs from `initialRecurring` via `useEffect`. |
 | `components/recurring/RecurringRow.tsx` | Individual recurring row: status badge, Post/Skip/Edit/Delete. Uses plain async/await (not startTransition). |
 | `components/recurring/RecurringForm.tsx` | Create/edit form for recurring rules. Passes `CategoryOption[]` to `CategoryCombobox`. |
-| `components/DashboardErrorBoundary.tsx` | Error boundary wrapping dashboard sections to isolate IDB/render failures. |
+| `components/DashboardErrorBoundary.tsx` | Error boundary isolating IDB/render failures. Page-level (no props) shows a full-height fallback; with a `section` prop it renders a compact card fallback — `DashboardContent` wraps each section (quick add, recurring, insights, trend chart, monthly chart, budgets, recent transactions) individually. |
 | `components/UserManager.tsx` | Admin-only client component: user list (avatar, role badge, inline reset-password expand) + create form. Exports `UserRecord` interface. |
 | `components/SettingsTabs.tsx` | Client component wrapping all settings sections in a tab bar (Users / Categories / Account). Admins default to Users tab; non-admins default to Categories tab. |
 | `prisma/schema.prisma` | Five models: `User`, `Transaction`, `Category`, `Budget`, `RecurringTransaction`. |

@@ -6,6 +6,7 @@ import { applyLocalMutation } from "@/lib/sync";
 import { patchTransaction, deleteTransactionFromIDB } from "@/lib/idb";
 import { CategoryCombobox } from "@/components/CategoryCombobox";
 import { useSyncContext } from "@/context/SyncProvider";
+import { useToast } from "@/context/ToastContext";
 import { formatCurrency, formatDate, cn, stringToColor } from "@/lib/utils";
 import { ChevronDown, Pencil, Trash2, X } from "lucide-react";
 
@@ -572,8 +573,7 @@ export function TransactionList({
 }: TransactionListProps) {
   const [txs, setTxs] = useState(initial);
   const [categories, setCategories] = useState<CategoryMeta[]>([]);
-  const [listError, setListError] = useState("");
-  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { showToast } = useToast();
 
   // Sync local state when the parent swaps the list (e.g. month / filter change)
   useEffect(() => {
@@ -584,12 +584,6 @@ export function TransactionList({
     getCategories().then((cats) =>
       setCategories(cats.map((c) => ({ name: c.name, icon: c.icon, color: c.color })))
     );
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
-    };
   }, []);
 
   // Identity-stable handlers so the memoized rows don't re-render on every
@@ -612,10 +606,8 @@ export function TransactionList({
         : [...prev, tx].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     );
     onRestore?.(tx);
-    setListError("Delete failed — transaction restored.");
-    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
-    errorTimerRef.current = setTimeout(() => setListError(""), 4000);
-  }, [onRestore]);
+    showToast("Delete failed — transaction restored.", "error");
+  }, [onRestore, showToast]);
 
   if (!txs.length) {
     return (
@@ -627,9 +619,6 @@ export function TransactionList({
 
   return (
     <div data-testid="transaction-list" className="space-y-0.5">
-      {listError && (
-        <p className="text-xs text-rose-400 px-1 pb-1 animate-fade-in">{listError}</p>
-      )}
       {txs.map((tx) => (
         <TransactionRow
           key={tx.id}

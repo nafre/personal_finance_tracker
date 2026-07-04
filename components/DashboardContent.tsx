@@ -10,6 +10,7 @@ import { QuickAddSheet } from "@/components/QuickAddSheet";
 import { MonthSelector } from "@/components/MonthSelector";
 import { RecurringList } from "@/components/recurring/RecurringList";
 import { SyncStatusBar } from "@/components/SyncStatusBar";
+import { DashboardErrorBoundary } from "@/components/DashboardErrorBoundary";
 import { StatCard } from "@/components/StatCard";
 import { BudgetProgress } from "@/components/budgets/BudgetProgress";
 import { useDashboardState } from "@/hooks/useDashboardState";
@@ -32,6 +33,23 @@ const MonthlyBarChart = dynamic(
   { ssr: false }
 );
 
+const chartCardSkeleton = () => <div className="card h-[280px] animate-pulse" />;
+
+const PaceChart = dynamic(
+  () => import("@/components/charts/PaceChart").then((m) => ({ default: m.PaceChart })),
+  { ssr: false, loading: chartCardSkeleton }
+);
+
+const SpendingPieChart = dynamic(
+  () => import("@/components/charts/SpendingPieChart").then((m) => ({ default: m.SpendingPieChart })),
+  { ssr: false, loading: chartCardSkeleton }
+);
+
+const WealthCurve = dynamic(
+  () => import("@/components/charts/WealthCurve").then((m) => ({ default: m.WealthCurve })),
+  { ssr: false, loading: () => <div className="card h-[320px] animate-pulse" /> }
+);
+
 interface DashboardContentProps {
   initialTransactions: Transaction[];
   initialTotalIncome: number;
@@ -51,6 +69,7 @@ interface DashboardContentProps {
   prevTotalExpenses: number;
   prevTotalIncome: number;
   prevCategoryData: CategoryData[];
+  prevDailyData: DailyData[];
 }
 
 export function DashboardContent(props: DashboardContentProps) {
@@ -136,13 +155,15 @@ export function DashboardContent(props: DashboardContentProps) {
         <>
           {/* Quick input — desktop only; mobile uses FAB below */}
           <div className="hidden md:block">
-            <ExpenseInput
-              onAdd={handleAdd}
-              onReplace={handleReplace}
-              onRemove={handleDelete}
-              recentCategories={recentCategories}
-              categories={props.initialCategories}
-            />
+            <DashboardErrorBoundary section="Quick add">
+              <ExpenseInput
+                onAdd={handleAdd}
+                onReplace={handleReplace}
+                onRemove={handleDelete}
+                recentCategories={recentCategories}
+                categories={props.initialCategories}
+              />
+            </DashboardErrorBoundary>
           </div>
 
           {/* Mobile FAB */}
@@ -155,6 +176,7 @@ export function DashboardContent(props: DashboardContentProps) {
           </button>
 
           {/* Recurring transactions */}
+          <DashboardErrorBoundary section="Recurring transactions">
           <div data-testid="recurring-section" className="card">
         <button
           onClick={() => setShowRecurring((v) => !v)}
@@ -190,6 +212,7 @@ export function DashboardContent(props: DashboardContentProps) {
               </div>
             )}
           </div>
+          </DashboardErrorBoundary>
         </>
       )}
 
@@ -236,16 +259,26 @@ export function DashboardContent(props: DashboardContentProps) {
         );
       })()}
 
+      {/* Wealth curve — all-time hero: running net balance since day one */}
+      {period === "all" && (
+        <DashboardErrorBoundary section="Wealth curve">
+          <WealthCurve data={dailyData} />
+        </DashboardErrorBoundary>
+      )}
+
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <SpendingInsights
-          categoryData={categoryData}
-          prevCategoryData={props.prevCategoryData}
-          month={month}
-          year={year}
-          monthView={isMonthView}
-        />
+        <DashboardErrorBoundary section="Spending insights">
+          <SpendingInsights
+            categoryData={categoryData}
+            prevCategoryData={props.prevCategoryData}
+            month={month}
+            year={year}
+            monthView={isMonthView}
+          />
+        </DashboardErrorBoundary>
 
+        <DashboardErrorBoundary section="Trend chart">
         <div className="card">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
@@ -278,23 +311,58 @@ export function DashboardContent(props: DashboardContentProps) {
             )}
           </div>
         </div>
+        </DashboardErrorBoundary>
       </div>
+
+      {/* Pace + category donut — month view only (pace lines and the monthly
+          budget are month-centric; the donut complements the insights bars).
+          The pace line targets the month's spending cap: an "overall" budget
+          when one exists, else an "excluded"-type budget (overall minus a few
+          categories — the closest thing to a monthly cap). Label/category
+          budgets are never month-wide caps. */}
+      {isMonthView && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <DashboardErrorBoundary section="Spending pace">
+            <PaceChart
+              dailyData={dailyData}
+              prevDailyData={props.prevDailyData}
+              budgetAmount={
+                (budgets.find((b) => b.budgetType === "overall") ??
+                  budgets.find((b) => b.budgetType === "excluded"))?.amount ?? null
+              }
+              month={month}
+              year={year}
+            />
+          </DashboardErrorBoundary>
+          <DashboardErrorBoundary section="Category breakdown">
+            <SpendingPieChart
+              categoryData={categoryData}
+              categories={props.initialCategories}
+              month={month}
+              year={year}
+            />
+          </DashboardErrorBoundary>
+        </div>
+      )}
 
       {/* Income vs expense bars + monthly spend — wider (year / all-time) views */}
       {!isMonthView && (
-        <div className="card">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
-            <h3 className="text-sm font-semibold text-slate-200">Income vs Expenses by Month</h3>
+        <DashboardErrorBoundary section="Monthly chart">
+          <div className="card">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
+              <h3 className="text-sm font-semibold text-slate-200">Income vs Expenses by Month</h3>
+            </div>
+            <Suspense fallback={<div className="h-[200px] rounded-xl bg-slate-800 animate-pulse" />}>
+              <MonthlyBarChart data={dailyData} emptyMessage="No transactions in this period" />
+            </Suspense>
           </div>
-          <Suspense fallback={<div className="h-[200px] rounded-xl bg-slate-800 animate-pulse" />}>
-            <MonthlyBarChart data={dailyData} emptyMessage="No transactions in this period" />
-          </Suspense>
-        </div>
+        </DashboardErrorBoundary>
       )}
 
       {/* Budget overview — month view only (budgets are monthly limits) */}
       {isMonthView && budgets.length > 0 && (
+        <DashboardErrorBoundary section="Budgets">
         <div data-testid="budget-overview" className="card space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -321,6 +389,7 @@ export function DashboardContent(props: DashboardContentProps) {
             })}
           </div>
         </div>
+        </DashboardErrorBoundary>
       )}
 
       {/* Set up budgets CTA */}
@@ -340,6 +409,7 @@ export function DashboardContent(props: DashboardContentProps) {
       )}
 
       {/* Recent transactions */}
+      <DashboardErrorBoundary section="Recent transactions">
       <div className="card">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -373,6 +443,7 @@ export function DashboardContent(props: DashboardContentProps) {
           />
         )}
       </div>
+      </DashboardErrorBoundary>
 
       {/* Budget manager modal */}
       {showBudgetManager && <BudgetManager onClose={() => setShowBudgetManager(false)} />}

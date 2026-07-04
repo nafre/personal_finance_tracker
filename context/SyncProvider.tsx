@@ -21,7 +21,9 @@ interface SyncContextValue {
   /** Bumped each time a reconcile purges stale IDB records — consumers that
    *  merge IDB data into React state re-read when it changes. */
   reconcileCount: number;
-  syncNow: () => Promise<void>;
+  /** Drain the sync queue. `force: true` (user-initiated retries, reconnects)
+   *  bypasses the exponential-backoff window on recently-failed ops. */
+  syncNow: (opts?: { force?: boolean }) => Promise<void>;
   refreshPendingCount: () => Promise<void>;
   userId: string;
 }
@@ -80,12 +82,12 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const syncNow = useCallback(async () => {
+  const syncNow = useCallback(async (opts?: { force?: boolean }) => {
     if (isSyncingRef.current) return;
     isSyncingRef.current = true;
     setIsSyncing(true);
     try {
-      const { synced } = await drainQueue();
+      const { synced } = await drainQueue({ force: opts?.force ?? false });
       let reconciled = 0;
       if (userId) {
         reconciled = await reconcileAfterSync(userId);
@@ -114,8 +116,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       setIsOnline(true);
       if (wentOfflineRef.current) {
         wentOfflineRef.current = false;
-        // Slight delay so the connection is stable before syncing
-        setTimeout(syncNow, 500);
+        // Slight delay so the connection is stable before syncing. Forced:
+        // connectivity just changed, so stale backoff windows shouldn't apply.
+        setTimeout(() => syncNow({ force: true }), 500);
       }
     }
     function handleOffline() {

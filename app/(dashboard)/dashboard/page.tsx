@@ -9,7 +9,7 @@ import {
 import { getCurrentMonthYear, getPrevMonth } from "@/lib/utils";
 import { DashboardContent } from "@/components/DashboardContent";
 import { DashboardErrorBoundary } from "@/components/DashboardErrorBoundary";
-import type { Period, CategoryData } from "@/types";
+import type { Period, CategoryData, DailyData } from "@/types";
 
 interface PageProps {
   searchParams: Promise<{ period?: string; month?: string; year?: string }>;
@@ -35,7 +35,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   let rangeStart: Date;
   let rangeEnd: Date;
   let data: Awaited<ReturnType<typeof getDashboardData>>;
-  let prevData: { totalExpenses: number; totalIncome: number; categoryData: CategoryData[] };
+  let prevData: {
+    totalExpenses: number;
+    totalIncome: number;
+    categoryData: CategoryData[];
+    dailyData: DailyData[];
+  };
   let deltaLabel: string;
 
   if (period === "month") {
@@ -67,7 +72,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     rangeStart = earliestISO ? new Date(earliestISO) : new Date(year, 0, 1);
     rangeEnd = new Date();
     data = await getRangeDashboardData(rangeStart.toISOString(), rangeEnd.toISOString(), "month");
-    prevData = { totalExpenses: 0, totalIncome: 0, categoryData: [] };
+    prevData = { totalExpenses: 0, totalIncome: 0, categoryData: [], dailyData: [] };
     deltaLabel = "";
   }
 
@@ -103,6 +108,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         prevTotalExpenses={prevData.totalExpenses}
         prevTotalIncome={prevData.totalIncome}
         prevCategoryData={prevData.categoryData}
+        prevDailyData={prevData.dailyData}
       />
     </DashboardErrorBoundary>
   );
