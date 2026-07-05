@@ -9,17 +9,34 @@ function TopLoadingBarInner() {
   const navKey = `${pathname}?${searchParams.toString()}`;
   const [active, setActive] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // True while the in-flight navigation will announce its own completion via
+  // nav-end (MonthSelector). The URL updates optimistically well before the
+  // new data commits, so for these the navKey fallback below must stay out.
+  const managedNav = useRef(false);
 
   useEffect(() => {
-    function onNavStart() {
+    function onNavStart(e: Event) {
+      managedNav.current = (e as CustomEvent).detail?.managed === true;
+      if (hideTimer.current) clearTimeout(hideTimer.current);
       setActive(true);
     }
+    function onNavEnd() {
+      managedNav.current = false;
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      hideTimer.current = setTimeout(() => setActive(false), 200);
+    }
     window.addEventListener("nav-start", onNavStart);
-    return () => window.removeEventListener("nav-start", onNavStart);
+    window.addEventListener("nav-end", onNavEnd);
+    return () => {
+      window.removeEventListener("nav-start", onNavStart);
+      window.removeEventListener("nav-end", onNavEnd);
+    };
   }, []);
 
+  // Fallback for navigations that never dispatch nav-end (NavBar page links —
+  // their segments have loading.tsx skeletons, so commit is quick).
   useEffect(() => {
-    if (!active) return;
+    if (!active || managedNav.current) return;
     if (hideTimer.current) clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => setActive(false), 500);
     return () => {

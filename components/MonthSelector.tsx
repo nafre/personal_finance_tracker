@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { getMonthName, getPrevMonth, getNextMonth } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -26,15 +27,31 @@ const PERIOD_OPTIONS: { value: Period; label: string }[] = [
 export function MonthSelector({ period, month, year, showPeriodToggle = true }: MonthSelectorProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
+  const navInFlight = useRef(false);
+
+  // isPending stays true until the new server payload commits (the URL itself
+  // updates optimistically, long before the data arrives) — so completion is
+  // signalled from here rather than from a URL change.
+  useEffect(() => {
+    if (!isPending && navInFlight.current) {
+      navInFlight.current = false;
+      window.dispatchEvent(new Event("nav-end"));
+    }
+  }, [isPending]);
 
   function go(next: { period: Period; month?: number; year?: number }) {
     const params = new URLSearchParams();
     params.set("period", next.period);
     if (next.month != null) params.set("month", String(next.month));
     if (next.year != null) params.set("year", String(next.year));
-    // Same event NavBar links fire — TopLoadingBar shows until the URL updates.
-    window.dispatchEvent(new Event("nav-start"));
-    router.push(`${pathname}?${params.toString()}`);
+    // Same event NavBar links fire; `managed` tells TopLoadingBar to wait for
+    // our nav-end instead of hiding on the (optimistic) URL change.
+    window.dispatchEvent(new CustomEvent("nav-start", { detail: { managed: true } }));
+    navInFlight.current = true;
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`);
+    });
   }
 
   function switchPeriod(p: Period) {
@@ -48,7 +65,14 @@ export function MonthSelector({ period, month, year, showPeriodToggle = true }: 
   const isCurrentYear = year === now.getFullYear();
 
   return (
-    <div data-testid="period-selector" className="flex items-center gap-x-3 gap-y-2 flex-wrap">
+    <div
+      data-testid="period-selector"
+      aria-busy={isPending}
+      className={cn(
+        "flex items-center gap-x-3 gap-y-2 flex-wrap transition-opacity",
+        isPending && "opacity-60 animate-pulse"
+      )}
+    >
       {/* Period toggle */}
       {showPeriodToggle && (
       <div className="inline-flex rounded-lg bg-slate-800/60 p-0.5 border border-slate-700">
