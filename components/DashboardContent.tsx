@@ -136,6 +136,19 @@ export function DashboardContent(props: DashboardContentProps) {
       ? `${savingsRate.toFixed(0)}% saved`
       : `${Math.abs(savingsRate).toFixed(0)}% overspent`;
 
+  // "View all" mirrors the period being viewed: month view → that month's
+  // transactions; year → Jan 1–Dec 31 date range; all-time → first
+  // transaction through today (from/to must both be set — the transactions
+  // page only enters range mode when both are present).
+  const localDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const viewAllHref =
+    period === "month"
+      ? `/transactions?month=${month}&year=${year}`
+      : period === "year"
+      ? `/transactions?from=${year}-01-01&to=${year}-12-31`
+      : `/transactions?from=${props.rangeStartISO.slice(0, 10)}&to=${localDate(new Date())}`;
+
   const handleTransactionPosted = useCallback(
     (tx: { id: string; category: string; amount: number; type: string; note?: string | null; labels?: string[] | null; date: Date | string }) =>
       handleAdd({
@@ -518,7 +531,7 @@ export function DashboardContent(props: DashboardContentProps) {
             <h3 className="text-sm font-semibold text-slate-200">Recent Transactions</h3>
           </div>
           <Link
-            href="/transactions"
+            href={viewAllHref}
             className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
           >
             View all →

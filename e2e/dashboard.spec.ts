@@ -238,6 +238,13 @@ test.describe("Dashboard — past month (read-only)", () => {
     await expect(page.locator('[aria-label^="Edit "]')).toHaveCount(0);
     await expect(page.locator('[aria-label^="Delete "]')).toHaveCount(0);
   });
+
+  test("view-all link carries the viewed month", async ({ page }) => {
+    await expect(page.getByRole("link", { name: "View all →" })).toHaveAttribute(
+      "href",
+      "/transactions?month=5&year=2026"
+    );
+  });
 });
 
 // ── Year view ─────────────────────────────────────────────────────────────
