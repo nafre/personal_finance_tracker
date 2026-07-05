@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth";
 import { revalidatePath, updateTag, unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getNextDueDate, DEFAULT_CATEGORIES, enumerateMonths, type RecurringFrequency } from "@/lib/utils";
+import { getNextDueDate, DEFAULT_CATEGORIES, enumerateMonths, MAX_BACKFILL, type RecurringFrequency } from "@/lib/utils";
 import { IS_SQLITE, encodeLabels, normalizeTx, getLabelFilter, getTrendRows, type TrendGranularity, normalizeBudget, encodeBudgetArray, parseLabels } from "@/lib/db-adapter";
 import { transactionSchema, categorySchema, budgetSchema, recurringSchema, passwordSchema } from "@/lib/validation";
 import bcrypt from "bcryptjs";
@@ -634,6 +634,58 @@ export async function postRecurringTransaction(id: string) {
   revalidatePath("/transactions");
   updateTag("transactions");
   return normalizeTx(tx);
+}
+
+// Creates one transaction per missed period (rule added mid-period or left
+// unposted), each dated at its historical due date, then advances lastRun to
+// the last backfilled date. Capped at MAX_BACKFILL per call — a rule further
+// behind than that can be backfilled again. Atomic: all instances + the
+// lastRun bump commit together.
+export async function backfillRecurringTransaction(id: string) {
+  const userId = await getAuthenticatedUserId();
+  const rec = await db.recurringTransaction.findFirst({ where: { id, userId } });
+  if (!rec) throw new Error("Not found");
+
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const end = rec.endDate ? new Date(rec.endDate) : null;
+  if (end) end.setHours(23, 59, 59, 999);
+
+  const dueDates: Date[] = [];
+  let due = getNextDueDate(rec.frequency as RecurringFrequency, rec.startDate, rec.lastRun ?? null);
+  while (dueDates.length < MAX_BACKFILL && due <= today && (!end || due <= end)) {
+    dueDates.push(due);
+    due = getNextDueDate(rec.frequency as RecurringFrequency, due, due);
+  }
+  if (dueDates.length === 0) throw new Error("Nothing to backfill");
+
+  const { txs, updated } = await db.$transaction(async (p) => {
+    const txs = [];
+    for (const date of dueDates) {
+      txs.push(
+        await p.transaction.create({
+          data: {
+            userId,
+            category: rec.category,
+            amount: rec.amount,
+            type: rec.type,
+            note: rec.note ?? `Recurring: ${rec.name}`,
+            date,
+          },
+        })
+      );
+    }
+    const updated = await p.recurringTransaction.update({
+      where: { id },
+      data: { lastRun: dueDates[dueDates.length - 1] },
+    });
+    return { txs, updated };
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  updateTag("transactions");
+  return { count: txs.length, recurring: updated, transactions: txs.map(normalizeTx) };
 }
 
 // ─── Budgets ──────────────────────────────────────────────────────────────────

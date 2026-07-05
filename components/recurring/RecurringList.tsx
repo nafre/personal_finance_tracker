@@ -73,6 +73,10 @@ export function RecurringList({ initialRecurring, onTransactionPosted }: Recurri
     setShowForm(false);
   }
 
+  function handleDuplicated(rec: RecurringTransaction) {
+    setItems((prev) => [...prev, rec]);
+  }
+
   const activeItems = items.filter((rec) => {
     const nextDue = getNextDueDate(
       rec.frequency as RecurringFrequency,
@@ -108,6 +112,7 @@ export function RecurringList({ initialRecurring, onTransactionPosted }: Recurri
           onRestored={handleRestored}
           onDeleteError={(msg) => showToast(msg, "error")}
           onUpdated={handleUpdated}
+          onDuplicated={handleDuplicated}
           onTransactionPosted={onTransactionPosted}
         />
       ))}

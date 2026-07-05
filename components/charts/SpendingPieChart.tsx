@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { formatCurrency, stringToColor } from "@/lib/utils";
+import { useChartAnimation } from "@/hooks/useChartAnimation";
 import type { CategoryData, CategoryOption } from "@/types";
 
 interface SpendingPieChartProps {
@@ -49,6 +50,7 @@ function DonutTooltip({ active, payload, total }: any) {
 // filtered to that category and month.
 export function SpendingPieChart({ categoryData, categories, month, year }: SpendingPieChartProps) {
   const router = useRouter();
+  const anim = useChartAnimation();
 
   const { slices, total } = useMemo(() => {
     const total = categoryData.reduce((s, c) => s + c.value, 0);
@@ -81,7 +83,7 @@ export function SpendingPieChart({ categoryData, categories, month, year }: Spen
   }
 
   return (
-    <div data-testid="category-donut" className="card">
+    <div data-testid="category-donut" className="card animate-fade-in">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
         <h3 className="text-sm font-semibold text-slate-200">Category Breakdown</h3>
@@ -107,6 +109,7 @@ export function SpendingPieChart({ categoryData, categories, month, year }: Spen
                   stroke="#0f172a"
                   strokeWidth={2}
                   onClick={(_, index) => drillDown(slices[index])}
+                  {...anim}
                 >
                   {slices.map((s) => (
                     <Cell

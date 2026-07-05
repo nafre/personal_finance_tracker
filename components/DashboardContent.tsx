@@ -50,13 +50,19 @@ const WealthCurve = dynamic(
   { ssr: false, loading: () => <div className="card h-[320px] animate-pulse" /> }
 );
 
+const DayOfWeekChart = dynamic(
+  () => import("@/components/charts/DayOfWeekChart").then((m) => ({ default: m.DayOfWeekChart })),
+  { ssr: false }
+);
+
 interface DashboardContentProps {
   initialTransactions: Transaction[];
   initialTotalIncome: number;
   initialTotalExpenses: number;
   initialCategoryData: CategoryData[];
   initialDailyData: DailyData[];
-  /** Ledger-basis monthly buckets for WealthCurve (all-time view only; empty otherwise). */
+  /** Ledger-basis monthly buckets (year + all-time views; empty in month view).
+      Feeds WealthCurve (all-time) and the off-chart overlay on MonthlyBarChart. */
   initialWealthData: DailyData[];
   initialTopCategory: CategoryData | null;
   initialRecurring: RecurringTransaction[];
@@ -91,6 +97,9 @@ export function DashboardContent(props: DashboardContentProps) {
     dueCount,
     fixedAvailableCash,
     fixedMonthlyExpense,
+    dueWeekCount,
+    dueWeekExpense,
+    dueWeekIncome,
     discretionarySpend,
     mergedTransactions,
     recentTransactions,
@@ -177,6 +186,36 @@ export function DashboardContent(props: DashboardContentProps) {
             +
           </button>
 
+          {/* Due this week — 7-day look-ahead over the recurring rules
+              (overdue included). Leads into the recurring card below it. */}
+          {dueWeekCount > 0 && (
+            <div data-testid="due-week-card" className="card flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+                <div className="w-1 h-4 rounded-full bg-amber-500 opacity-60 shrink-0" />
+                <span className="text-sm font-semibold text-slate-200 shrink-0">Due this week</span>
+                <span className="text-xs text-slate-500 shrink-0">
+                  {dueWeekCount} item{dueWeekCount !== 1 ? "s" : ""}
+                </span>
+                {dueWeekExpense > 0 && (
+                  <span className="text-xs font-medium text-rose-400 tabular-nums shrink-0">
+                    −{formatCurrency(dueWeekExpense)}
+                  </span>
+                )}
+                {dueWeekIncome > 0 && (
+                  <span className="text-xs font-medium text-emerald-400 tabular-nums shrink-0">
+                    +{formatCurrency(dueWeekIncome)}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowRecurring(true)}
+                className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors shrink-0"
+              >
+                Review →
+              </button>
+            </div>
+          )}
+
           {/* Recurring transactions */}
           <DashboardErrorBoundary section="Recurring transactions">
           <div data-testid="recurring-section" className="card">
@@ -218,8 +257,11 @@ export function DashboardContent(props: DashboardContentProps) {
         </>
       )}
 
-      {/* Summary stats */}
-      <div data-testid="stat-cards" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* Summary stats — the stat cards, charts row, and recent transactions
+          stagger in on first mount (fill-mode backwards hides delayed items
+          until their turn); month navigation only swaps props, so it never
+          replays the entrance. */}
+      <div data-testid="stat-cards" className="grid grid-cols-2 gap-3 lg:grid-cols-4 animate-slide-up [animation-fill-mode:backwards]">
         <StatCard label="Income" amount={displayIncome} variant="income" icon={<TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />} momDelta={incomeDelta} deltaLabel={deltaLabel} />
         <StatCard label="Expenses" amount={displayExpenses} variant="expense" icon={<TrendingDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />} momDelta={expenseDelta} deltaLabel={deltaLabel} />
         <StatCard label="Net" amount={displayBalance} variant="balance" icon={<Scale className="w-3.5 h-3.5 sm:w-4 sm:h-4" />} subtitle={savingsLabel} />
@@ -270,7 +312,7 @@ export function DashboardContent(props: DashboardContentProps) {
       )}
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-slide-up [animation-delay:50ms] [animation-fill-mode:backwards]">
         <DashboardErrorBoundary section="Spending insights">
           <SpendingInsights
             categoryData={categoryData}
@@ -290,12 +332,16 @@ export function DashboardContent(props: DashboardContentProps) {
             </h3>
           </div>
           <Suspense fallback={<div className="h-[200px] rounded-xl bg-slate-800 animate-pulse" />}>
-            <TrendChart
-              data={dailyData}
-              labelEvery={isMonthView ? undefined : 1}
-              emptyMessage={isMonthView ? undefined : "No transactions in this period"}
-              showCumulative={!isMonthView}
-            />
+            {/* Wrapper commits with the resolved chunk, so the chart fades in
+                over the skeleton instead of popping */}
+            <div className="animate-fade-in">
+              <TrendChart
+                data={dailyData}
+                labelEvery={isMonthView ? undefined : 1}
+                emptyMessage={isMonthView ? undefined : "No transactions in this period"}
+                showCumulative={!isMonthView}
+              />
+            </div>
           </Suspense>
           <div className="flex gap-4 mt-2 justify-center">
             <div className="flex items-center gap-1.5 text-xs text-slate-400">
@@ -357,7 +403,37 @@ export function DashboardContent(props: DashboardContentProps) {
               <h3 className="text-sm font-semibold text-slate-200">Income vs Expenses by Month</h3>
             </div>
             <Suspense fallback={<div className="h-[200px] rounded-xl bg-slate-800 animate-pulse" />}>
-              <MonthlyBarChart data={dailyData} emptyMessage="No transactions in this period" />
+              <div className="animate-fade-in">
+                <MonthlyBarChart
+                  data={dailyData}
+                  wealthData={props.initialWealthData}
+                  emptyMessage="No transactions in this period"
+                />
+              </div>
+            </Suspense>
+          </div>
+        </DashboardErrorBoundary>
+      )}
+
+      {/* Day-of-week spending profile — wider views only (a single month's
+          sample is too small to read habits from). Snapshot note: the bars
+          shift as each new weekday elapses (denominator grows), so e2e masks
+          the whole card in the year/all-time full-page tests. */}
+      {!isMonthView && (
+        <DashboardErrorBoundary section="Day-of-week profile">
+          <div data-testid="dow-chart" className="card">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
+              <h3 className="text-sm font-semibold text-slate-200">Avg Spend by Day of Week</h3>
+            </div>
+            <Suspense fallback={<div className="h-[180px] rounded-xl bg-slate-800 animate-pulse" />}>
+              <div className="animate-fade-in">
+                <DayOfWeekChart
+                  transactions={mergedTransactions}
+                  rangeStartISO={props.rangeStartISO}
+                  rangeEndISO={props.rangeEndISO}
+                />
+              </div>
             </Suspense>
           </div>
         </DashboardErrorBoundary>
@@ -413,7 +489,7 @@ export function DashboardContent(props: DashboardContentProps) {
 
       {/* Recent transactions */}
       <DashboardErrorBoundary section="Recent transactions">
-      <div className="card">
+      <div className="card animate-slide-up [animation-delay:100ms] [animation-fill-mode:backwards]">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />

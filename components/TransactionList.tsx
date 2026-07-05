@@ -195,6 +195,7 @@ const TransactionRow = memo(function TransactionRow({
   compact,
   categories,
   budgets,
+  highlight,
 }: {
   tx: Transaction;
   onDelete: (id: string) => void;
@@ -203,6 +204,8 @@ const TransactionRow = memo(function TransactionRow({
   compact?: boolean;
   categories: CategoryMeta[];
   budgets: BudgetOption[];
+  /** Just-added row — plays a one-shot slide-in + brand-tint flash. */
+  highlight?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [editAmount, setEditAmount] = useState(tx.amount.toString());
@@ -224,6 +227,7 @@ const TransactionRow = memo(function TransactionRow({
   const [rowError, setRowError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const { isOnline, userId, refreshPendingCount } = useSyncContext();
 
@@ -304,33 +308,39 @@ const TransactionRow = memo(function TransactionRow({
     setConfirmingDelete(false);
     setRowError("");
     setIsDeleting(true);
+    // Fade the row out before removing it from the list (the fade-out
+    // keyframe holds opacity 0 via `forwards` until the row unmounts).
+    setLeaving(true);
 
-    if (!isOnline) {
-      (async () => {
-        try {
-          await applyLocalMutation("delete", { id: tx.id, userId });
-          await refreshPendingCount();
-          onDelete(tx.id);
-        } catch {
-          setIsDeleting(false);
-          setRowError("Failed to delete. Please try again.");
-        }
-      })();
-      return;
-    }
+    setTimeout(() => {
+      if (!isOnline) {
+        (async () => {
+          try {
+            await applyLocalMutation("delete", { id: tx.id, userId });
+            await refreshPendingCount();
+            onDelete(tx.id);
+          } catch {
+            setIsDeleting(false);
+            setLeaving(false);
+            setRowError("Failed to delete. Please try again.");
+          }
+        })();
+        return;
+      }
 
-    // Optimistic: remove from UI immediately, fire server call in background.
-    // On failure the transaction still exists server-side — restore the row.
-    onDelete(tx.id);
-    deleteTransaction(tx.id)
-      .then(() => {
-        // Remove the IDB mirror copy too, or the dashboard's pending-load
-        // merge resurrects the row as a ghost until the next reconcile.
-        void deleteTransactionFromIDB(tx.id).catch(() => {});
-      })
-      .catch(() => {
-        onRestore(tx);
-      });
+      // Optimistic: remove from UI immediately, fire server call in background.
+      // On failure the transaction still exists server-side — restore the row.
+      onDelete(tx.id);
+      deleteTransaction(tx.id)
+        .then(() => {
+          // Remove the IDB mirror copy too, or the dashboard's pending-load
+          // merge resurrects the row as a ghost until the next reconcile.
+          void deleteTransactionFromIDB(tx.id).catch(() => {});
+        })
+        .catch(() => {
+          onRestore(tx);
+        });
+    }, 160);
   }
 
   const isIncome = tx.type === "income";
@@ -456,7 +466,9 @@ const TransactionRow = memo(function TransactionRow({
       className={cn(
         "flex items-start gap-3 px-3 rounded-xl hover:bg-slate-800/60 transition-colors group",
         compact ? "py-2" : "py-3",
-        tx.isPending && "opacity-75"
+        tx.isPending && "opacity-75",
+        highlight && !leaving && "animate-row-highlight",
+        leaving && "animate-fade-out"
       )}
     >
       {/* Icon */}
@@ -575,10 +587,20 @@ export function TransactionList({
   const [categories, setCategories] = useState<CategoryMeta[]>([]);
   const { showToast } = useToast();
 
+  // Rows present on first render must not flash — only rows added afterwards.
+  const seenIdsRef = useRef<Set<string> | null>(null);
+  if (seenIdsRef.current === null) seenIdsRef.current = new Set(initial.map((t) => t.id));
+
   // Sync local state when the parent swaps the list (e.g. month / filter change)
   useEffect(() => {
     setTxs(initial);
   }, [initial]);
+
+  // Mark rendered rows as seen so the highlight plays once per new row
+  useEffect(() => {
+    const seen = seenIdsRef.current!;
+    txs.forEach((t) => seen.add(t.id));
+  }, [txs]);
 
   useEffect(() => {
     getCategories().then((cats) =>
@@ -629,6 +651,7 @@ export function TransactionList({
           compact={compact}
           categories={categories}
           budgets={budgets}
+          highlight={!seenIdsRef.current!.has(tx.id)}
         />
       ))}
     </div>

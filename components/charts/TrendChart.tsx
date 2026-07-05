@@ -12,6 +12,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { formatCurrency } from "@/lib/utils";
+import { useChartAnimation } from "@/hooks/useChartAnimation";
 
 interface DailyData {
   date: string;
@@ -51,6 +52,7 @@ function CustomTooltip({ active, payload, label }: any) {
 }
 
 export function TrendChart({ data, labelEvery, emptyMessage, showCumulative }: TrendChartProps) {
+  const anim = useChartAnimation();
   // Running balance per bucket — only computed/rendered when requested.
   const chartData = useMemo(() => {
     if (!showCumulative) return data;
@@ -132,6 +134,7 @@ export function TrendChart({ data, labelEvery, emptyMessage, showCumulative }: T
           fill="url(#gradExpense)"
           dot={false}
           activeDot={{ r: 4, fill: "#6366f1", stroke: "#0f172a", strokeWidth: 2 }}
+          {...anim}
         />
         <Area
           type="monotone"
@@ -142,6 +145,7 @@ export function TrendChart({ data, labelEvery, emptyMessage, showCumulative }: T
           fill="url(#gradIncome)"
           dot={false}
           activeDot={{ r: 4, fill: "#10b981", stroke: "#0f172a", strokeWidth: 2 }}
+          {...anim}
         />
         {showCumulative && (
           <Line
@@ -154,6 +158,7 @@ export function TrendChart({ data, labelEvery, emptyMessage, showCumulative }: T
             strokeDasharray="4 3"
             dot={false}
             activeDot={{ r: 4, fill: "#f59e0b", stroke: "#0f172a", strokeWidth: 2 }}
+            {...anim}
           />
         )}
       </ComposedChart>

@@ -290,7 +290,7 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, cat
                 inputRef.current?.focus();
               }}
               className="shrink-0 inline-flex items-center gap-1.5 text-xs py-2 px-3 min-h-[36px] [@media(hover:none)]:min-h-11 bg-slate-800 border border-slate-700
-                         hover:border-indigo-500 text-slate-300 rounded-full transition-colors"
+                         hover:border-indigo-500 text-slate-300 rounded-full transition-[color,background-color,border-color,transform] active:scale-95"
               style={
                 cat.color
                   ? { borderColor: `${cat.color}55`, backgroundColor: `${cat.color}14` }

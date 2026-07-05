@@ -107,16 +107,25 @@ export function useDashboardState({
   const topCategory = useMemo(() => categoryData[0] ?? null, [categoryData]);
 
   // One pass over the recurring rules (due-date + status computed once per
-  // rule) yields all three aggregates:
+  // rule) yields all the aggregates:
   // - dueCount: rules currently due or overdue.
   // - fixedAvailableCash: net monthly-normalized cash flow of active rules.
   // - fixedMonthlyExpense: monthly-normalized sum of active recurring
   //   *expense* commitments — the "fixed" half of the fixed-vs-discretionary
   //   split (month view only).
-  const { dueCount, fixedAvailableCash, fixedMonthlyExpense } = useMemo(() => {
+  // - dueWeekCount / dueWeekExpense / dueWeekIncome: rules whose next due
+  //   date falls within the coming 7 days (overdue included) — feeds the
+  //   "Due this week" summary card (month view only).
+  const { dueCount, fixedAvailableCash, fixedMonthlyExpense, dueWeekCount, dueWeekExpense, dueWeekIncome } = useMemo(() => {
     let dueCount = 0;
     let fixedAvailableCash = 0;
     let fixedMonthlyExpense = 0;
+    let dueWeekCount = 0;
+    let dueWeekExpense = 0;
+    let dueWeekIncome = 0;
+    const weekAhead = new Date();
+    weekAhead.setDate(weekAhead.getDate() + 7);
+    weekAhead.setHours(23, 59, 59, 999);
     for (const r of initialRecurring) {
       const nextDue = getNextDueDate(
         r.frequency as RecurringFrequency,
@@ -126,11 +135,16 @@ export function useDashboardState({
       const status = getRecurringStatus(nextDue, r.endDate ? new Date(r.endDate) : null);
       if (status === "due" || status === "overdue") dueCount++;
       if (status === "ended") continue;
+      if (nextDue <= weekAhead) {
+        dueWeekCount++;
+        if (r.type === "expense") dueWeekExpense += r.amount;
+        else dueWeekIncome += r.amount;
+      }
       const monthly = toMonthlyAmount(r.frequency as RecurringFrequency, r.amount);
       fixedAvailableCash += r.type === "income" ? monthly : -monthly;
       if (r.type === "expense") fixedMonthlyExpense += monthly;
     }
-    return { dueCount, fixedAvailableCash, fixedMonthlyExpense };
+    return { dueCount, fixedAvailableCash, fixedMonthlyExpense, dueWeekCount, dueWeekExpense, dueWeekIncome };
   }, [initialRecurring]);
 
   const [showRecurring, setShowRecurring] = useState(dueCount > 0);
@@ -515,6 +529,9 @@ export function useDashboardState({
     dueCount,
     fixedAvailableCash,
     fixedMonthlyExpense,
+    dueWeekCount,
+    dueWeekExpense,
+    dueWeekIncome,
     discretionarySpend,
     mergedTransactions,
     recentTransactions,

@@ -11,6 +11,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { cn, formatCurrency } from "@/lib/utils";
+import { useChartAnimation } from "@/hooks/useChartAnimation";
 import type { DailyData } from "@/types";
 
 interface PaceChartProps {
@@ -47,6 +48,7 @@ function PaceTooltip({ active, payload, label }: any) {
 // Cumulative spend climbing day by day vs a straight "even pace" line to the
 // overall budget and last month's cumulative curve (muted). Month view only.
 export function PaceChart({ dailyData, prevDailyData, budgetAmount, month, year }: PaceChartProps) {
+  const anim = useChartAnimation();
   const { points, spentToDate, paceToDate, cutoff, isCurrentMonth } = useMemo(() => {
     const daysInMonth = dailyData.length;
     const today = new Date();
@@ -98,7 +100,7 @@ export function PaceChart({ dailyData, prevDailyData, budgetAmount, month, year 
   const step = dailyData.length > 20 ? 5 : dailyData.length > 10 ? 3 : 1;
 
   return (
-    <div data-testid="pace-chart" className="card">
+    <div data-testid="pace-chart" className="card animate-fade-in">
       <div className="flex items-center justify-between mb-3 gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60 shrink-0" />
@@ -151,6 +153,7 @@ export function PaceChart({ dailyData, prevDailyData, budgetAmount, month, year 
                   strokeWidth={1.5}
                   dot={false}
                   activeDot={{ r: 3, fill: "#475569", stroke: "#0f172a", strokeWidth: 2 }}
+                  {...anim}
                 />
               )}
               {budgetAmount != null && (
@@ -163,6 +166,7 @@ export function PaceChart({ dailyData, prevDailyData, budgetAmount, month, year 
                   strokeDasharray="4 3"
                   dot={false}
                   activeDot={{ r: 3, fill: "#f59e0b", stroke: "#0f172a", strokeWidth: 2 }}
+                  {...anim}
                 />
               )}
               <Line
@@ -173,6 +177,7 @@ export function PaceChart({ dailyData, prevDailyData, budgetAmount, month, year 
                 strokeWidth={2.5}
                 dot={false}
                 activeDot={{ r: 4, fill: "#6366f1", stroke: "#0f172a", strokeWidth: 2 }}
+                {...anim}
               />
             </LineChart>
           </ResponsiveContainer>

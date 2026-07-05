@@ -59,8 +59,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     rangeEnd = new Date(year, 11, 31, 23, 59, 59, 999);
     const prevStart = new Date(year - 1, 0, 1);
     const prevEnd = new Date(year - 1, 11, 31, 23, 59, 59, 999);
+    // The wealth series doubles as the ledger-basis source for the off-chart
+    // overlay on the monthly bars (only needed for the selected year).
     const [d, prev] = await Promise.all([
-      getRangeDashboardData(rangeStart.toISOString(), rangeEnd.toISOString(), "month"),
+      getRangeDashboardData(rangeStart.toISOString(), rangeEnd.toISOString(), "month", true),
       getRangeDashboardData(prevStart.toISOString(), prevEnd.toISOString(), "month"),
     ]);
     data = d;

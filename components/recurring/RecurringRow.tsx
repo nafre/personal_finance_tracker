@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { cn, formatCurrency, getNextDueDate, getRecurringStatus, countRemainingPayments, isPostedThisPeriod, type RecurringFrequency } from "@/lib/utils";
-import { postRecurringTransaction, deleteRecurringTransaction, skipRecurringTransaction } from "@/lib/actions";
+import { cn, formatCurrency, getNextDueDate, getRecurringStatus, countRemainingPayments, countMissedPeriods, isPostedThisPeriod, type RecurringFrequency } from "@/lib/utils";
+import { postRecurringTransaction, deleteRecurringTransaction, skipRecurringTransaction, backfillRecurringTransaction } from "@/lib/actions";
 import { RecurringForm } from "./RecurringForm";
-import { Check, Pencil, Trash2 } from "lucide-react";
+import { Check, Copy, Pencil, Trash2 } from "lucide-react";
 
 interface RecurringTransaction {
   id: string;
@@ -41,6 +41,7 @@ interface RecurringRowProps {
   onRestored: (rec: RecurringTransaction) => void;
   onDeleteError: (msg: string) => void;
   onUpdated: (rec: RecurringTransaction) => void;
+  onDuplicated: (rec: RecurringTransaction) => void;
   onTransactionPosted?: (tx: PostedTransaction) => void;
 }
 
@@ -64,12 +65,15 @@ function formatRelativeDate(date: Date): string {
   return `${Math.abs(diff)}d ago`;
 }
 
-export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, onDeleteError, onUpdated, onTransactionPosted }: RecurringRowProps) {
+export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, onDeleteError, onUpdated, onDuplicated, onTransactionPosted }: RecurringRowProps) {
   const [editing, setEditing] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   const [confirmingPost, setConfirmingPost] = useState(false);
+  const [confirmingBackfill, setConfirmingBackfill] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
+  const [isBackfilling, setIsBackfilling] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const nextDue = getNextDueDate(
@@ -85,6 +89,12 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
   const postedThisPeriod = isPostedThisPeriod(
     rec.frequency as RecurringFrequency,
     rec.lastRun ? new Date(rec.lastRun) : null
+  );
+  const missedCount = countMissedPeriods(
+    rec.frequency as RecurringFrequency,
+    new Date(rec.startDate),
+    rec.lastRun ? new Date(rec.lastRun) : null,
+    endDate
   );
 
   function handlePost() {
@@ -103,6 +113,19 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
         setPostError("Post failed — please try again.");
       })
       .finally(() => setIsPosting(false));
+  }
+
+  function handleBackfill() {
+    setPostError(null);
+    setConfirmingBackfill(false);
+    setIsBackfilling(true);
+    // No optimistic patch: the created transactions carry historical dates the
+    // client would have to recompute — the row updates from the server result
+    // and the dashboard refreshes via revalidatePath.
+    backfillRecurringTransaction(rec.id)
+      .then((res) => onUpdated(res.recurring as RecurringTransaction))
+      .catch(() => setPostError("Backfill failed — please try again."))
+      .finally(() => setIsBackfilling(false));
   }
 
   function handleSkip() {
@@ -168,7 +191,7 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
   return (
     <>
     <div className={cn(
-      "flex items-center gap-3 py-3 px-3 rounded-xl border transition-colors",
+      "flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 py-3 px-3 rounded-xl border transition-colors",
       status === "ended"
         ? "border-slate-800 opacity-50"
         : "border-slate-700/60 hover:border-slate-600"
@@ -179,8 +202,9 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
         rec.type === "income" ? "bg-emerald-500" : "bg-rose-500"
       )} />
 
-      {/* Main info */}
-      <div className="flex-1 min-w-0">
+      {/* Main info — basis-40 sets the wrap threshold: when the actions can't
+          fit beside at least 10rem of info, they wrap to their own line */}
+      <div className="grow shrink basis-40 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium text-slate-200 truncate">{rec.name}</span>
           <span className="text-xs text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">
@@ -218,8 +242,8 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
         {statusLabel}
       </span>
 
-      {/* Actions */}
-      <div className="flex items-center gap-1 shrink-0">
+      {/* Actions — ml-auto keeps them right-aligned when wrapped to their own line */}
+      <div className="flex flex-wrap items-center justify-end gap-1 shrink-0 ml-auto">
         {postedThisPeriod && status !== "ended" && (
           <span className="text-[11px] sm:text-xs px-2 py-0.5 sm:py-1 rounded-full border border-emerald-700/40 bg-emerald-900/20 text-emerald-500 shrink-0 inline-flex items-center gap-1">
             Posted <Check className="w-3 h-3" aria-hidden="true" />
@@ -228,12 +252,44 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
         {canSkip && (
           <button
             onClick={handleSkip}
-            disabled={isSkipping || isPosting}
+            disabled={isSkipping || isPosting || isBackfilling}
             title="Skip this occurrence"
             className="text-xs px-2.5 py-2 [@media(hover:none)]:min-h-11 rounded-lg font-medium transition-colors border border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-400 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSkipping ? "Skipping…" : "Skip"}
           </button>
+        )}
+        {/* Backfill — rule is ≥2 periods behind: create every missed instance
+            at its historical due date in one go (Post only covers one). */}
+        {missedCount >= 2 && (
+          confirmingBackfill ? (
+            <>
+              <button
+                onClick={handleBackfill}
+                disabled={isBackfilling}
+                title={`Create ${missedCount} transactions dated at their original due dates`}
+                className="text-xs px-2.5 py-2 [@media(hover:none)]:min-h-11 rounded-lg font-medium bg-rose-600 hover:bg-rose-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isBackfilling ? "Backfilling…" : `Create ${missedCount}?`}
+              </button>
+              <button
+                onClick={() => setConfirmingBackfill(false)}
+                disabled={isBackfilling}
+                className="text-xs text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50 px-2 py-2 [@media(hover:none)]:min-h-11"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setConfirmingBackfill(true)}
+              disabled={isPosting || isSkipping || isBackfilling}
+              title={`Create ${missedCount} missed transactions dated at their original due dates`}
+              className="text-xs px-2.5 py-2 [@media(hover:none)]:min-h-11 rounded-lg font-medium transition-colors border border-rose-700/60 text-rose-400 hover:border-rose-500 hover:text-rose-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isBackfilling ? "Backfilling…" : `Backfill ${missedCount}`}
+            </button>
+          )
         )}
         {canPost && (
           confirmingPost ? (
@@ -264,7 +320,7 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
           ) : (
             <button
               onClick={() => setConfirmingPost(true)}
-              disabled={isPosting || isSkipping}
+              disabled={isPosting || isSkipping || isBackfilling}
               title="Post now"
               className={cn(
                 "text-xs px-2.5 py-2 [@media(hover:none)]:min-h-11 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
@@ -298,7 +354,7 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
           <>
             <button
               onClick={() => setEditing(true)}
-              disabled={isPosting || isSkipping || isDeleting}
+              disabled={isPosting || isSkipping || isDeleting || isBackfilling}
               title="Edit"
               aria-label={`Edit recurring ${rec.name}`}
               className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors rounded-lg disabled:opacity-50 flex items-center justify-center [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
@@ -306,8 +362,17 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
               <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
             <button
+              onClick={() => setDuplicating(true)}
+              disabled={isPosting || isSkipping || isDeleting || isBackfilling || duplicating}
+              title="Duplicate"
+              aria-label={`Duplicate recurring ${rec.name}`}
+              className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors rounded-lg disabled:opacity-50 flex items-center justify-center [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
+            >
+              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            <button
               onClick={() => setConfirmingDelete(true)}
-              disabled={isDeleting || isPosting || isSkipping}
+              disabled={isDeleting || isPosting || isSkipping || isBackfilling}
               title={isDeleting ? "Deleting…" : "Delete"}
               aria-label={`Delete recurring ${rec.name}`}
               className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
@@ -327,6 +392,31 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
     </div>
     {postError && (
       <p role="alert" className="text-xs text-rose-400 px-3 pb-1">{postError}</p>
+    )}
+    {/* Duplicate: a create-mode form (no id) prefilled from this rule. The
+        start date resets to today, and a past end date is dropped — copying
+        it verbatim would create an already-ended (invisible) rule. */}
+    {duplicating && (
+      <RecurringForm
+        initial={{
+          name: `${rec.name} (copy)`,
+          category: rec.category,
+          amount: rec.amount,
+          type: rec.type as "income" | "expense",
+          frequency: rec.frequency as RecurringFrequency,
+          startDate: new Date().toISOString().split("T")[0],
+          endDate:
+            rec.endDate && new Date(rec.endDate) > new Date()
+              ? new Date(rec.endDate).toISOString().split("T")[0]
+              : undefined,
+          note: rec.note ?? undefined,
+        }}
+        onSave={(created) => {
+          onDuplicated(created as RecurringTransaction);
+          setDuplicating(false);
+        }}
+        onCancel={() => setDuplicating(false)}
+      />
     )}
     </>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { formatCurrency, cn } from "@/lib/utils";
+import { useCountUp } from "@/hooks/useCountUp";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -21,6 +22,10 @@ export function StatCard({
   deltaLabel?: string;
   subtitle?: string;
 }) {
+  // Tween toward the new amount after optimistic mutations (first render and
+  // reduced-motion show it instantly). The sign/color logic keys off the real
+  // `amount` so the styling never flips mid-tween.
+  const displayAmount = useCountUp(amount);
   const isNegative = variant === "balance" && amount < 0;
   const effectiveKey: "income" | "expense" | "balance" =
     variant === "balance" && isNegative ? "expense" : variant;
@@ -97,7 +102,7 @@ export function StatCard({
         className={cn("text-lg sm:text-3xl font-bold tabular-nums truncate relative", colorMap[effectiveKey])}
       >
         {variant === "balance" && amount < 0 ? "-" : ""}
-        {formatCurrency(Math.abs(amount))}
+        {formatCurrency(Math.abs(displayAmount))}
       </p>
 
       {momDelta != null && isFinite(momDelta) && (

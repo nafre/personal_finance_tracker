@@ -17,6 +17,7 @@ interface Toast {
   id: number;
   message: string;
   type: ToastType;
+  leaving?: boolean;
 }
 
 interface ToastContextValue {
@@ -31,6 +32,7 @@ export function useToast(): ToastContextValue {
 }
 
 const AUTO_DISMISS_MS = 5000;
+const EXIT_MS = 200;
 const MAX_VISIBLE = 3;
 
 const TYPE_STYLES: Record<
@@ -49,11 +51,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const dismiss = useCallback((id: number) => {
     const timer = timersRef.current.get(id);
-    if (timer) {
-      clearTimeout(timer);
-      timersRef.current.delete(id);
-    }
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    if (timer) clearTimeout(timer);
+    // Two-phase: mark as leaving so the exit animation plays, then remove.
+    setToasts((prev) =>
+      prev.map((t) => (t.id === id && !t.leaving ? { ...t, leaving: true } : t))
+    );
+    timersRef.current.set(
+      id,
+      setTimeout(() => {
+        timersRef.current.delete(id);
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, EXIT_MS)
+    );
   }, []);
 
   const showToast = useCallback(
@@ -78,7 +87,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         aria-live="polite"
         className="fixed inset-x-0 bottom-[calc(80px+var(--safe-bottom))] md:bottom-6 z-[60] flex flex-col items-center gap-2 px-4 pointer-events-none"
       >
-        {toasts.map(({ id, message, type }) => {
+        {toasts.map(({ id, message, type, leaving }) => {
           const { Icon, iconCls, borderCls } = TYPE_STYLES[type];
           return (
             <div
@@ -86,7 +95,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               role={type === "error" ? "alert" : "status"}
               className={cn(
                 "pointer-events-auto flex items-center gap-2.5 max-w-sm w-full sm:w-auto",
-                "bg-slate-800 border rounded-xl shadow-lg px-3.5 py-2.5 animate-slide-up",
+                "bg-slate-800 border rounded-xl shadow-lg px-3.5 py-2.5",
+                leaving ? "animate-fade-out-down" : "animate-slide-up",
                 borderCls
               )}
             >

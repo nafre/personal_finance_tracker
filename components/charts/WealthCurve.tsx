@@ -12,6 +12,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { cn, formatCurrency } from "@/lib/utils";
+import { useChartAnimation } from "@/hooks/useChartAnimation";
 import type { DailyData } from "@/types";
 
 interface WealthCurveProps {
@@ -42,6 +43,7 @@ function WealthTooltip({ active, payload, label }: any) {
 // rows still count. The headline derives from the plotted points, matching the
 // curve endpoint exactly.
 export function WealthCurve({ data }: WealthCurveProps) {
+  const anim = useChartAnimation();
   const { points, finalBalance, hasNegative } = useMemo(() => {
     let running = 0;
     let hasNegative = false;
@@ -60,7 +62,7 @@ export function WealthCurve({ data }: WealthCurveProps) {
   const step = points.length > 20 ? 4 : points.length > 12 ? 2 : 1;
 
   return (
-    <div data-testid="wealth-curve" className="card">
+    <div data-testid="wealth-curve" className="card animate-fade-in">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-1 h-4 rounded-full bg-emerald-500 opacity-60 shrink-0" />
@@ -125,6 +127,7 @@ export function WealthCurve({ data }: WealthCurveProps) {
               fill="url(#gradWealth)"
               dot={false}
               activeDot={{ r: 4, fill: "#10b981", stroke: "#0f172a", strokeWidth: 2 }}
+              {...anim}
             />
           </AreaChart>
         </ResponsiveContainer>

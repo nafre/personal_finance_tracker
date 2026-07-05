@@ -116,6 +116,31 @@ export function countRemainingPayments(
   return count;
 }
 
+// How many periods a rule has missed up to today (a rule added mid-period or
+// left unposted accumulates one per elapsed due date). Capped so a long-dead
+// daily rule can't produce an absurd count — MAX_BACKFILL must stay in sync
+// with the server-side cap in `backfillRecurringTransaction`.
+export const MAX_BACKFILL = 36;
+
+export function countMissedPeriods(
+  frequency: RecurringFrequency,
+  startDate: Date,
+  lastRun: Date | null,
+  endDate: Date | null
+): number {
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const end = endDate ? new Date(endDate) : null;
+  if (end) end.setHours(23, 59, 59, 999);
+  let count = 0;
+  let due = getNextDueDate(frequency, startDate, lastRun);
+  while (count < MAX_BACKFILL && due <= today && (!end || due <= end)) {
+    count++;
+    due = getNextDueDate(frequency, due, due);
+  }
+  return count;
+}
+
 export function formatDate(date: Date | string): string {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",

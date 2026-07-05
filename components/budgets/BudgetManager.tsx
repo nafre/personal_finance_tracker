@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getBudgets, saveBudget, deleteBudget, getCategories, getUsedLabels } from "@/lib/actions";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -59,7 +59,13 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
   const [formExcluded, setFormExcluded] = useState<string[]>(EMPTY_FORM.formExcluded);
   const [formLabels, setFormLabels] = useState<string[]>(EMPTY_FORM.formLabels);
   const [editingId, setEditingId] = useState<string | null>(EMPTY_FORM.editingId);
-  const dialogRef = useDialogBehavior(true, onClose);
+  const [closing, setClosing] = useState(false);
+  // Play the exit animation before the parent unmounts the modal.
+  const requestClose = useCallback(() => {
+    setClosing(true);
+    setTimeout(onClose, 150);
+  }, [onClose]);
+  const dialogRef = useDialogBehavior(true, requestClose);
 
   useEffect(() => {
     Promise.all([getBudgets(), getCategories(), getUsedLabels()])
@@ -155,15 +161,21 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
+      className={cn(
+        "fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm",
+        closing ? "animate-fade-out" : "animate-fade-in"
+      )}
+      onClick={requestClose}
     >
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="budget-manager-title"
-        className="card w-full sm:max-w-lg max-h-[90dvh] flex flex-col rounded-b-none sm:rounded-2xl overflow-hidden"
+        className={cn(
+          "card w-full sm:max-w-lg max-h-[90dvh] flex flex-col rounded-b-none sm:rounded-2xl overflow-hidden",
+          !closing && "animate-scale-in"
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -173,7 +185,7 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
             <h2 id="budget-manager-title" className="text-sm font-semibold text-slate-200">Manage Budgets</h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="Close budget manager"
             className="text-slate-500 hover:text-slate-300 transition-colors p-2 -m-1 flex items-center justify-center [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
           >

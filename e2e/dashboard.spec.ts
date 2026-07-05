@@ -159,6 +159,15 @@ test.describe("Dashboard", () => {
     });
   });
 
+  test("due this week card — count, amounts, review link", async ({ page }) => {
+    const card = page.locator('[data-testid="due-week-card"]');
+    if (!(await card.isVisible())) return; // nothing due within 7 days — skip
+    await expect(card).toHaveScreenshot("due-week-card.png", {
+      animations: "disabled",
+      mask: amountMasks(page),
+    });
+  });
+
   // ── Category donut + pace chart ───────────────────────────────────────────
   // Both use a fixed past month with data (May 2026): historical data never
   // changes, and the current month's pace line moves daily (ends at *today*),
@@ -212,8 +221,18 @@ test.describe("Dashboard — year view", () => {
     await expect(page).toHaveScreenshot("year-full-page.png", {
       fullPage: true,
       animations: "disabled",
-      mask: amountMasks(page),
+      // The day-of-week profile divides by weekday occurrences up to *today*,
+      // so its bars shift as days elapse — mask the whole card.
+      mask: [...amountMasks(page), page.locator('[data-testid="dow-chart"]')],
     });
+  });
+
+  test("day-of-week profile — renders seven bars", async ({ page }) => {
+    // Content drifts daily (see mask note above), so assert presence rather
+    // than pixels: the card and its bar chart must render.
+    const card = page.locator('[data-testid="dow-chart"]');
+    await expect(card).toBeVisible();
+    await expect(card.locator(".recharts-bar-rectangle")).toHaveCount(7);
   });
 
   test("stat cards — three cards, YoY badge, no daily-avg card", async ({ page }) => {
@@ -238,7 +257,8 @@ test.describe("Dashboard — all-time view", () => {
     await expect(page).toHaveScreenshot("all-time-full-page.png", {
       fullPage: true,
       animations: "disabled",
-      mask: amountMasks(page),
+      // Day-of-week profile bars shift daily — mask the card (see year view).
+      mask: [...amountMasks(page), page.locator('[data-testid="dow-chart"]')],
     });
   });
 

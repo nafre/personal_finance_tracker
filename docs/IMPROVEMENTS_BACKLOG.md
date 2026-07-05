@@ -37,11 +37,11 @@ One-tap re-add for complete frequent transactions (category + amount + note + la
 - The add path must stay offline-aware: reuse the existing submit flow (`applyLocalMutation` when offline).
 - Start: `components/ExpenseInput.tsx`, `hooks/useDashboardState.ts`.
 
-### 1j — Recurring Upgrades (M, medium)
-- "Backfill" button to create past instances when adding a rule mid-period.
-- Duplicate-rule action.
-- "Due this week" summary card on dashboard.
-- Start: `components/recurring/RecurringList.tsx`, `components/recurring/RecurringRow.tsx`, `lib/actions.ts`.
+### ~~1j — Recurring Upgrades~~ DONE
+All three shipped (Jul 2026):
+- **Backfill** — `backfillRecurringTransaction(id)` creates one transaction per missed period at its historical due date and advances `lastRun`, atomically (capped at `MAX_BACKFILL = 36` per call). `RecurringRow` shows a two-step-confirm "Backfill N" button when a rule is ≥2 periods behind (`countMissedPeriods` in `lib/utils.ts`). No optimistic tx patching — backfilled rows carry past dates, so the UI catches up via `revalidatePath`.
+- **Duplicate** — Copy icon on `RecurringRow` opens `RecurringForm` in create mode prefilled from the rule (" (copy)" name, start date reset to today, past end dates dropped so the copy isn't born ended).
+- **Due this week** — month-view summary card above the recurring section (`data-testid="due-week-card"`): count + expense/income totals for rules due within 7 days (overdue included); computed in the consolidated recurring memo in `useDashboardState`; "Review →" expands the recurring list. Hidden when nothing qualifies.
 
 ---
 
@@ -160,7 +160,7 @@ Monthly "Download backup JSON" button in settings (or a scheduled email).
 
 ## Visualizations
 
-New charts scoped in Jul 2026. Each is tagged with the view it belongs to (month / year / all-time / general). All must respect the `excludeFromStats: false` filter — deriving from the already-filtered `dailyData`/`categoryData` gets this for free.
+New charts scoped in Jul 2026. Each is tagged with the view it belongs to (month / year / all-time / general). Pattern charts must respect the `excludeFromStats: false` filter — deriving from the already-filtered `dailyData`/`categoryData` gets this for free. (Exception: accounting charts like the wealth curve use the ledger basis — see the "Exclude from charts" section in CLAUDE.md for the split.)
 
 ### ~~7a — Cumulative Spend Pace Line~~ DONE — month view
 `components/charts/PaceChart.tsx` (lazy-loaded): cumulative spend vs last month's curve (muted) vs a straight even-pace line to the month's spending cap, with an "RM X ahead of / under pace" badge. The cap prefers an `overall` budget, falling back to an `excluded`-type budget's amount (overall-minus-categories is still a month-wide cap); `category`/`label` budgets never draw the line. Spend is chart-basis (excludeFromStats filtered), consistent with `SpendingInsights`' burn rate. No extra fetch was needed — the prev-month `getDashboardData` call already returned `dailyData`; it's now passed down as the `prevDailyData` prop. In the current month the spend line stops at today. Snapshot note: the current-month plot changes daily, so the month full-page e2e test masks the whole card and the dedicated test uses a fixed past month.
@@ -190,7 +190,7 @@ Stacked area per month: spend from recurring rules (rent, subscriptions) vs ever
 - Start: `lib/utils.ts` (`toMonthlyAmount` already exported), new chart component.
 
 ### ~~7g — Cumulative Net Balance "Wealth Curve"~~ DONE — all-time view
-`components/charts/WealthCurve.tsx` (lazy-loaded): running net balance over the all-time monthly buckets, rendered as the hero chart directly below the stat cards in `?period=all`. Headline figure is derived from the plotted (chart-basis) data so it always matches the curve's endpoint; a dashed zero reference line appears if the balance ever goes negative.
+`components/charts/WealthCurve.tsx` (lazy-loaded): running net balance over the all-time monthly buckets, rendered as the hero chart directly below the stat cards in `?period=all`. Ledger basis since Jul 2026 (off-chart transactions count — a cumulative balance must reflect every real money movement): consumes the dedicated `initialWealthData` series fetched via `getRangeDashboardData(…, withWealthSeries: true)`. Headline figure is derived from the plotted data so it always matches the curve's endpoint; a dashed zero reference line appears if the balance ever goes negative.
 
 ### 7h — Year-over-Year Overlay (M, low — until 2+ years of data) — all-time view
 Cumulative spend per year plotted Jan→Dec as overlaid lines (current year brighter). Catches seasonal comparisons ("am I spending more than last year at this point?") that MoM deltas miss.
@@ -201,9 +201,11 @@ Small sparkline of remaining budget through the period inside each `BudgetProgre
 - Budget spend is already computed client-side in `computeBudgetSpent` — derive the daily series with the same loop plus a date bucket.
 - Start: `hooks/useDashboardState.ts`, `components/budgets/BudgetProgress.tsx`.
 
-### 7j — Day-of-Week Spending Profile (S, low) — general
-Seven bars: average spend Mon–Sun over the selected period. Surfaces habits invisible in a list ("weekends cost 2×"). Weak on a single month's sample — fit it to year/all-time views or `SpendingInsights` with a ≥3-month window.
-- Client-side from transaction dates.
+### ~~7j — Day-of-Week Spending Profile~~ DONE — year / all-time views
+`components/charts/DayOfWeekChart.tsx` (lazy-loaded): Mon–Sun bars of average expense per weekday — each weekday's spend total ÷ how many times that weekday occurred between range start and today (so sparse spending days don't inflate the profile). Chart basis (`excludeFromStats` rows skipped); computed client-side from the range transactions (bounded to the 500 most recent — fine for a habit profile). Tooltip shows avg/day, total, and occurrence count. Rendered below the monthly bars in the year and all-time views only (a single month's sample is too small). Snapshot note: the occurrence denominators grow as days elapse, so the year/all-time full-page e2e tests mask the card and a dedicated test asserts the seven bars render.
+
+### ~~7l — Off-Chart Overlay on "Income vs Expenses by Month"~~ DONE — year / all-time views
+Expense bars stay chart-basis; each month's off-chart amount (`wealthData` minus `dailyData` per bucket, clamped ≥ 0) is stacked on top as a dimmer diagonally-hatched segment in `MonthlyBarChart`. Tooltip gains an "Off-chart" line (only when > 0) and Net subtracts it; a legend row ("Expenses" / "Off-chart") appears only when off-chart data exists, so months without flagged rows render pixel-identical to before. The year view now opts in via `getRangeDashboardData(…, withWealthSeries: true)` (the all-time view already fetched it); `DashboardContent` passes `initialWealthData` down. Recharts gotcha hit during implementation: `<Bar>` elements must be **direct** children of `<BarChart>` — wrapping the stacked pair in a React fragment silently drops them.
 
 ### ~~7k — Category Pie Chart~~ DONE — month view
 Rebuilt as `components/charts/SpendingPieChart.tsx` (lazy-loaded, `ssr: false`): donut of top-6 categories + "Other", each category's stored colour (fallback `stringToColor`), HTML centre label with the chart-basis total (maskable via `amountMasks`). Slice **and** legend click (keyboard-accessible buttons) → `/transactions?month=&year=&category=X`. Rendered beside `PaceChart` in a second month-view charts row.
