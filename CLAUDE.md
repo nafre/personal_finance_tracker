@@ -382,6 +382,10 @@ UI conventions (established in the Jul 2026 polish pass — full details in `doc
 components\recurring\RecurringList.tsx ← RecurringRow, RecurringForm
 components\recurring\RecurringRow.tsx ← RecurringForm
 components\DashboardContent.tsx ← hooks/useDashboardState, StatCard
+components\budgets\BudgetManager.tsx ← hooks/useDialogBehavior
+components\QuickAddSheet.tsx ← hooks/useDialogBehavior, hooks/usePresence, ExpenseInput
+components\charts\*.tsx ← hooks/useChartAnimation
+components\StatCard.tsx ← hooks/useCountUp
 ```
 
 ## app
@@ -410,6 +414,8 @@ component SettingsPage
 ### app\(dashboard)\transactions\page.tsx
 ```
 component TransactionsPage
+interface Transaction
+interface Category
 hook useSearchParams
 hook useRouter
 hook usePathname
@@ -418,11 +424,17 @@ hook useRef
 hook useState
 hook useEffect
 hook useCallback
-handler onAdd
-handler onChange
-handler onClick
-handler onDelete
-handler onUpdate
+hook useMemo
+hook useSWR
+handler setFilter
+handler handleSearchChange
+handler clearAllFilters
+handler handleExport
+handler handleAdd
+handler handleDelete
+handler handleRestore
+handler handleUpdate
+handler loadMore
 ```
 
 ### app\(auth)\login\page.tsx
@@ -433,8 +445,7 @@ hook useRouter
 hook useSearchParams
 hook useState
 hook useTransition
-handler onSubmit
-handler onChange
+handler handleSubmit
 ```
 
 ### app\(dashboard)\dashboard\loading.tsx
@@ -445,7 +456,6 @@ component DashboardLoading
 ### app\(dashboard)\error.tsx
 ```
 component DashboardError
-handler onClick
 ```
 
 ### app\(dashboard)\transactions\loading.tsx
@@ -463,10 +473,14 @@ export async function POST(req)
 export async function GET(req)
 ```
 
+### app\api\auth\[...nextauth]\route.ts
+```
+export { handler as GET, handler as POST }
+```
+
 ### app\global-error.tsx
 ```
 component GlobalError
-handler onClick
 ```
 
 ### app\globals.css
@@ -494,12 +508,21 @@ component RootPage
 ### components\budgets\BudgetManager.tsx
 ```
 component BudgetManager
+component TypeBadge
 props BudgetManagerProps
+interface Category
 hook useState
 hook useEffect
+hook useCallback
+hook useDialogBehavior
 export BudgetManager
-handler onClick
-handler onChange
+handler resetForm
+handler startEdit
+handler handleTypeChange
+handler handleCategorySelect
+handler handleSave
+handler handleDelete
+handler requestClose
 ```
 
 ### components\CategoryCombobox.tsx
@@ -509,25 +532,25 @@ props CategoryComboboxProps
 hook useState
 hook useRef
 hook useEffect
-hook useDown
 export CategoryCombobox
-handler onChange
-handler onKeyDown
-handler onMouseDown
+handler select
+handler handleKeyDown
+handler handleMouseDown
 ```
 
 ### components\CategoryManager.tsx
 ```
 component CategoryManager
 component CategoryRow
+interface Category
 hook useState
 export CategoryManager
-handler onDelete
-handler onSubmit
-handler onChange
-handler onStartEdit
-handler onSaveEdit
-handler onCancelEdit
+handler startEdit
+handler cancelEdit
+handler handleSaveEdit
+handler handleRestoreDefaults
+handler handleAdd
+handler handleDelete
 ```
 
 ### components\ChangePasswordForm.tsx
@@ -535,8 +558,7 @@ handler onCancelEdit
 component ChangePasswordForm
 hook useState
 export ChangePasswordForm
-handler onSubmit
-handler onChange
+handler handleSubmit
 ```
 
 ### components\DashboardContent.tsx
@@ -544,13 +566,23 @@ handler onChange
 component DashboardContent
 props DashboardContentProps
 hook useDashboardState
+hook useCallback
 export DashboardContent
-handler onTransactionPosted
+handler handleTransactionPosted
+```
+
+### components\DashboardErrorBoundary.tsx
+```
+component DashboardErrorBoundary (class)
+props Props
+interface State
+export DashboardErrorBoundary
 ```
 
 ### components\StatCard.tsx
 ```
 component StatCard
+hook useCountUp
 export StatCard
 ```
 
@@ -561,47 +593,52 @@ component DemoBanner
 
 ### components\NavBar.tsx
 ```
-component ChevronLeftIcon
-component ChevronRightIcon
 component NavBar
 hook usePathname
 hook useSidebar
 hook useState
 hook useEffect
 export NavBar
-handler onClick
+handler dispatchNavStart
 ```
 
 ### components\recurring\RecurringForm.tsx
 ```
 component RecurringForm
 props RecurringFormProps
+interface RecurringFormData
 hook useState
-hook useTransition
 hook useEffect
+hook useTransition
 export RecurringForm
-handler onSubmit
-handler onChange
-handler onClick
+handler handleSubmit
 ```
 
 ### components\TransactionList.tsx
 ```
 component LabelBadge
 component LabelEditor
+component BudgetExcludeSelect
 component TransactionRow
 component TransactionList
 props TransactionListProps
+interface Transaction
+interface BudgetOption
+interface CategoryMeta
 hook useState
 hook useRef
-hook useSyncContext
 hook useEffect
+hook useCallback
+hook useSyncContext
+hook useToast
 export TransactionList
-handler onClick
-handler onChange
-handler onKeyDown
-handler onDelete
-handler onUpdate
+handler addLabel
+handler handleKeyDown
+handler toggle
+handler handleSave
+handler handleDelete
+handler handleUpdate
+handler handleRestore
 ```
 
 ### components\budgets\BudgetProgress.tsx
@@ -616,7 +653,61 @@ export BudgetProgress
 component CustomTooltip
 component TrendChart
 props TrendChartProps
+interface DailyData
+hook useMemo
+hook useChartAnimation
 export TrendChart
+```
+
+### components\charts\MonthlyBarChart.tsx
+```
+component CustomTooltip
+component MonthlyBarChart
+props MonthlyBarChartProps
+hook useChartAnimation
+export MonthlyBarChart
+```
+
+### components\charts\DayOfWeekChart.tsx
+```
+component CustomTooltip
+component DayOfWeekChart
+props DayOfWeekChartProps
+hook useChartAnimation
+export DayOfWeekChart
+```
+
+### components\charts\PaceChart.tsx
+```
+component PaceTooltip
+component PaceChart
+props PaceChartProps
+hook useMemo
+hook useChartAnimation
+export PaceChart
+```
+
+### components\charts\SpendingPieChart.tsx
+```
+component DonutTooltip
+component SpendingPieChart
+props SpendingPieChartProps
+interface Slice
+hook useMemo
+hook useRouter
+hook useChartAnimation
+export SpendingPieChart
+handler drillDown
+```
+
+### components\charts\WealthCurve.tsx
+```
+component WealthTooltip
+component WealthCurve
+props WealthCurveProps
+hook useMemo
+hook useChartAnimation
+export WealthCurve
 ```
 
 ### components\ExpenseInput.tsx
@@ -626,12 +717,15 @@ component TypeToggle
 props ExpenseInputProps
 hook useState
 hook useRef
+hook useMemo
 hook useSyncContext
+hook useToast
 export AddedTx
 export ExpenseInput
-handler onChange
-handler onKeyDown
-handler onClick
+handler handleChange
+handler handleKeyDown
+handler clearInput
+handler handleSubmit
 ```
 
 ### components\MainWrapper.tsx
@@ -647,7 +741,12 @@ component MonthSelector
 props MonthSelectorProps
 hook useRouter
 hook usePathname
+hook useEffect
+hook useRef
+hook useTransition
 export MonthSelector
+handler go
+handler switchPeriod
 ```
 
 ### components\Providers.tsx
@@ -660,65 +759,77 @@ export Providers
 ```
 component QuickAddSheet
 props QuickAddSheetProps
+hook usePresence
+hook useDialogBehavior
 export QuickAddSheet
-handler onClick
-handler onAdd
-handler onReplace
-handler onRemove
+handler handleAddAndClose
 ```
 
 ### components\recurring\RecurringList.tsx
 ```
 component RecurringList
 props RecurringListProps
+interface RecurringTransaction
+interface PostedTransaction
 hook useState
 hook useEffect
+hook useToast
 export RecurringList
-handler onPosted
-handler onSkipped
-handler onDeleted
-handler onRestored
-handler onDeleteError
-handler onUpdated
-handler onTransactionPosted
-handler onSave
+handler handlePosted
+handler handleDeleted
+handler handleRestored
+handler handleSkipped
+handler handleUpdated
+handler handleCreated
+handler handleDuplicated
 ```
 
 ### components\recurring\RecurringRow.tsx
 ```
 component RecurringRow
 props RecurringRowProps
+interface RecurringTransaction
+interface PostedTransaction
 hook useState
 export RecurringRow
-handler onSave
-handler onClick
+handler handlePost
+handler handleBackfill
+handler handleSkip
+handler handleDelete
 ```
 
 ### components\SpendingInsights.tsx
 ```
 component SpendingInsights
 props SpendingInsightsProps
+interface CategoryData
 export SpendingInsights
 ```
 
 ### components\SyncStatusBar.tsx
 ```
 component SyncStatusBar
+component PresenceWrapper
 hook useSyncContext
 hook useState
 hook useRef
 hook useEffect
+hook usePresence
 export SyncStatusBar
-handler onClick
 ```
 
 ### components\TopLoadingBar.tsx
 ```
+component TopLoadingBarInner
 component TopLoadingBar
 hook usePathname
+hook useSearchParams
 hook useState
+hook useRef
 hook useEffect
 export TopLoadingBar
+handler onNavStart
+handler onNavEnd
 ```
 
 ### components\UserManager.tsx
@@ -738,6 +849,7 @@ handler handleResetPassword
 ```
 component SettingsTabs
 props SettingsTabsProps
+interface Category
 hook useState
 export SettingsTabs
 ```
@@ -756,6 +868,11 @@ hook useRef
 hook useCallback
 hook useEffect
 export SyncProvider
+export useSyncContext
+handler refreshPendingCount
+handler syncNow
+handler handleOnline
+handler handleOffline
 ```
 
 ### context\SidebarContext.tsx
@@ -765,6 +882,23 @@ hook useState
 hook useEffect
 hook useContext
 export SidebarProvider
+export useSidebar
+handler toggle
+```
+
+### context\ToastContext.tsx
+```
+component ToastProvider
+interface Toast
+interface ToastContextValue
+hook useState
+hook useRef
+hook useCallback
+hook useEffect
+export ToastProvider
+export useToast
+handler dismiss
+handler showToast
 ```
 
 ## e2e
@@ -779,12 +913,37 @@ export async function waitForReady(page) → Promise<void>
 
 ### hooks\useDashboardState.ts
 ```
-export function useDashboardState(props) → { categoryData, dailyData, budgets, showBudgetManager, setShowBudgetManager, sheetOpen, setSheetOpen, showRecurring, setShowRecurring, topCategory, dueCount, fixedAvailableCash, mergedTransactions, recentTransactions, recentCategories, displayIncome, displayExpenses, displayBalance, dailySpend, isCurrentMonth, expenseDelta, incomeDelta, handleAdd, handleReplace, handleDelete, handleUpdate }
+export function useDashboardState(props) → { categoryData, dailyData, budgets, budgetSpending, budgetOptions, showBudgetManager, setShowBudgetManager, sheetOpen, setSheetOpen, showRecurring, setShowRecurring, topCategory, dueCount, fixedAvailableCash, fixedMonthlyExpense, dueWeekCount, dueWeekExpense, dueWeekIncome, discretionarySpend, mergedTransactions, recentTransactions, recentCategories, displayIncome, displayExpenses, displayBalance, savingsRate, avgMonthlySpend, dailySpend, isCurrentMonth, isMonthView, expenseDelta, incomeDelta, handleAdd, handleReplace, handleDelete, handleUpdate }
 ```
 
 ### hooks\useOnlineStatus.ts
 ```
 export function useOnlineStatus() → boolean
+```
+
+### hooks\useDialogBehavior.ts
+```
+export function useDialogBehavior(open, onClose) → RefObject<HTMLDivElement>
+```
+
+### hooks\useReducedMotion.ts
+```
+export function useReducedMotion() → boolean
+```
+
+### hooks\usePresence.ts
+```
+export function usePresence(open, exitMs?) → { mounted, visible }
+```
+
+### hooks\useCountUp.ts
+```
+export function useCountUp(value) → number
+```
+
+### hooks\useChartAnimation.ts
+```
+export function useChartAnimation() → { isAnimationActive, animationDuration, animationEasing }
 ```
 
 ## lib
@@ -796,7 +955,9 @@ export async function updateTransaction(id, data)
 export async function deleteTransaction(id)
 export async function getTransactionIds() → Promise<string[]>
 export async function getDashboardData(month, year)
-export async function getTransactions(filters) → Promise<
+export async function getRangeDashboardData(startISO, endISO, granularity, withWealthSeries?)
+export async function getEarliestTransactionDate() → Promise<string | null>
+export async function getTransactions(filters) → Promise<{ transactions, nextCursor, totalCount, totalIncome, totalExpenses }>
 export const getCategories (React.cache'd)
 export async function addCategory(data)
 export async function updateCategory(id, data)
@@ -807,17 +968,19 @@ export async function createRecurringTransaction(data)
 export async function updateRecurringTransaction(id, data)
 export async function deleteRecurringTransaction(id)
 export async function postRecurringTransaction(id)
+export async function backfillRecurringTransaction(id) → Promise<{ count, recurring, transactions }>
 export async function getBudgets()
-export async function upsertBudget(data)
+export async function saveBudget(data, id?)
 export async function deleteBudget(id)
+export async function getUsedLabels() → Promise<string[]>
 export async function skipRecurringTransaction(id)
-export async function changePassword(currentPassword, newPassword) → Promise<
-export async function createUser(data) → Promise<
+export async function changePassword(currentPassword, newPassword) → Promise<{ success: true }>
+export async function createUser(data) → Promise<{ id, email }>
 export async function getSessionRole() → Promise<string>
 export async function getUsers()
 export async function deleteUser(id) → Promise<void>
-export async function updateUser(id, data) → Promise<
-export async function adminResetPassword(id, newPassword) → Promise<
+export async function updateUser(id, data) → Promise<{ id, email, name, role }>
+export async function adminResetPassword(id, newPassword) → Promise<{ success: true }>
 ```
 
 ### lib\db-adapter.ts
@@ -826,8 +989,13 @@ export const IS_SQLITE: boolean
 export function parseLabels(val) → string[]
 export function encodeLabels(labels) → unknown
 export function normalizeTx(tx) → object
+export function parseBudgetArray(val) → string[]
+export function encodeBudgetArray(arr) → unknown
+export function normalizeBudget(b) → object
 export function getLabelFilter(label?) → Record<string, unknown>
-export async function getDailyRows(userId, start, end) → Promise<Array<...>>
+export type TrendGranularity
+export async function getTrendRows(userId, start, end, granularity?, includeOffChart?) → Promise<Array<{ day, type, total }>>
+export function getDailyRows(userId, start, end) → Promise<...>
 ```
 
 ### lib\validation.ts
@@ -849,7 +1017,12 @@ export interface LocalTransaction
   type: "income" | "expense"
   note?: string
   labels: string[]
+  excludedBudgetIds: string[]
+  excludeFromStats: boolean
   date: string
+  syncStatus: "synced" | "pending" | "pending-update" | "pending-delete"
+  syncError?: string
+  createdAt: string
 export interface QueuedOp
   queueId?: number
   op: "add" | "update" | "delete"
@@ -857,16 +1030,22 @@ export interface QueuedOp
   payload: Record<string, unknown>
   createdAt: string
   retryCount?: number
+  nextRetryAt?: number
 export async function putTransaction(tx) → Promise<void>
 export async function patchTransaction(id, patch) → Promise<void>
 export async function getTransactionsByMonth(userId, month, year) → Promise<LocalTransaction[]>
-export async function getTransactionFromIDB(id) → Promise<LocalTransaction | und
+export async function getTransactionsInRange(userId, startISO, endISO) → Promise<LocalTransaction[]>
+export async function getTransactionFromIDB(id) → Promise<LocalTransaction | undefined>
 export async function deleteTransactionFromIDB(id) → Promise<void>
-export async function replaceTempId(tempId, realId, serverPatch) → Promise<void>
-export async function enqueueOp(op, "queueId">) → Promise<void>
+export async function replaceTempId(tempId, realId, serverPatch?) → Promise<void>
+export async function enqueueOp(op) → Promise<void>
 export async function getAllQueuedOps() → Promise<QueuedOp[]>
 export async function deleteQueuedOp(queueId) → Promise<void>
 export async function updateQueuedOp(op) → Promise<void>
+export async function getPendingCount() → Promise<number>
+export async function getFailedSyncCount() → Promise<number>
+export async function seedIDBFromServer(serverTransactions, userId) → Promise<void>
+export async function reconcileWithServer(serverIds, userId) → Promise<number>
 ```
 
 ### lib\parser.ts
@@ -882,29 +1061,43 @@ export function parseExpenseInput(input) → ParsedExpense | null
 
 ### lib\sync.ts
 ```
-export async function drainQueue() → Promise<
-export async function applyLocalMutation(op, data) → Promise<
+export { seedIDBFromServer }
+export async function drainQueue(options?) → Promise<{ synced, failed }>
+export async function applyLocalMutation(op, data) → Promise<{ committed, wasQueued }>
 export async function reconcileAfterSync(userId) → Promise<number>
 ```
 
 ### lib\utils.ts
 ```
 export const DEFAULT_CATEGORIES (server-side use only)
-export type RecurringFrequency
 export function cn(...inputs)
+export type RecurringFrequency
 export function formatCurrency(amount) → string
 export function getNextDueDate(frequency, startDate, lastRun) → Date
-export function getRecurringStatus(nextDue, endDate) → "upcoming" | "due" | "overdue"
+export function getRecurringStatus(nextDue, endDate) → "upcoming" | "due" | "overdue" | "ended"
 export function isPostedThisPeriod(frequency, lastRun) → boolean
 export function toMonthlyAmount(frequency, amount) → number
 export function countRemainingPayments(frequency, nextDue, endDate) → number
+export const MAX_BACKFILL: number
+export function countMissedPeriods(frequency, startDate, lastRun, endDate) → number
 export function formatDate(date) → string
 export function formatDateShort(date) → string
 export function getMonthName(month) → string
-export function getCurrentMonthYear()
-export function getPrevMonth(month, year)
-export function getNextMonth(month, year)
+export function getCurrentMonthYear() → { month, year }
+export function getPrevMonth(month, year) → { month, year }
+export function getNextMonth(month, year) → { month, year }
+export function enumerateMonths(start, end) → { year, month }[]
 export function stringToColor(str) → string
+```
+
+### lib\db.ts
+```
+export const db: PrismaClient
+```
+
+### lib\auth.ts
+```
+export const authOptions: NextAuthOptions
 ```
 
 ## types
@@ -915,6 +1108,14 @@ export interface Transaction
 export interface CategoryData
 export interface DailyData
 export interface RecurringTransaction
+export type BudgetType
 export interface Budget
 export interface CategoryOption
+export type Period
+```
+
+### types\next-auth.d.ts
+```
+declare module "next-auth" (User, Session)
+declare module "next-auth/jwt" (JWT)
 ```
