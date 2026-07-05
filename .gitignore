@@ -25,6 +25,9 @@ generated/
 *.db-wal
 *.db-shm
 
+# Database backups (may contain production data — never commit)
+backups/
+
 # Vercel
 .vercel
 
