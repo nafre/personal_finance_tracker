@@ -151,7 +151,7 @@ From the Jul 2026 review. Each is its own project; **do not bundle**:
 - **React 18 → 19** — 18 is still LTS; note the codebase deliberately avoids `startTransition(async fn)` because of React 18 behavior — revisit that note when upgrading.
 - **Tailwind 3 → 4** — architectural changes; verify custom utility classes in `app/globals.css`.
 - **Recharts 2 → 3** — chart API breaking changes; re-baseline visual snapshots after.
-- **TypeScript 5.6 → 6.0** — lowest risk, mostly stricter checks.
+- ~~**TypeScript 5.6 → 6.0**~~ DONE — both `package.json` (root, `mcp-server`) bumped to `^6.0.3` in separate commits. Zero source changes needed: both `tsconfig.json`s already had `strict`/`skipLibCheck` on, and the risk-surface scan (no `@ts-ignore`, `enum`, `namespace`, `satisfies`, or decorators) turned up clean. Verified via `npm run build` in both packages plus a manual smoke test (SQLite dev mode: budget create/delete, year/all-time views) — no runtime regressions.
 
 ### 5e — Align mcp-server zod Version (S, low)
 
