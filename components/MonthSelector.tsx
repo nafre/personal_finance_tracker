@@ -32,10 +32,13 @@ export function MonthSelector({ period, month, year, showPeriodToggle = true }: 
     params.set("period", next.period);
     if (next.month != null) params.set("month", String(next.month));
     if (next.year != null) params.set("year", String(next.year));
+    // Same event NavBar links fire — TopLoadingBar shows until the URL updates.
+    window.dispatchEvent(new Event("nav-start"));
     router.push(`${pathname}?${params.toString()}`);
   }
 
   function switchPeriod(p: Period) {
+    if (p === period) return; // no-op nav would leave the loading bar stuck
     if (p === "all") go({ period: "all" });
     else go({ period: p, month, year });
   }

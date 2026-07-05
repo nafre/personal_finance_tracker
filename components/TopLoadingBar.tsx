@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
-export function TopLoadingBar() {
+function TopLoadingBarInner() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const navKey = `${pathname}?${searchParams.toString()}`;
   const [active, setActive] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -24,7 +26,7 @@ export function TopLoadingBar() {
       if (hideTimer.current) clearTimeout(hideTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  }, [navKey]);
 
   if (!active) return null;
 
@@ -35,5 +37,14 @@ export function TopLoadingBar() {
     >
       <div className="h-full bg-indigo-500 animate-nav-progress" />
     </div>
+  );
+}
+
+export function TopLoadingBar() {
+  // useSearchParams requires a Suspense boundary during prerender.
+  return (
+    <Suspense fallback={null}>
+      <TopLoadingBarInner />
+    </Suspense>
   );
 }
