@@ -122,6 +122,12 @@ export function DashboardContent(props: DashboardContentProps) {
 
   const { period, month, year, deltaLabel } = props;
 
+  // Past months are review-only: adding is hidden (quick-add always dates to
+  // *today*, so it can never land in the viewed month), today-anchored widgets
+  // (due-week, recurring) disappear, and edit/delete actions are removed.
+  // Deliberate corrections to historical data go through /transactions.
+  const readOnlyMonth = isMonthView && !isCurrentMonth;
+
   // "42% saved" / "12% overspent" subtitle for the Net card.
   const savingsLabel =
     savingsRate == null
@@ -145,7 +151,17 @@ export function DashboardContent(props: DashboardContentProps) {
     <div className="space-y-5">
       {/* Period selector */}
       <div className="flex flex-wrap items-center justify-between gap-y-2">
-        <MonthSelector period={period} month={month} year={year} />
+        <div className="flex items-center gap-3 flex-wrap">
+          <MonthSelector period={period} month={month} year={year} />
+          {readOnlyMonth && (
+            <span
+              data-testid="view-only-badge"
+              className="text-[11px] font-medium text-slate-500 border border-slate-700 rounded-full px-2 py-0.5 whitespace-nowrap"
+            >
+              Past month · view only
+            </span>
+          )}
+        </div>
         {topCategory && (
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <span>Top spend:</span>
@@ -160,9 +176,10 @@ export function DashboardContent(props: DashboardContentProps) {
       {/* Offline / syncing status */}
       <SyncStatusBar />
 
-      {/* Quick input + recurring — month view only (adding/recurring are
-          month-centric concepts) */}
-      {isMonthView && (
+      {/* Quick input + recurring — current month only. Adding always dates to
+          today, and due-week/recurring status is anchored to *now*, so none of
+          these belong on a past-month (or year/all-time) view. */}
+      {isCurrentMonth && (
         <>
           {/* Quick input — desktop only; mobile uses FAB below */}
           <div className="hidden md:block">
@@ -448,12 +465,17 @@ export function DashboardContent(props: DashboardContentProps) {
               <div className="w-1 h-4 rounded-full bg-indigo-500 opacity-60" />
               <h3 className="text-sm font-semibold text-slate-200">Budget</h3>
             </div>
-            <button
-              onClick={() => setShowBudgetManager(true)}
-              className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
-            >
-              Manage →
-            </button>
+            {/* Budgets are global monthly limits — editing them from a past
+                month would retroactively change that month's view, so the
+                entry point only exists on the current month. */}
+            {isCurrentMonth && (
+              <button
+                onClick={() => setShowBudgetManager(true)}
+                className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+              >
+                Manage →
+              </button>
+            )}
           </div>
           <div className="space-y-3">
             {budgets.map((b) => {
@@ -471,8 +493,8 @@ export function DashboardContent(props: DashboardContentProps) {
         </DashboardErrorBoundary>
       )}
 
-      {/* Set up budgets CTA */}
-      {isMonthView && budgets.length === 0 && (
+      {/* Set up budgets CTA — current month only (see Manage note above) */}
+      {isCurrentMonth && budgets.length === 0 && (
         <div className="card flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-slate-300">No budgets set</p>
@@ -505,9 +527,9 @@ export function DashboardContent(props: DashboardContentProps) {
         {mergedTransactions.length === 0 ? (
           <div className="text-center py-6">
             <p className="text-sm text-slate-400">
-              {isMonthView ? "No transactions yet." : "No transactions in this period."}
+              {isCurrentMonth ? "No transactions yet." : "No transactions in this period."}
             </p>
-            {isMonthView && (
+            {isCurrentMonth && (
               <p className="text-xs text-slate-500 mt-1">Use the input above to add your first one.</p>
             )}
           </div>
@@ -519,6 +541,7 @@ export function DashboardContent(props: DashboardContentProps) {
             onRestore={handleTransactionPosted}
             compact
             budgets={budgetOptions}
+            readOnly={readOnlyMonth}
           />
         )}
       </div>
@@ -527,7 +550,8 @@ export function DashboardContent(props: DashboardContentProps) {
       {/* Budget manager modal */}
       {showBudgetManager && <BudgetManager onClose={() => setShowBudgetManager(false)} />}
 
-      {/* Mobile bottom sheet for quick add */}
+      {/* Mobile bottom sheet for quick add — current month only, like the FAB */}
+      {isCurrentMonth && (
       <QuickAddSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
@@ -537,6 +561,7 @@ export function DashboardContent(props: DashboardContentProps) {
         onReplace={handleReplace}
         onRemove={handleDelete}
       />
+      )}
     </div>
   );
 }

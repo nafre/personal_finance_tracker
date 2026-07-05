@@ -60,7 +60,7 @@ The dev server must be running (`npm run dev`) before using these tools. The MCP
 | File | What it covers |
 |------|----------------|
 | `e2e/login.spec.ts` | Login layout, error state |
-| `e2e/dashboard.spec.ts` | Full page, stat cards, quick-add, transaction list, recurring section, due-week card, navigation, category donut, pace chart (fixed past month), wealth curve (all-time), day-of-week profile (presence only — its bars drift daily, so the year/all-time full-page tests mask the `[data-testid="dow-chart"]` card) |
+| `e2e/dashboard.spec.ts` | Full page, stat cards, quick-add, transaction list, recurring section, due-week card, navigation, category donut, pace chart (fixed past month), past-month read-only view (badge + absence of edit affordances), wealth curve (all-time), day-of-week profile (presence only — its bars drift daily, so the year/all-time full-page tests mask the `[data-testid="dow-chart"]` card) |
 | `e2e/transactions.spec.ts` | Full page, filter bar, summary strip, transaction list, category filter |
 | `e2e/settings.spec.ts` | Settings page: categories tab, account tab, users tab (admin) |
 
@@ -268,7 +268,9 @@ Admin users see a **Users** tab in Settings (non-admins see only Categories and 
 
 #### Month navigation
 
-The dashboard supports historical month browsing via `?month=&year=` search params (e.g. `?month=3&year=2025`). `MonthSelector` renders prev/next arrows and updates the URL. The server component fetches both the selected month and the previous month (for MoM comparisons on stat cards).
+The dashboard supports historical month browsing via `?month=&year=` search params (e.g. `?month=3&year=2025`). `MonthSelector` renders prev/next arrows and updates the URL. The server component fetches both the selected month and the previous month (for MoM comparisons on stat cards). `MonthSelector` wraps `router.push` in a transition and dispatches `nav-start` / `nav-end` window events so `TopLoadingBar` stays visible until the new data actually commits (the URL updates optimistically long before).
+
+**Past months are read-only** (`readOnlyMonth = isMonthView && !isCurrentMonth` in `DashboardContent`): quick-add (input, FAB, sheet), the due-week card, and the recurring section render only on the current month (they're all today-anchored — quick-add always dates to *today*); the budget Manage/Set-up entry points are hidden (budgets are global, editing would retroactively change the historical view); and the recent-transactions list gets `readOnly` (a `TransactionList` prop that hides edit/delete). A "Past month · view only" badge (`data-testid="view-only-badge"`) sits next to the selector. Deliberate historical corrections go through `/transactions`, which stays editable.
 
 #### Income/Expense toggle
 `ExpenseInput` has an **Exp / Inc** pill toggle left of the text field. State: `manualTypeOverride` (`null` = follow parser). Resets to `null` when input is cleared.

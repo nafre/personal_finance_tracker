@@ -35,6 +35,8 @@ interface TransactionListProps {
   onRestore?: (tx: Transaction) => void;
   compact?: boolean;
   budgets?: BudgetOption[];
+  /** Hide edit/delete actions — used by the dashboard when viewing a past month. */
+  readOnly?: boolean;
 }
 
 // Pill badge for a single label
@@ -196,6 +198,7 @@ const TransactionRow = memo(function TransactionRow({
   categories,
   budgets,
   highlight,
+  readOnly,
 }: {
   tx: Transaction;
   onDelete: (id: string) => void;
@@ -206,6 +209,7 @@ const TransactionRow = memo(function TransactionRow({
   budgets: BudgetOption[];
   /** Just-added row — plays a one-shot slide-in + brand-tint flash. */
   highlight?: boolean;
+  readOnly?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [editAmount, setEditAmount] = useState(tx.amount.toString());
@@ -523,7 +527,7 @@ const TransactionRow = memo(function TransactionRow({
           {isIncome ? "+" : "−"}
           {formatCurrency(tx.amount)}
         </span>
-        {confirmingDelete ? (
+        {!readOnly && (confirmingDelete ? (
           <div className="flex items-center gap-1.5 animate-fade-in">
             <button
               onClick={handleDelete}
@@ -565,7 +569,7 @@ const TransactionRow = memo(function TransactionRow({
             )}
           </button>
         </div>
-        )}
+        ))}
       </div>
     </div>
     {rowError && (
@@ -582,6 +586,7 @@ export function TransactionList({
   onRestore,
   compact = false,
   budgets = [],
+  readOnly = false,
 }: TransactionListProps) {
   const [txs, setTxs] = useState(initial);
   const [categories, setCategories] = useState<CategoryMeta[]>([]);
@@ -652,6 +657,7 @@ export function TransactionList({
           categories={categories}
           budgets={budgets}
           highlight={!seenIdsRef.current!.has(tx.id)}
+          readOnly={readOnly}
         />
       ))}
     </div>

@@ -207,6 +207,39 @@ test.describe("Dashboard", () => {
   });
 });
 
+// ── Past month (read-only) ──────────────────────────────────────────────────
+// Historical months are review-only: no quick-add (adds always date to today),
+// no today-anchored widgets (due-week / recurring), no budget Manage entry,
+// and no edit/delete on transaction rows. Fixed past month = stable data.
+
+test.describe("Dashboard — past month (read-only)", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/dashboard?month=5&year=2026");
+    await waitForReady(page);
+  });
+
+  test("full page layout — view-only badge, no edit affordances", async ({ page }) => {
+    await expect(page.locator('[data-testid="view-only-badge"]')).toBeVisible();
+    await expect(page).toHaveScreenshot("past-month-full-page.png", {
+      fullPage: true,
+      animations: "disabled",
+      mask: amountMasks(page),
+    });
+  });
+
+  test("edit actions are absent", async ({ page }) => {
+    await expect(page.locator('[data-testid="expense-input"]')).toHaveCount(0);
+    await expect(page.locator('[aria-label="Add expense"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="due-week-card"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="recurring-section"]')).toHaveCount(0);
+    await expect(page.getByText("Manage →")).toHaveCount(0);
+    // Transaction rows render without edit/delete buttons
+    await expect(page.locator('[data-testid="transaction-list"]')).toBeVisible();
+    await expect(page.locator('[aria-label^="Edit "]')).toHaveCount(0);
+    await expect(page.locator('[aria-label^="Delete "]')).toHaveCount(0);
+  });
+});
+
 // ── Year view ─────────────────────────────────────────────────────────────
 // Wider period mode: monthly trend, category breakdown, no month-only widgets
 // (quick-add / recurring / budgets / daily-avg card are hidden).
