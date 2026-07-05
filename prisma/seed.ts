@@ -3,14 +3,28 @@ import path from "path";
 const IS_SQLITE = (process.env.DATABASE_URL ?? "").startsWith("file:");
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { PrismaClient } = IS_SQLITE
-  ? require(path.join(process.cwd(), "node_modules/.prisma/client-sqlite"))
-  : require("@prisma/client");
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const bcrypt = require("bcryptjs");
 
-const prisma = new PrismaClient();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let prisma: any;
+if (IS_SQLITE) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PrismaClient } = require(
+    path.join(process.cwd(), "generated/prisma-sqlite/client")
+  );
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PrismaBetterSqlite3 } = require("@prisma/adapter-better-sqlite3");
+  const adapter = new PrismaBetterSqlite3(
+    { url: process.env.DATABASE_URL },
+    // Keep DateTime columns as integer epoch-ms — see lib/db.ts.
+    { timestampFormat: "unixepoch-ms" }
+  );
+  prisma = new PrismaClient({ adapter });
+} else {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PrismaClient } = require("@prisma/client");
+  prisma = new PrismaClient();
+}
 
 const DEFAULT_CATEGORIES = [
   { name: "Food", icon: "🍽️", color: "#f59e0b" },

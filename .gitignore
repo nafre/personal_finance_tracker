@@ -17,6 +17,7 @@ build/
 
 # Prisma generated
 prisma/migrations/
+generated/
 
 # SQLite local dev database
 *.db

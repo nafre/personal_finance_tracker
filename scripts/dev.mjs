@@ -38,7 +38,7 @@ const isSQLite = dbUrl.startsWith("file:");
 if (isSQLite) {
   console.log("[dev] SQLite mode — bootstrapping local database...");
 
-  const clientDir = join(root, "node_modules/.prisma/client-sqlite");
+  const clientDir = join(root, "generated/prisma-sqlite");
   if (!existsSync(clientDir)) {
     console.error(
       "[dev] SQLite Prisma client not found. Run once:\n" +
@@ -51,7 +51,6 @@ if (isSQLite) {
     execSync(
       "npx prisma db push" +
         " --schema prisma/schema.sqlite.prisma" +
-        " --skip-generate" +
         " --accept-data-loss",
       { cwd: root, stdio: "inherit" }
     );
