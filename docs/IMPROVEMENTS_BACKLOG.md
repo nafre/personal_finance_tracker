@@ -17,7 +17,7 @@ Add multi-select checkboxes to `TransactionList`, a "Delete selected" action, an
 ### 1f — Undo for Delete (S, medium)
 5-second toast with "Undo" that re-inserts the deleted record before the server confirms deletion.
 - Start: `components/TransactionList.tsx` `handleDelete` — stash the deleted record in a ref, show toast, cancel deletion on undo.
-- Works without a new library: a simple `<div>` toast in the component tree.
+- `context/ToastContext.tsx` now exists (Jul 2026) — extend `showToast` with an optional action button (`{ label, onClick }`) instead of building a one-off toast. The exit animation plumbing (`usePresence`) is already there.
 
 ### ~~1g — Visual Category Picker in Quick-Add~~ DONE
 Implemented as a unified chip row in `ExpenseInput` (icon + colour tint, recently-used first, then all categories). Categories are fetched server-side on the dashboard page and passed down as `CategoryOption[]`; the transactions page reuses its existing on-mount fetch.
@@ -43,6 +43,18 @@ All three shipped (Jul 2026):
 - **Duplicate** — Copy icon on `RecurringRow` opens `RecurringForm` in create mode prefilled from the rule (" (copy)" name, start date reset to today, past end dates dropped so the copy isn't born ended).
 - **Due this week** — month-view summary card above the recurring section (`data-testid="due-week-card"`): count + expense/income totals for rules due within 7 days (overdue included); computed in the consolidated recurring memo in `useDashboardState`; "Review →" expands the recurring list. Hidden when nothing qualifies.
 
+### 1l — CSV Import (M, medium)
+Companion to the CSV export: upload a CSV (own export format first; bank formats later) and bulk-create transactions. Makes the export/backup story round-trip.
+- Parse client-side, preview rows in a table with per-row include checkboxes, then submit via a new `addTransactions(rows[])` server action (Zod-validate each row; cap batch size).
+- Dedupe against existing data by `(date, amount, category)` and flag suspected duplicates in the preview rather than silently skipping.
+- Start: new `components/ImportDialog.tsx` (use `hooks/useDialogBehavior.ts`), `lib/actions.ts`.
+
+### 1m — Auto-Post Recurring Rules (M, medium)
+Posting is manual today (Post button / backfill). An opt-in `autoPost` flag per rule plus a daily cron (Vercel Cron → `app/api/cron/route.ts`) would post due rules server-side without opening the app.
+- Idempotency comes free: `postRecurringTransaction` advances `lastRun` atomically, so a re-run posts nothing new. Reuse `backfillRecurringTransaction` semantics for rules more than one period behind.
+- Guard the route with `CRON_SECRET` (Vercel sends it as a Bearer header).
+- Schema change: `autoPost Boolean @default(false)` on `RecurringTransaction` (both schemas + `RecurringForm` checkbox).
+
 ---
 
 ## Performance
@@ -66,8 +78,8 @@ When `IS_SQLITE` and a label filter is active, `getTransactions` fetches **all**
 ### ~~2e — `getTransactionIds` Select-Only~~ DONE
 `lib/actions.ts:getTransactionIds` now uses `select: { id: true }` — only IDs are fetched.
 
-### ~~2f — Lazy-Load SpendingPieChart~~ DONE (removed as dead code)
-`SpendingPieChart` was imported nowhere (the dashboard's category breakdown is `SpendingInsights`, no Recharts), so the component was deleted instead of lazy-wrapped. If a pie chart is ever re-introduced, follow the `dynamic(... , { ssr: false })` pattern used by `TrendChart`.
+### ~~2f — Lazy-Load SpendingPieChart~~ DONE (removed as dead code, then rebuilt)
+`SpendingPieChart` was imported nowhere at the time and deleted. It has since been rebuilt from scratch for the month view (see 7k) and **is** lazy-loaded with `dynamic(..., { ssr: false })` as prescribed — nothing left to do here.
 
 ---
 
@@ -85,6 +97,17 @@ The transactions page's `loadMore()` appends the next cursor page without checki
 
 ### ~~3d — Toast Notifications~~ DONE
 Minimal `context/ToastContext.tsx` (no new dependency): `useToast().showToast(message, type)` with queue (max 3), 5s auto-dismiss, manual dismiss, `role="alert"` for errors. Mounted in `Providers`. Used for the failures that were invisible before: background add failure after `QuickAddSheet` closes (`ExpenseInput`), delete-failed-restored (`TransactionList`), recurring delete failure (`RecurringList`).
+
+### 3g — Service Worker Update Notification (S, medium)
+`public/sw.js` serves `/_next/static/**` cache-first, so after a deploy users can run a stale bundle until the new SW activates on a later visit — the same staleness documented as a dev gotcha, but in production. Detect the waiting worker and offer a refresh.
+- In `SyncProvider`'s registration effect, listen for `registration.waiting` / `updatefound` → show a persistent "New version available — Refresh" toast (needs the ToastContext action-button extension from 1f); on click, `postMessage({ type: "SKIP_WAITING" })` to the SW then reload.
+- Start: `context/SyncProvider.tsx`, `public/sw.js` (add the `SKIP_WAITING` message handler).
+
+### 3h — E2E Coverage for the Offline Flow (M, medium)
+The offline machinery (IDB queue, pending badges, temp-ID replacement, reconnect drain) has zero automated coverage — the Playwright suite is visual-only and always online. A regression here is invisible until someone actually goes offline.
+- Playwright can drive it: `context.setOffline(true)` → quick-add → assert amber "Pending" badge → reload (still offline) → assert persistence → `setOffline(false)` → assert badge clears and the row survives with a real ID.
+- Keep it a functional spec (assertions, not screenshots) so it doesn't add snapshot-churn surface.
+- Start: new `e2e/offline.spec.ts`, reusing the login helper in `e2e/helpers.ts`.
 
 ### ~~3f — Stale IDB Ghost After Cross-Page Delete~~ DONE
 Fixed in two halves: (1) `TransactionList`'s online edit/delete now write through to the IDB mirror (`patchTransaction` with the server-canonical record / `deleteTransactionFromIDB` after server success), so cross-page mutations can no longer orphan mirror records; (2) `SyncProvider` exposes `reconcileCount`, bumped whenever `reconcileAfterSync` purges stale records — the dashboard's pending-load effect depends on it, so ghosts captured into React state before a reconcile finished are dropped without a reload.
@@ -119,7 +142,7 @@ State and handlers were extracted to `hooks/useDashboardState.ts`. `DashboardCon
 Dialect abstraction lives in `lib/db-adapter.ts`: `IS_SQLITE`, `parseLabels`, `encodeLabels`, `normalizeTx`, `getLabelFilter`, `getDailyRows`. `lib/actions.ts` imports from there.
 
 ### 5c — Unit Tests (L, medium)
-`lib/parser.ts`, `lib/utils.ts` (`getNextDueDate`, `getRecurringStatus`), and `lib/sync.ts` are untested but regression-prone.
+`lib/parser.ts`, `lib/utils.ts` (`getNextDueDate`, `getRecurringStatus`, `countMissedPeriods` — the backfill count drives real transaction creation), and `lib/sync.ts` are untested but regression-prone.
 - Add Vitest and write tests for these pure functions.
 
 ### 5d — Major Dependency Upgrades (L, low urgency — tackle one at a time)
@@ -146,7 +169,12 @@ From the Jul 2026 review. Each is its own project; **do not bundle**:
 
 ### 6d — Validate `/api/export` Query Params (S, low)
 `month`/`year` come from `parseInt` with no NaN guard, and the `getTransactions` call has no try/catch — malformed params produce silent NaN filters or an unhandled 500. Validate params (reject or default on NaN) and wrap the fetch with an error response.
-- Start: `app/api/export/route.ts`.
+- Start: `app/api/export/route.ts`. Pair with 6e — same file.
+
+### 6e — CSV Export Ignores Date-Range Filters (S, medium)
+`handleExport` on the transactions page passes `month`/`year`/`category`/`label`/`q` but drops the `from`/`to` date-range filters, and the route doesn't accept them either — so with a date range active, the downloaded CSV silently contains the **whole month**, not what's on screen.
+- Fix both ends: forward `from`/`to` in `handleExport` and accept them in the route (they're already supported by `getTransactions`' filter object).
+- Start: `app/(dashboard)/transactions/page.tsx` `handleExport`, `app/api/export/route.ts`.
 
 ### 6b — Sentry Error Reporting (S, medium)
 No production error visibility. Sentry's free tier covers a single-user app.
@@ -165,10 +193,8 @@ New charts scoped in Jul 2026. Each is tagged with the view it belongs to (month
 ### ~~7a — Cumulative Spend Pace Line~~ DONE — month view
 `components/charts/PaceChart.tsx` (lazy-loaded): cumulative spend vs last month's curve (muted) vs a straight even-pace line to the month's spending cap, with an "RM X ahead of / under pace" badge. The cap prefers an `overall` budget, falling back to an `excluded`-type budget's amount (overall-minus-categories is still a month-wide cap); `category`/`label` budgets never draw the line. Spend is chart-basis (excludeFromStats filtered), consistent with `SpendingInsights`' burn rate. No extra fetch was needed — the prev-month `getDashboardData` call already returned `dailyData`; it's now passed down as the `prevDailyData` prop. In the current month the spend line stops at today. Snapshot note: the current-month plot changes daily, so the month full-page e2e test masks the whole card and the dedicated test uses a fixed past month.
 
-### 7b — Category Month-over-Month Comparison (S, high) — month view
-Horizontal paired/diverging bars per category: this month vs last, delta labelled ("Food +RM120"). The stat cards' MoM delta covers only the total — this shows which category moved.
-- Cheapest win: `prevCategoryData` is **already passed as a prop** to `DashboardContent` and only used for the top-level delta today.
-- Start: toggle inside `components/SpendingInsights.tsx` (no new data fetch).
+### ~~7b — Category Month-over-Month Comparison~~ DONE (as delta badges) — month view
+Shipped in `SpendingInsights`: each top-5 category bar now carries a MoM % delta badge (arrow up/down, rose/emerald) computed from `prevCategoryData` — the "which category moved" question is answered. The full paired/diverging-bars visualization with RM deltas ("Food +RM120") was deliberately not built; revisit only if the % badges prove insufficient.
 
 ### 7c — Cash-Flow Waterfall (M, medium) — month view
 Income on the left, stepping down through top expense categories, ending at the month's balance — the month's story as one narrative. Recharts has no native waterfall; use the stacked-bar-with-transparent-base trick.
@@ -181,9 +207,10 @@ Twelve bars stacked by top-5 categories + "Other", consistent colours across mon
 - Start: `lib/actions.ts`, new `components/charts/StackedMonthlyChart.tsx`.
 
 ### 7e — Savings Rate Trend (S, medium) — year view
-Line of `(income − expenses) / income` per month with a 0% reference line. The rate tracks financial health better than absolute numbers; no current view computes it.
-- Pure client-side arithmetic over the year view's existing monthly totals. Could render as a sparkline inside the balance stat card instead of a full chart.
-- Start: `hooks/useDashboardState.ts` (or the year-view equivalent), `components/StatCard.tsx`.
+Line of `(income − expenses) / income` per month with a 0% reference line. The rate tracks financial health better than absolute numbers.
+- **Partially covered**: the Net stat card now shows the current period's savings rate as its subtitle ("X% saved" / "X% overspent" — `savingsRate` in `useDashboardState`). The per-month *trend* line is still unbuilt.
+- Pure client-side arithmetic over the year view's existing monthly totals (`wealthData`/`dailyData` buckets already carry per-month income and expense).
+- Start: `hooks/useDashboardState.ts`, new sparkline in `components/StatCard.tsx` or a line in `MonthlyBarChart`'s tooltip.
 
 ### 7f — Fixed vs Variable Split (M, medium) — year view
 Stacked area per month: spend from recurring rules (rent, subscriptions) vs everything else — shows what portion of spending is actually controllable. Approximation is fine: sum `toMonthlyAmount()` over active rules as the fixed band, or match transactions to rules by category + amount tolerance.
