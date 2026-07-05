@@ -91,7 +91,7 @@ export function WealthCurve({ data }: WealthCurveProps) {
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={240}>
-          <AreaChart data={points} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+          <AreaChart data={points} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} accessibilityLayer={false}>
             <defs>
               <linearGradient id="gradWealth" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />

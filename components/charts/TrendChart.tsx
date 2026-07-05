@@ -80,7 +80,7 @@ export function TrendChart({ data, labelEvery, emptyMessage, showCumulative }: T
 
   return (
     <ResponsiveContainer width="100%" height={200}>
-      <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+      <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} accessibilityLayer={false}>
         <defs>
           <linearGradient id="gradExpense" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />

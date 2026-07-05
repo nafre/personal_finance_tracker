@@ -90,7 +90,7 @@ export function MonthlyBarChart({ data, wealthData, emptyMessage }: MonthlyBarCh
   return (
     <>
       <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={merged} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+        <BarChart data={merged} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} accessibilityLayer={false}>
           <defs>
             {/* Diagonal hatch for the off-chart segment — dimmer than the
                 solid expense fill so it reads as "present but atypical". */}

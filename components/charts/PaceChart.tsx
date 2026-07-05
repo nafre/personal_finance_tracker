@@ -126,7 +126,7 @@ export function PaceChart({ dailyData, prevDailyData, budgetAmount, month, year 
       ) : (
         <div data-testid="pace-chart-plot">
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={points} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+            <LineChart data={points} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} accessibilityLayer={false}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
               <XAxis
                 dataKey="date"

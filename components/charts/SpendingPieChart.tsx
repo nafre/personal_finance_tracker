@@ -97,7 +97,7 @@ export function SpendingPieChart({ categoryData, categories, month, year }: Spen
         <>
           <div className="relative">
             <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
+              <PieChart accessibilityLayer={false}>
                 <Tooltip content={<DonutTooltip total={total} />} />
                 <Pie
                   data={slices}
