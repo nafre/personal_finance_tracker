@@ -207,7 +207,7 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
       <div className="grow shrink basis-40 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium text-slate-200 truncate">{rec.name}</span>
-          <span className="text-xs text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">
+          <span className="text-xs text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded-sm">
             {FREQ_LABELS[rec.frequency] ?? rec.frequency}
           </span>
           {/* Mobile: status badge lives here so the right column doesn't squeeze the name */}

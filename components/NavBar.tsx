@@ -69,7 +69,7 @@ export function NavBar() {
         {/* Brand */}
         <div className={cn("flex items-center mb-8 pt-1", collapsed ? "justify-center" : "gap-3 px-1")}>
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0 bg-gradient-to-br from-brand to-brand-violet shadow-[0_4px_12px_rgba(99,102,241,0.4)]"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0 bg-linear-to-br from-brand to-brand-violet shadow-[0_4px_12px_rgba(99,102,241,0.4)]"
             aria-hidden="true"
           >
             💸
@@ -130,7 +130,7 @@ export function NavBar() {
       {/* Mobile bottom nav */}
       <nav
         data-testid="bottom-nav"
-        className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 flex pb-[var(--safe-bottom)]"
+        className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 flex pb-(--safe-bottom)"
       >
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;

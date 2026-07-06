@@ -111,7 +111,7 @@ function LabelEditor({
         onKeyDown={handleKeyDown}
         onBlur={() => { if (input.trim()) addLabel(input); }}
         placeholder={value.length === 0 ? "Add labels… (Enter to confirm)" : ""}
-        className="bg-transparent outline-none text-base sm:text-sm text-slate-200 placeholder:text-slate-500 flex-1 min-w-[120px]"
+        className="bg-transparent outline-hidden text-base sm:text-sm text-slate-200 placeholder:text-slate-500 flex-1 min-w-[120px]"
       />
     </div>
   );
@@ -412,7 +412,7 @@ const TransactionRow = memo(function TransactionRow({
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
               type="checkbox"
-              className="h-4 w-4 rounded border-slate-600 bg-slate-700 accent-indigo-500"
+              className="h-4 w-4 rounded-sm border-slate-600 bg-slate-700 accent-indigo-500"
               checked={editExcludeFromStats}
               onChange={(e) => setEditExcludeFromStats(e.target.checked)}
             />

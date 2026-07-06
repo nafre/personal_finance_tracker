@@ -103,7 +103,7 @@ When `DATABASE_URL` is set, all `POSTGRES_*` variables are ignored and the app u
 
 ## Architecture
 
-**Stack:** Next.js 16 App Router · React 19 · Prisma 7 (PostgreSQL/Supabase via `@prisma/adapter-pg`, or SQLite via `@prisma/adapter-better-sqlite3`) · NextAuth v4 · SWR 2 · Recharts · Tailwind CSS · `lucide-react` (icons) · IndexedDB (`idb@8`) · `bcryptjs` (password hashing) · `zod` (input validation) · `clsx` + `tailwind-merge` (`cn()` helper)
+**Stack:** Next.js 16 App Router · React 19 · Prisma 7 (PostgreSQL/Supabase via `@prisma/adapter-pg`, or SQLite via `@prisma/adapter-better-sqlite3`) · NextAuth v4 · SWR 2 · Recharts · Tailwind CSS 4 · `lucide-react` (icons) · IndexedDB (`idb@8`) · `bcryptjs` (password hashing) · `zod` (input validation) · `clsx` + `tailwind-merge` (`cn()` helper)
 
 ### Data flow
 
@@ -358,12 +358,12 @@ NextAuth v4 with credentials provider. **Multi-user app with admin-only account 
 
 ### Styling
 
-Tailwind with dark mode forced via `class="dark"` on `<html>`. Custom utility classes (`card`, `input-base`, `btn-primary`, `badge`, etc.) are defined in `app/globals.css`.
+Tailwind v4, CSS-first config — there is no `tailwind.config.ts`; theme tokens, keyframes, and the `dark` variant (`@custom-variant dark (&:is(.dark *));`, driven by `class="dark"` on `<html>`) live in an `@theme` block at the top of `app/globals.css`. Custom utility classes (`card`, `input-base`, `btn-primary`, `badge`, etc.) are defined with `@utility` in the same file. PostCSS config (`postcss.config.js`) only needs the `@tailwindcss/postcss` plugin — v4 handles vendor-prefixing internally, so `autoprefixer` was removed.
 
 UI conventions (established in the Jul 2026 polish pass — full details in `docs/UI_POLISH_JUL2026.md`):
 
 - **Icons**: structural UI icons come from `lucide-react`; emoji only as data (category icons, brand mark). Icon-only buttons need `aria-label`; the icon itself gets `aria-hidden`.
-- **Brand color**: use the `brand` / `brand-light` / `brand-violet` tokens from `tailwind.config.ts` (or `theme(colors.brand.*)` in CSS) — never inline `#4f46e5`/`#6366f1`/`#7c3aed`.
+- **Brand color**: use the `brand` / `brand-light` / `brand-violet` tokens (`--color-brand`, `--color-brand-light`, `--color-brand-violet` in the `@theme` block of `app/globals.css`) or `theme(colors.brand.*)` in CSS — never inline `#4f46e5`/`#6366f1`/`#7c3aed`.
 - **Radius scale**: cards `rounded-2xl`, controls `rounded-xl`, badges/pills `rounded-full`, small chips `rounded-lg`; skeletons match the component they stand in for.
 - **Touch targets**: compact icon buttons get ≥44px hit areas on touch via `[@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11`.
 - **Inputs**: `text-base sm:text-sm` (16px on mobile prevents iOS focus-zoom).

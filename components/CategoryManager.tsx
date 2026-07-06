@@ -232,7 +232,7 @@ export function CategoryManager({ initialCategories }: { initialCategories: Cate
                 key={c.hex}
                 type="button"
                 onClick={() => setColor(c.hex)}
-                className="w-7 h-7 rounded-full transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                className="w-7 h-7 rounded-full transition-transform hover:scale-110 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 style={{
                   backgroundColor: c.hex,
                   outline: color === c.hex ? `2px solid ${c.hex}` : "none",
@@ -322,7 +322,7 @@ function CategoryRow({
               key={c.hex}
               type="button"
               onClick={() => setEditForm((f) => ({ ...f, color: c.hex }))}
-              className="w-7 h-7 rounded-full transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              className="w-7 h-7 rounded-full transition-transform hover:scale-110 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
               style={{
                 backgroundColor: c.hex,
                 outline: editForm.color === c.hex ? `2px solid ${c.hex}` : "none",

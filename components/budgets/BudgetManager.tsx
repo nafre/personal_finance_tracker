@@ -28,7 +28,7 @@ const TYPE_META: Record<BudgetType, { label: string; color: string; desc: string
 function TypeBadge({ type }: { type: BudgetType }) {
   const meta = TYPE_META[type];
   return (
-    <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded border", meta.color)}>
+    <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-sm border", meta.color)}>
       {meta.label}
     </span>
   );
@@ -162,7 +162,7 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
   return (
     <div
       className={cn(
-        "fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm",
+        "fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs",
         closing ? "animate-fade-out" : "animate-fade-in"
       )}
       onClick={requestClose}
@@ -210,7 +210,7 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
                   tabIndex={0}
                   aria-label={editingId === b.id ? `Stop editing ${b.name}` : `Edit budget ${b.name}`}
                   className={cn(
-                    "flex items-center justify-between py-2.5 px-3 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500/70 focus:outline-none",
+                    "flex items-center justify-between py-2.5 px-3 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500/70 focus:outline-hidden",
                     editingId === b.id
                       ? "bg-slate-700/60 ring-1 ring-indigo-500/40"
                       : "hover:bg-slate-700/40 cursor-pointer"
@@ -346,7 +346,7 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
                     onChange={(e) => {
                       if (e.target.value) setFormExcluded((prev) => [...prev, e.target.value]);
                     }}
-                    className="text-xs bg-transparent text-slate-400 focus:outline-none cursor-pointer"
+                    className="text-xs bg-transparent text-slate-400 focus:outline-hidden cursor-pointer"
                   >
                     <option value="">+ Add category</option>
                     {categories
@@ -390,7 +390,7 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
                       onChange={(e) => {
                         if (e.target.value) setFormLabels((prev) => [...prev, e.target.value]);
                       }}
-                      className="text-xs bg-transparent text-slate-400 focus:outline-none cursor-pointer"
+                      className="text-xs bg-transparent text-slate-400 focus:outline-hidden cursor-pointer"
                     >
                       <option value="">+ Add label</option>
                       {availableLabels

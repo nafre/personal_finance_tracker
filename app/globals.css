@@ -1,6 +1,209 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-brand: #4f46e5;
+  --color-brand-light: #6366f1;
+  --color-brand-violet: #7c3aed;
+
+  --font-sans: var(--font-jakarta), system-ui, sans-serif;
+  --font-mono: JetBrains Mono, Fira Code, monospace;
+
+  --animate-fade-in: fadeIn 0.2s ease-in-out;
+  --animate-slide-up: slideUp 0.2s ease-out;
+  --animate-fade-out: fadeOut 0.15s ease-in forwards;
+  --animate-fade-out-down: fadeOutDown 0.2s ease-in forwards;
+  --animate-scale-in: scaleIn 0.2s ease-out;
+  --animate-slide-down-in: slideDownIn 0.2s ease-out;
+  --animate-row-highlight: rowHighlight 1.2s ease-out;
+
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+  @keyframes slideUp {
+    0% {
+      transform: translateY(8px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  @keyframes fadeOut {
+    0% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes fadeOutDown {
+    0% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(8px);
+      opacity: 0;
+    }
+  }
+  @keyframes scaleIn {
+    0% {
+      transform: scale(0.96);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  @keyframes slideDownIn {
+    0% {
+      transform: translateY(-8px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  @keyframes rowHighlight {
+    0% {
+      transform: translateY(6px);
+      opacity: 0;
+      background-color: rgba(99, 102, 241, 0.16);
+    }
+    20% {
+      transform: translateY(0);
+      opacity: 1;
+      background-color: rgba(99, 102, 241, 0.16);
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+      background-color: transparent;
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility fab {
+  @apply fixed z-40 flex items-center justify-center
+           w-14 h-14 rounded-full text-white text-2xl
+           active:scale-95 transition-all;
+  bottom: calc(80px + var(--safe-bottom));
+  right: 1.25rem;
+  background: linear-gradient(
+    135deg,
+    var(--color-brand),
+    var(--color-brand-violet)
+  );
+  box-shadow:
+    0 8px 24px rgba(99, 102, 241, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+@utility bottom-sheet-overlay {
+  @apply fixed inset-0 bg-black/60 z-40 backdrop-blur-xs;
+}
+
+@utility bottom-sheet {
+  @apply fixed bottom-0 left-0 right-0 z-50 bg-slate-900
+           border-t border-slate-800 rounded-t-2xl
+           transition-transform duration-300;
+  padding-bottom: var(--safe-bottom);
+}
+
+@utility bottom-sheet-handle {
+  @apply w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-2;
+}
+
+@utility card {
+  @apply bg-slate-900 rounded-2xl border border-slate-800/60 p-4;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.4),
+    0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+@utility btn-primary {
+  @apply text-white font-semibold px-4 py-2 rounded-xl transition-all cursor-pointer;
+  background: linear-gradient(
+    135deg,
+    var(--color-brand),
+    var(--color-brand-light)
+  );
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  &:hover {
+    background: linear-gradient(135deg, #4338ca, #4f46e5);
+    box-shadow: 0 4px 18px rgba(99, 102, 241, 0.5);
+    transform: translateY(-1px);
+  }
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  }
+}
+
+@utility btn-ghost {
+  @apply hover:bg-slate-800/80 text-slate-400 hover:text-slate-200 px-3 py-2 rounded-xl transition-colors cursor-pointer;
+}
+
+@utility input-base {
+  @apply bg-slate-800/80 border border-slate-700/70 rounded-xl px-3 py-2 text-slate-100
+           placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/70
+           focus:border-indigo-500/40 transition-all;
+}
+
+@utility badge {
+  @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+}
+
+@utility badge-income {
+  @apply bg-emerald-500/20 text-emerald-400;
+}
+
+@utility badge-expense {
+  @apply bg-rose-500/20 text-rose-400;
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility animate-nav-progress {
+  animation: nav-progress 500ms ease-out forwards;
+}
 
 @layer base {
   /* Bottom safe-area inset, applied only in installed-PWA mode. In a regular
@@ -61,93 +264,10 @@
   }
 }
 
-@layer components {
-  .fab {
-    @apply fixed z-40 flex items-center justify-center
-           w-14 h-14 rounded-full text-white text-2xl
-           active:scale-95 transition-all;
-    bottom: calc(80px + var(--safe-bottom));
-    right: 1.25rem;
-    background: linear-gradient(135deg, theme(colors.brand.DEFAULT), theme(colors.brand.violet));
-    box-shadow: 0 8px 24px rgba(99,102,241,0.45), 0 2px 8px rgba(0,0,0,0.3);
-  }
-
-  .bottom-sheet-overlay {
-    @apply fixed inset-0 bg-black/60 z-40 backdrop-blur-sm;
-  }
-
-  .bottom-sheet {
-    @apply fixed bottom-0 left-0 right-0 z-50 bg-slate-900
-           border-t border-slate-800 rounded-t-2xl
-           transition-transform duration-300;
-    padding-bottom: var(--safe-bottom);
-  }
-
-  .bottom-sheet-handle {
-    @apply w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-2;
-  }
-
-  .card {
-    @apply bg-slate-900 rounded-2xl border border-slate-800/60 p-4;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.25);
-  }
-
-  .btn-primary {
-    @apply text-white font-semibold px-4 py-2 rounded-xl transition-all cursor-pointer;
-    background: linear-gradient(135deg, theme(colors.brand.DEFAULT), theme(colors.brand.light));
-    box-shadow: 0 4px 14px rgba(99,102,241,0.35);
-  }
-  .btn-primary:hover {
-    background: linear-gradient(135deg, #4338ca, #4f46e5);
-    box-shadow: 0 4px 18px rgba(99,102,241,0.5);
-    transform: translateY(-1px);
-  }
-  .btn-primary:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(99,102,241,0.3);
-  }
-
-  .btn-ghost {
-    @apply hover:bg-slate-800/80 text-slate-400 hover:text-slate-200 px-3 py-2 rounded-xl transition-colors cursor-pointer;
-  }
-
-  .input-base {
-    @apply bg-slate-800/80 border border-slate-700/70 rounded-xl px-3 py-2 text-slate-100
-           placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/70
-           focus:border-indigo-500/40 transition-all;
-  }
-
-  .badge {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
-  }
-
-  .badge-income {
-    @apply bg-emerald-500/20 text-emerald-400;
-  }
-
-  .badge-expense {
-    @apply bg-rose-500/20 text-rose-400;
-  }
-}
-
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-
-  .scrollbar-none {
-    scrollbar-width: none;
-  }
-  .scrollbar-none::-webkit-scrollbar {
-    display: none;
-  }
-
   @keyframes nav-progress {
     0%   { width: 0%;   opacity: 1; }
     70%  { width: 80%;  opacity: 1; }
     100% { width: 100%; opacity: 0; }
-  }
-  .animate-nav-progress {
-    animation: nav-progress 500ms ease-out forwards;
   }
 }

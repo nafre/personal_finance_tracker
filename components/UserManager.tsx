@@ -155,7 +155,7 @@ export function UserManager({ initialUsers, currentUserId }: UserManagerProps) {
                 <div className="flex items-center gap-3">
                   {/* Avatar */}
                   <div
-                    className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white select-none"
+                    className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-white select-none"
                     style={{ background: stringToColor(user.name) }}
                   >
                     {getInitials(user.name)}
@@ -168,7 +168,7 @@ export function UserManager({ initialUsers, currentUserId }: UserManagerProps) {
                         {user.name}
                       </span>
                       {isCurrent && (
-                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-400 font-medium flex-shrink-0">
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-400 font-medium shrink-0">
                           You
                         </span>
                       )}

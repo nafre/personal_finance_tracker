@@ -42,7 +42,7 @@ function LoginForm() {
         {/* Logo / title */}
         <div className="text-center mb-8">
           <div
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 text-3xl bg-gradient-to-br from-brand to-brand-violet shadow-[0_8px_28px_rgba(99,102,241,0.5)]"
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 text-3xl bg-linear-to-br from-brand to-brand-violet shadow-[0_8px_28px_rgba(99,102,241,0.5)]"
             aria-hidden="true"
           >
             💸

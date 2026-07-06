@@ -265,7 +265,7 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, cat
           ) : (
             <>
               <span>Add</span>
-              <kbd className="hidden sm:inline text-[10px] bg-indigo-500 px-1 rounded opacity-60">↵</kbd>
+              <kbd className="hidden sm:inline text-[10px] bg-indigo-500 px-1 rounded-sm opacity-60">↵</kbd>
             </>
           )}
         </button>

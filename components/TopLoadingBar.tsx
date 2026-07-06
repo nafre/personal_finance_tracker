@@ -49,7 +49,7 @@ function TopLoadingBarInner() {
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 z-[100] h-[3px] pointer-events-none overflow-hidden"
+      className="fixed top-0 left-0 right-0 z-100 h-[3px] pointer-events-none overflow-hidden"
       aria-hidden
     >
       <div className="h-full bg-indigo-500 animate-nav-progress" />
