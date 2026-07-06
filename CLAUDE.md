@@ -103,7 +103,7 @@ When `DATABASE_URL` is set, all `POSTGRES_*` variables are ignored and the app u
 
 ## Architecture
 
-**Stack:** Next.js 16 App Router · React 18 · Prisma 6 (PostgreSQL/Supabase or SQLite) · NextAuth v4 · SWR 2 · Recharts · Tailwind CSS · `lucide-react` (icons) · IndexedDB (`idb@8`) · `bcryptjs` (password hashing) · `zod` (input validation) · `clsx` + `tailwind-merge` (`cn()` helper)
+**Stack:** Next.js 16 App Router · React 18 · Prisma 7 (PostgreSQL/Supabase via `@prisma/adapter-pg`, or SQLite via `@prisma/adapter-better-sqlite3`) · NextAuth v4 · SWR 2 · Recharts · Tailwind CSS · `lucide-react` (icons) · IndexedDB (`idb@8`) · `bcryptjs` (password hashing) · `zod` (input validation) · `clsx` + `tailwind-merge` (`cn()` helper)
 
 ### Data flow
 

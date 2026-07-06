@@ -17,12 +17,16 @@ build/
 
 # Prisma generated
 prisma/migrations/
+generated/
 
 # SQLite local dev database
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
+
+# Database backups (may contain production data — never commit)
+backups/
 
 # Vercel
 .vercel

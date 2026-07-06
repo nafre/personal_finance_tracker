@@ -38,7 +38,7 @@ const isSQLite = dbUrl.startsWith("file:");
 if (isSQLite) {
   console.log("[dev] SQLite mode — bootstrapping local database...");
 
-  const clientDir = join(root, "node_modules/.prisma/client-sqlite");
+  const clientDir = join(root, "generated/prisma-sqlite");
   if (!existsSync(clientDir)) {
     console.error(
       "[dev] SQLite Prisma client not found. Run once:\n" +
@@ -47,11 +47,22 @@ if (isSQLite) {
     process.exit(1);
   }
 
+  // lib/db.ts statically imports the Postgres client (generated/prisma), so
+  // it must exist for the app to compile even when SQLite serves at runtime.
+  if (!existsSync(join(root, "generated/prisma"))) {
+    console.log("[dev] Postgres Prisma client missing — generating...");
+    try {
+      execSync("npx prisma generate", { cwd: root, stdio: "inherit" });
+    } catch {
+      console.error("[dev] prisma generate failed — see output above.");
+      process.exit(1);
+    }
+  }
+
   try {
     execSync(
       "npx prisma db push" +
         " --schema prisma/schema.sqlite.prisma" +
-        " --skip-generate" +
         " --accept-data-loss",
       { cwd: root, stdio: "inherit" }
     );

@@ -1,11 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "../node_modules/.prisma/client-sqlite"
+  provider     = "prisma-client"
+  output       = "../generated/prisma-sqlite"
+  moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 model Transaction {

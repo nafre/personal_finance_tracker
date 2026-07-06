@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Keep the Prisma 7 runtime + pg driver out of the server bundle — bundling
+  // pg breaks its connection handling (empty-message P1001-style timeouts).
+  serverExternalPackages: ["@prisma/client", "@prisma/adapter-pg", "pg"],
   experimental: {
     optimizePackageImports: ["recharts"],
   },
