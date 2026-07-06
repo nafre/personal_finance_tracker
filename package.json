@@ -14,6 +14,8 @@
     "db:dev:push": "prisma db push --schema prisma/schema.sqlite.prisma",
     "db:dev:studio": "prisma studio --schema prisma/schema.sqlite.prisma",
     "db:dev:seed": "tsx prisma/seed.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:ui": "playwright test",
     "test:ui:update": "playwright test --update-snapshots",
     "test:ui:report": "playwright show-report"
@@ -47,10 +49,13 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "dotenv": "^17.4.2",
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^29.1.1",
     "postcss": "^8.5.12",
     "prisma": "^7.8.0",
     "tailwindcss": "^4.3.2",
     "tsx": "^4.19.2",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   }
 }

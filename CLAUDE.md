@@ -11,6 +11,8 @@ npm run db:push      # Push Prisma schema to DB (no migration history)
 npm run db:migrate   # Deploy pending migrations
 npm run db:studio    # Open Prisma Studio
 npm run db:seed      # Seed with tsx prisma/seed.ts
+npm run test         # Run unit tests (Vitest)
+npm run test:watch   # Unit tests in watch mode
 npm run test:ui      # Run visual regression tests (Playwright)
 npm run test:ui:update  # Regenerate snapshot baselines after intentional design changes
 npm run test:ui:report  # Open the HTML test report
@@ -83,6 +85,24 @@ TEST_PASSWORD=<your plaintext login password>
 ```
 
 Then generate initial snapshots: `npm run test:ui:update`
+
+## Unit Testing
+
+Vitest covers the pure logic in `lib/parser.ts`, `lib/utils.ts`, and `lib/sync.ts` — files with no
+Playwright coverage since the visual suite doesn't assert behavior. Tests live alongside their source
+as `lib/*.test.ts` (distinct from Playwright's `e2e/*.spec.ts`, so `vitest.config.ts` scopes
+`test.include` to `lib/**/*.test.ts` and the two runners never collide). Config: `vitest.config.ts`
+(root), default environment `"node"`.
+
+`lib/sync.test.ts` is the one with real setup cost, since `lib/sync.ts` drives `lib/idb.ts`
+(IndexedDB) and calls `@/lib/actions` (Prisma/`next/cache` — must never load in a test process):
+- A `// @vitest-environment jsdom` docblock at the top of the file opts just that file into jsdom,
+  because `lib/idb.ts`'s `getDB()` guards on `typeof window === "undefined"`.
+- `@/lib/actions` is fully mocked via `vi.mock("@/lib/actions", () => ({ getTransactionIds: vi.fn() }))`.
+- `lib/idb.ts` caches its DB connection in a module-level singleton, so per-test isolation needs
+  **both** a fresh IndexedDB backend (`vi.stubGlobal("indexedDB", new FDBFactory())` from
+  `fake-indexeddb/lib/FDBFactory`) **and** a fresh module instance (`vi.resetModules()` before
+  re-importing `@/lib/sync`/`@/lib/idb`) — resetting only one leaks state across tests.
 
 ## Environment
 

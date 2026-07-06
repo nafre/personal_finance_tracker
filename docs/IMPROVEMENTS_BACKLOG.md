@@ -141,9 +141,17 @@ State and handlers were extracted to `hooks/useDashboardState.ts`. `DashboardCon
 ### ~~5b — Centralize IS_SQLITE Branch~~ DONE
 Dialect abstraction lives in `lib/db-adapter.ts`: `IS_SQLITE`, `parseLabels`, `encodeLabels`, `normalizeTx`, `getLabelFilter`, `getDailyRows`. `lib/actions.ts` imports from there.
 
-### 5c — Unit Tests (L, medium)
-`lib/parser.ts`, `lib/utils.ts` (`getNextDueDate`, `getRecurringStatus`, `countMissedPeriods` — the backfill count drives real transaction creation), and `lib/sync.ts` are untested but regression-prone.
-- Add Vitest and write tests for these pure functions.
+### ~~5c — Unit Tests~~ DONE
+Added Vitest (`vitest.config.ts`, `npm run test` / `test:watch`) and wrote 66 tests across three files, matching the exact scope this item called out:
+- `lib/parser.test.ts` — `parseExpenseInput`: currency-prefix stripping, thousands separators, income-keyword detection (keys off the first category token only), `#label` parsing, the `"Misc"` default, and the zero/negative-amount rejection in `extractNumericValue`.
+- `lib/utils.test.ts` — every exported pure function except `cn` (trivial passthrough) and `DEFAULT_CATEGORIES` (static data), with the heaviest coverage on `getNextDueDate`, `getRecurringStatus`, and `countMissedPeriods` (the function flagged here, since its return value drives how many transactions `backfillRecurringTransaction` actually creates) — including the `MAX_BACKFILL` cap and the `endDate`-cutoff case. Date-dependent tests use `vi.setSystemTime()` with dates picked away from month/DST boundaries rather than relying on real "now", so they aren't timezone- or day-fragile.
+- `lib/sync.test.ts` — the one with real setup cost, since `lib/sync.ts` touches `lib/idb.ts` (IndexedDB) and calls `@/lib/actions` (Prisma/`next/cache`, which must never load in a test process):
+  - `@/lib/actions` is fully mocked (`vi.mock("@/lib/actions", () => ({ getTransactionIds: vi.fn() }))`).
+  - A `// @vitest-environment jsdom` docblock opts just this file into jsdom (`lib/idb.ts`'s `getDB()` guards on `typeof window === "undefined"`); the rest of the suite runs on Vitest's faster default `"node"` environment. (Vitest's older `environmentMatchGlobs` config option — the initially-planned approach — no longer exists in the installed v4; the per-file docblock is what's still supported.)
+  - `lib/idb.ts` caches its DB connection in a module-level singleton, so per-test isolation needed both a fresh IndexedDB backend (`vi.stubGlobal("indexedDB", new FDBFactory())` from `fake-indexeddb/lib/FDBFactory`) *and* a fresh module instance (`vi.resetModules()` before re-importing `@/lib/sync`/`@/lib/idb` in `beforeEach`) — resetting only one leaks state across tests.
+  - Covers `applyLocalMutation` (add/update/delete, including the still-pending-record in-place patch and the never-synced-delete cancellation), `drainQueue` (success paths, 404-as-success, retry/backoff with causal-order stop, the `MAX_RETRIES` drop, and the force-bypass of an active backoff window), and `reconcileAfterSync` (purge + the catch-and-return-0 path).
+  - `vitest.config.ts` scopes `test.include` to `lib/**/*.test.ts` specifically — Vitest's default include glob also matches `*.spec.ts`, which would otherwise have picked up (and failed to run) Playwright's `e2e/*.spec.ts` files.
+- **Verified**: `npm run test` (66/66), `npm run build` (confirms the new devDependencies/config don't affect the Next.js type-check gate), `npm run test:ui` (91/91, unaffected).
 
 ### 5d — Major Dependency Upgrades (L, low urgency — tackle one at a time)
 From the Jul 2026 review. Each is its own project; **do not bundle**:
