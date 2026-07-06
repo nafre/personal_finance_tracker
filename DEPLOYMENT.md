@@ -19,8 +19,10 @@ Deploy your Expense Tracker to Vercel + Supabase (or Neon) — free tier — in 
 ### Option B — Neon (alternative free tier)
 
 1. Go to [neon.tech](https://neon.tech) and create a free account.
-2. Create a new project → copy the **connection string** (starts with `postgresql://`).
-3. Use this as a single `DATABASE_URL` environment variable (no pooled/direct split needed).
+2. Create a new project → copy the **pooled connection string** (has `-pooler` in the host) — this is your `POSTGRES_PRISMA_URL`.
+3. Copy the **direct connection string** (same string without `-pooler`) — this is your `POSTGRES_URL_NON_POOLING`.
+
+> The app reads `POSTGRES_PRISMA_URL` at runtime regardless of provider — do **not** put your Neon string in `DATABASE_URL`. That variable is reserved for the SQLite local-dev switch (`file:./dev.db`) and a `postgresql://` value there is ignored by the app.
 
 ---
 
@@ -142,7 +144,8 @@ In your project's **Settings → Environment Variables**, add:
 
 | Key | Value |
 |-----|-------|
-| `DATABASE_URL` | Neon connection string |
+| `POSTGRES_PRISMA_URL` | Neon pooled connection string (`-pooler` host) |
+| `POSTGRES_URL_NON_POOLING` | Neon direct connection string |
 | `NEXTAUTH_SECRET` | Your generated secret |
 | `NEXTAUTH_URL` | `https://your-app.vercel.app` |
 | `ADMIN_EMAIL` | `you@example.com` |
@@ -165,8 +168,8 @@ POSTGRES_URL_NON_POOLING="your-direct-url" npm run db:seed
 **Neon:**
 
 ```bash
-DATABASE_URL="your-neon-url" npx prisma migrate deploy
-DATABASE_URL="your-neon-url" npm run db:seed
+POSTGRES_URL_NON_POOLING="your-neon-direct-url" npx prisma migrate deploy
+POSTGRES_URL_NON_POOLING="your-neon-direct-url" npm run db:seed
 ```
 
 Or use Vercel's **Build Command** override:
@@ -199,7 +202,7 @@ Push to GitHub → Vercel auto-deploys. No further steps needed.
 |---------|-----|
 | "ADMIN_PASSWORD_HASH not configured" | Check Vercel env vars are set |
 | Can't sign in | Verify email matches `ADMIN_EMAIL` exactly (case-insensitive) |
-| DB connection errors | Supabase: ensure `POSTGRES_PRISMA_URL` includes `?pgbouncer=true`. Neon: ensure `DATABASE_URL` includes `?sslmode=require` |
+| DB connection errors | Supabase: ensure `POSTGRES_PRISMA_URL` includes `?pgbouncer=true`. Neon: ensure `POSTGRES_PRISMA_URL` includes `?sslmode=require` and points at the `-pooler` host |
 | Charts not rendering | Charts use `"use client"` with `dynamic({ ssr: false })` — ensure no SSR mismatch |
 | 500 on first load | Run `prisma migrate deploy` against production DB |
 | Offline sync not working | Check browser supports BackgroundSync; inspect `syncQueue` in DevTools → Application → IndexedDB |

@@ -223,7 +223,7 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `hooks/useOnlineStatus.ts` | Thin hook: `navigator.onLine` + `online`/`offline` events. |
 | `hooks/useDialogBehavior.ts` | Shared modal/sheet behavior: Escape-to-close, body scroll lock, focus-on-open/restore-on-close. Used by `BudgetManager` and `QuickAddSheet` — apply it (plus `role="dialog"` / `aria-modal`) to any new dialog. |
 | `app/api/sync/route.ts` | REST endpoint for SW background sync. Mirrors `lib/actions.ts` ownership checks. Uses upsert on `clientId` for add-op deduplication. |
-| `app/api/export/route.ts` | GET endpoint for CSV export. Accepts `month`, `year`, `category`, `label`, `q` query params. Returns `text/csv` attachment scoped to the authenticated user. |
+| `app/api/export/route.ts` | GET endpoint for CSV export. Accepts `month`, `year`, `category`, `label`, `q`, `from`, `to` query params (validated — 400 on malformed values). Returns `text/csv` attachment scoped to the authenticated user. |
 | `public/sw.js` | Service worker: static caching + BackgroundSync drain. Plain JS, raw IDB cursor API. |
 | `components/DashboardContent.tsx` | Thin client orchestrator: calls `useDashboardState(props)` and renders JSX. No state or logic lives here directly. |
 | `components/StatCard.tsx` | Standalone stat card with gradient background, MoM delta badge, and income/expense/balance colour variants. |
@@ -318,7 +318,7 @@ Rules stored in `RecurringTransaction` table. Displayed in a collapsible card on
 
 #### CSV export
 
-The transactions page has an **Export CSV ↓** button in the filter bar. It calls `GET /api/export` with the current `month`, `year`, `category`, `label`, and `q` params. The route returns a `text/csv` attachment (`expenses-YYYY-MM.csv`) with columns: `Date, Category, Type, Amount (RM), Note, Labels`. Up to 10,000 rows are included.
+The transactions page has an **Export CSV ↓** button in the filter bar. It calls `GET /api/export` with the current `month`, `year`, `category`, `label`, `q`, and (when a date range is active) `from`/`to` params. The route returns a `text/csv` attachment (`expenses-YYYY-MM.csv`, or `expenses-<from>-to-<to>.csv` for a date range) with columns: `Date, Category, Type, Amount (RM), Note, Labels`. Up to 10,000 rows are included.
 
 #### Category management
 

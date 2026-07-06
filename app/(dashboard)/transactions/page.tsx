@@ -96,6 +96,8 @@ export default function TransactionsPage() {
     if (categoryFilter) params.set("category", categoryFilter);
     if (labelFilter) params.set("label", labelFilter);
     if (qFilter) params.set("q", qFilter);
+    if (fromFilter) params.set("from", fromFilter);
+    if (toFilter) params.set("to", toFilter);
     window.location.href = `/api/export?${params.toString()}`;
   }
 
@@ -159,7 +161,14 @@ export default function TransactionsPage() {
     setIsLoadingMore(true);
     try {
       const result = await getTransactions({ ...buildFilters(), cursor: nextCursor });
-      setTransactions((prev) => [...prev, ...result.transactions as Transaction[]]);
+      // Dedupe against rows already loaded — server data can shift between pages
+      setTransactions((prev) => {
+        const seen = new Set(prev.map((t) => t.id));
+        return [
+          ...prev,
+          ...(result.transactions as Transaction[]).filter((t) => !seen.has(t.id)),
+        ];
+      });
       setNextCursor(result.nextCursor);
     } finally {
       setIsLoadingMore(false);

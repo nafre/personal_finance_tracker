@@ -24,18 +24,18 @@ A personal finance tracker built with Next.js 16, Prisma, and PostgreSQL. Track 
 | Layer | Technology |
 |-------|-----------|
 | Framework | Next.js 16 (App Router) |
-| Language | TypeScript 5 |
-| Database | PostgreSQL via Prisma 6 (Supabase / Neon / Vercel Postgres) or SQLite (local dev) |
+| Language | TypeScript 6 |
+| Database | PostgreSQL via Prisma 7 (Supabase / Neon / Vercel Postgres) or SQLite (local dev) |
 | Auth | NextAuth v4 (credentials provider) |
 | Data fetching | SWR 2 |
-| Charts | Recharts 2 |
-| Styling | Tailwind CSS 3 |
+| Charts | Recharts 3 |
+| Styling | Tailwind CSS 4 |
 | Validation | Zod 4 |
 | Offline | IndexedDB (`idb@8`) + Service Worker BackgroundSync |
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - A PostgreSQL database (free options: [Supabase](https://supabase.com), [Neon](https://neon.tech), Vercel Postgres) — or skip entirely and use SQLite for local development
 
 ## Getting Started
@@ -128,6 +128,8 @@ Open [http://localhost:3000](http://localhost:3000) and log in.
 | `npm run db:dev:push` | Push SQLite schema to `dev.db` |
 | `npm run db:dev:studio` | Open Prisma Studio for SQLite DB |
 | `npm run db:dev:seed` | Seed SQLite DB |
+| `npm run test` | Run unit tests (Vitest) |
+| `npm run test:watch` | Unit tests in watch mode |
 | `npm run test:ui` | Run Playwright visual regression tests |
 | `npm run test:ui:update` | Regenerate snapshot baselines |
 | `npm run test:ui:report` | Open the Playwright HTML report |
@@ -227,7 +229,7 @@ Push to GitHub — Vercel auto-deploys. No extra steps needed.
 
 ### Vercel + Neon (alternative free tier)
 
-Same steps, but use a single `DATABASE_URL` from [neon.tech](https://neon.tech). Set `DATABASE_URL` in Vercel env vars in place of the Supabase pair.
+Same steps, but with connection strings from [neon.tech](https://neon.tech): use the pooled string (`-pooler` host) as `POSTGRES_PRISMA_URL` and the direct string as `POSTGRES_URL_NON_POOLING`. Do **not** put the Neon string in `DATABASE_URL` — the app reads that variable only as the SQLite local-dev switch and ignores `postgresql://` values.
 
 ### Install as PWA
 

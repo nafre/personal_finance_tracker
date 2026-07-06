@@ -88,9 +88,8 @@ When `IS_SQLITE` and a label filter is active, `getTransactions` fetches **all**
 ### ~~3b — Service Worker Retry/Backoff~~ DONE
 Failed ops now carry `nextRetryAt` (exponential: 30s → 1m → 2m → 4m → 8m, base kept in sync between `lib/sync.ts` and `public/sw.js`). Drains stop at an op still inside its backoff window (causal order preserved); the SW rejects the sync event when ops remain so the browser reschedules with its own backoff. User-initiated syncs (`syncNow({ force: true })` — SyncStatusBar buttons, reconnect flush) bypass the window.
 
-### 3e — Pagination Dedup in loadMore (S, low)
-The transactions page's `loadMore()` appends the next cursor page without checking for IDs already in the list — if data changes server-side between pages, rows can duplicate. Filter appended results against existing IDs.
-- Start: `app/(dashboard)/transactions/page.tsx` `loadMore`.
+### ~~3e — Pagination Dedup in loadMore~~ DONE
+`loadMore()` now filters appended results against a `Set` of already-loaded IDs before concatenating, so server-side data shifts between cursor pages can no longer duplicate rows.
 
 ### ~~3c — Error Boundaries~~ DONE
 `DashboardErrorBoundary` now takes an optional `section` prop rendering a compact card fallback with "Try again"; `DashboardContent` wraps each section (quick add, recurring, spending insights, trend chart, monthly chart, budgets, recent transactions) in its own boundary. The page-level boundary remains as the outer catch-all.
@@ -177,6 +176,13 @@ From the Jul 2026 review. Each is its own project; **do not bundle**:
 `mcp-server/package.json` pins `zod ^3.x` while the main app uses `^4.x`. Harmless while the two share no code, but a footgun if validation logic is ever shared. Bump mcp-server to zod 4 and adjust any v3-only API usage.
 - Start: `mcp-server/package.json`.
 
+### 5f — Unit Tests for lib/db-adapter.ts (S, medium)
+Natural follow-on to 5c: `parseLabels`, `encodeLabels`, `parseBudgetArray`, `encodeBudgetArray`, `normalizeTx`, and `normalizeBudget` are pure functions guarding the SQLite/Postgres split (JSON-string vs native arrays, `excludeFromStats` coercion) with zero coverage — exactly the code a future schema tweak silently breaks. No jsdom or mocking needed; plain Vitest on the node environment.
+- Start: new `lib/db-adapter.test.ts` (skip `getTrendRows`/`getDailyRows` — they need a DB; the pure helpers are the value).
+
+### 5g — Keep `.github/copilot-instructions.md` Regenerated (S, low)
+The auto-generated SigMap signature file was last regenerated 2026-06-03 — it predates the Prisma 7 / React 19 / Tailwind 4 / Vitest changes, so any tool consuming it sees stale signatures. Re-run `gen-context.js` and ideally wire it into a pre-commit hook or CI step so it can't drift; alternatively delete the file if nothing uses Copilot here.
+
 ---
 
 ## Security & Hygiene
@@ -186,14 +192,11 @@ From the Jul 2026 review. Each is its own project; **do not bundle**:
 - Use `@upstash/ratelimit` (free tier) or a tiny in-memory token bucket.
 - Note: as of Jul 2026, `/api/sync` now also validates `sessionVersion` (stale-JWT rejection), matching server actions.
 
-### 6d — Validate `/api/export` Query Params (S, low)
-`month`/`year` come from `parseInt` with no NaN guard, and the `getTransactions` call has no try/catch — malformed params produce silent NaN filters or an unhandled 500. Validate params (reject or default on NaN) and wrap the fetch with an error response.
-- Start: `app/api/export/route.ts`. Pair with 6e — same file.
+### ~~6d — Validate `/api/export` Query Params~~ DONE
+`month`/`year` are now range-checked (1–12 / 1970–9999, rejecting NaN) with a 400 response, `from`/`to` are date-validated the same way, and the `getTransactions` call is wrapped — `"Unauthorized"` (stale session) maps to 401, anything else to a 500 with a plain body instead of an unhandled exception.
 
-### 6e — CSV Export Ignores Date-Range Filters (S, medium)
-`handleExport` on the transactions page passes `month`/`year`/`category`/`label`/`q` but drops the `from`/`to` date-range filters, and the route doesn't accept them either — so with a date range active, the downloaded CSV silently contains the **whole month**, not what's on screen.
-- Fix both ends: forward `from`/`to` in `handleExport` and accept them in the route (they're already supported by `getTransactions`' filter object).
-- Start: `app/(dashboard)/transactions/page.tsx` `handleExport`, `app/api/export/route.ts`.
+### ~~6e — CSV Export Ignores Date-Range Filters~~ DONE
+`handleExport` now forwards `from`/`to` and the route accepts them (same inclusive end-of-day semantics as the transactions page: `to` gets `T23:59:59.999`). When a range is active the filename reflects it (`expenses-<from>-to-<to>.csv`) instead of the month stamp.
 
 ### 6b — Sentry Error Reporting (S, medium)
 No production error visibility. Sentry's free tier covers a single-user app.
@@ -202,6 +205,17 @@ No production error visibility. Sentry's free tier covers a single-user app.
 ### 6c — Backup / Export (S, low)
 Monthly "Download backup JSON" button in settings (or a scheduled email).
 - Server action `exportAllData()` that returns JSON of all transactions, categories, and recurring rules.
+
+### ~~6f — Neon Deployment Docs Pointed at a Dead Env Var~~ DONE
+DEPLOYMENT.md and the README both told Neon users to set a single `DATABASE_URL` — but since the SQLite-mode work, `lib/db.ts` reads that variable only as the SQLite switch (`startsWith("file:")`) and the Postgres adapter reads **only** `POSTGRES_PRISMA_URL`, so a by-the-book Neon deploy got an empty connection string at runtime. All four mentions rewritten to the `POSTGRES_*` pair (pooled `-pooler` host + direct), with an explicit warning not to use `DATABASE_URL` for Postgres.
+
+### 6g — Repo Hygiene Sweep (S, low)
+Accumulated cruft, all verified Jul 2026:
+- `stat-cards-mobile.png` / `stat-cards-mobile-v2.png` — debug screenshots committed at the repo root in an old StatCard commit; delete.
+- `course.html` — standalone "Full-Stack Course" page at the root; move to `docs/` if worth keeping, else delete.
+- `.claude/skills/` and `.agents/skills/` are byte-identical duplicates (~65 files each, both tracked). If `skills-lock.json`'s installer doesn't require both, keep one.
+- `.claude/settings.local.json` is committed — by convention it's machine-local and gitignored; merge the useful permission allowlist into `.claude/settings.json` and untrack.
+- `@types/bcryptjs` is likely removable (`bcryptjs` 3.x bundles its own types); `@types/node` is `^20` while dev runs Node 24 — bump when next touching deps.
 
 ---
 
