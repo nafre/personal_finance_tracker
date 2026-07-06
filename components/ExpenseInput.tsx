@@ -278,7 +278,7 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, cat
 
       {/* Category picker chips — recently used first, then all categories */}
       {categoryChips.length > 0 && (
-        <div data-testid="category-chip-row" className="flex gap-2 mt-2 overflow-x-auto pb-1 scrollbar-none">
+        <div data-testid="category-chip-row" className="flex gap-2 mt-2 overflow-x-auto pb-1 scrollbar-none sm:flex-wrap sm:overflow-x-visible">
           {categoryChips.map((cat) => (
             <button
               key={cat.name}
