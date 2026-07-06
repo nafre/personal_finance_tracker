@@ -1,4 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import path from "path";
 
 const IS_SQLITE = (process.env.DATABASE_URL ?? "").startsWith("file:");
@@ -34,7 +35,19 @@ function makeClient(): PrismaClient {
     );
     return new SQLiteClient({ adapter, log: ["error", "warn"] }) as PrismaClient;
   }
+  // Unnamed prepared statements by default (no statementNameGenerator), so
+  // this is safe behind Supabase's transaction-mode pgbouncer pooler.
+  // sslmode=require -> no-verify: the pg driver verifies certs under
+  // `require` (unlike Prisma 6's Rust engine) and Supabase's pooler chain is
+  // self-signed; no-verify preserves the v6 semantics (encrypted, unverified).
+  const adapter = new PrismaPg({
+    connectionString: (process.env.POSTGRES_PRISMA_URL ?? "").replace(
+      "sslmode=require",
+      "sslmode=no-verify"
+    ),
+  });
   return new PrismaClient({
+    adapter,
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 }

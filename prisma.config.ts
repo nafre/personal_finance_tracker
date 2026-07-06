@@ -11,6 +11,10 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: process.env.DATABASE_URL ?? process.env.POSTGRES_PRISMA_URL,
+    // Only the CLI reads this (generate/db push/studio) — the runtime client
+    // gets its URL via the driver adapter in lib/db.ts. SQLite dev mode wins
+    // when DATABASE_URL is set; otherwise use the direct (non-pooled) Supabase
+    // connection, mirroring the directUrl the schema carried under Prisma 6.
+    url: process.env.DATABASE_URL ?? process.env.POSTGRES_URL_NON_POOLING,
   },
 });

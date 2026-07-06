@@ -22,8 +22,19 @@ if (IS_SQLITE) {
   prisma = new PrismaClient({ adapter });
 } else {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { PrismaClient } = require("@prisma/client");
-  prisma = new PrismaClient();
+  const { PrismaClient } = require(
+    path.join(process.cwd(), "generated/prisma/client")
+  );
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PrismaPg } = require("@prisma/adapter-pg");
+  // sslmode no-verify: see lib/db.ts — matches Prisma 6's `require` semantics.
+  const adapter = new PrismaPg({
+    connectionString: (process.env.POSTGRES_PRISMA_URL ?? "").replace(
+      "sslmode=require",
+      "sslmode=no-verify"
+    ),
+  });
+  prisma = new PrismaClient({ adapter });
 }
 
 const DEFAULT_CATEGORIES = [

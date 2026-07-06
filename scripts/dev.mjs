@@ -47,6 +47,18 @@ if (isSQLite) {
     process.exit(1);
   }
 
+  // lib/db.ts statically imports the Postgres client (generated/prisma), so
+  // it must exist for the app to compile even when SQLite serves at runtime.
+  if (!existsSync(join(root, "generated/prisma"))) {
+    console.log("[dev] Postgres Prisma client missing — generating...");
+    try {
+      execSync("npx prisma generate", { cwd: root, stdio: "inherit" });
+    } catch {
+      console.error("[dev] prisma generate failed — see output above.");
+      process.exit(1);
+    }
+  }
+
   try {
     execSync(
       "npx prisma db push" +
