@@ -45,7 +45,7 @@ export default function TransactionsPage() {
 
   const { pendingCount } = useSyncContext();
   const prevPendingCountRef = useRef(pendingCount);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);

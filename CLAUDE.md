@@ -103,7 +103,7 @@ When `DATABASE_URL` is set, all `POSTGRES_*` variables are ignored and the app u
 
 ## Architecture
 
-**Stack:** Next.js 16 App Router · React 18 · Prisma 7 (PostgreSQL/Supabase via `@prisma/adapter-pg`, or SQLite via `@prisma/adapter-better-sqlite3`) · NextAuth v4 · SWR 2 · Recharts · Tailwind CSS · `lucide-react` (icons) · IndexedDB (`idb@8`) · `bcryptjs` (password hashing) · `zod` (input validation) · `clsx` + `tailwind-merge` (`cn()` helper)
+**Stack:** Next.js 16 App Router · React 19 · Prisma 7 (PostgreSQL/Supabase via `@prisma/adapter-pg`, or SQLite via `@prisma/adapter-better-sqlite3`) · NextAuth v4 · SWR 2 · Recharts · Tailwind CSS · `lucide-react` (icons) · IndexedDB (`idb@8`) · `bcryptjs` (password hashing) · `zod` (input validation) · `clsx` + `tailwind-merge` (`cn()` helper)
 
 ### Data flow
 
@@ -118,7 +118,7 @@ Props passed to `DashboardContent`: `initialTransactions`, `initialTotalIncome`,
 
 The transactions page (`/transactions`) is a **fully client-side** page. It fetches data via the `getTransactions` server action through **SWR**, keyed by a serialized filter object (`month`, `year`, `category`, `label`, `q`, `from`, `to`) — re-visiting a previously-seen filter returns cached data instantly while revalidating in the background. Cursor-based "Load more" pagination appends pages outside SWR; categories and budgets are fetched once on mount. A drop in `pendingCount` (sync completed) triggers a silent `mutate()` to clear "Pending" badges.
 
-**Important React 18 note:** Do not use `startTransition(async fn)` for server actions — React 18 does not properly track async transitions. Use plain `async/await` with a `useState` loading flag instead.
+**Historical note (fixed in React 19):** Prior to the React 19 upgrade, `startTransition(async fn)` did not reliably track async transitions, so this codebase used a manual `useState` loading flag instead (still present in several components — see `ChangePasswordForm.tsx`, `BudgetManager.tsx`, `CategoryManager.tsx`, `ExpenseInput.tsx`, `TransactionList.tsx`, `app/(dashboard)/transactions/page.tsx`, `UserManager.tsx`, `SyncProvider.tsx`, `RecurringRow.tsx`). React 19 tracks async transitions correctly, so `login/page.tsx` and `RecurringForm.tsx` now use `startTransition(async fn)` safely; the `useState`-flag components were left as-is (not strictly necessary anymore, but harmless) to avoid unrelated scope creep in the upgrade.
 
 ### Offline-first & background sync
 

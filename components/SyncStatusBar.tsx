@@ -9,7 +9,7 @@ export function SyncStatusBar() {
   const { isOnline, pendingCount, failedCount, isSyncing, syncNow } = useSyncContext();
   const [showSynced, setShowSynced] = useState(false);
   const prevPendingRef = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (prevPendingRef.current > 0 && pendingCount === 0 && !isSyncing && isOnline) {
