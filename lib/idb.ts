@@ -244,6 +244,20 @@ export async function seedIDBFromServer(
   await txn.done;
 }
 
+// Wipes both stores. Called on sign-out so financial data doesn't linger in
+// IndexedDB on a shared device. Any still-pending offline ops are discarded —
+// sign-out is an explicit choice to leave, not a moment to sync.
+export async function clearAllLocalData(): Promise<void> {
+  if (typeof window === "undefined") return;
+  const db = await getDB();
+  const txn = db.transaction(["transactions", "syncQueue"], "readwrite");
+  await Promise.all([
+    txn.objectStore("transactions").clear(),
+    txn.objectStore("syncQueue").clear(),
+  ]);
+  await txn.done;
+}
+
 export async function reconcileWithServer(
   serverIds: Set<string>,
   userId: string
