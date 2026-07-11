@@ -7,7 +7,8 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getNextDueDate, DEFAULT_CATEGORIES, enumerateMonths, MAX_BACKFILL, type RecurringFrequency } from "@/lib/utils";
 import { IS_SQLITE, encodeLabels, normalizeTx, getLabelFilter, getTrendRows, type TrendGranularity, normalizeBudget, encodeBudgetArray, parseLabels } from "@/lib/db-adapter";
-import { transactionSchema, categorySchema, budgetSchema, recurringSchema, passwordSchema } from "@/lib/validation";
+import { transactionSchema, categorySchema, budgetSchema, recurringSchema, recurringUpdateSchema, passwordSchema, roleSchema } from "@/lib/validation";
+import { rateLimit } from "@/lib/rate-limit";
 import bcrypt from "bcryptjs";
 
 // ─── Auth helpers ──────────────────────────────────────────────────────────────
@@ -785,6 +786,10 @@ export async function changePassword(
   const userId = await getAuthenticatedUserId();
   const session = await getServerSession(authOptions);
   if (session?.user?.role === "demo") throw new Error("Demo accounts cannot change their password");
+
+  // The current-password check below is an offline-crackable oracle — throttle it.
+  const rl = rateLimit(`changepw:${userId}`, { limit: 5, windowMs: 15 * 60_000 });
+  if (!rl.success) throw new Error("Too many attempts. Try again later.");
 
   passwordSchema.parse(newPassword);
 

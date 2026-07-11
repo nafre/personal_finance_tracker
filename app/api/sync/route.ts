@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { encodeLabels } from "@/lib/db-adapter";
+import { transactionSchema } from "@/lib/validation";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -23,6 +25,17 @@ export async function POST(req: NextRequest) {
   });
   if (!dbUser || dbUser.sessionVersion !== (session.user.sessionVersion ?? 1)) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Generous ceiling: a legitimate offline drain replays ops sequentially and
+  // stays far below this; only scripted abuse hits it. Kept high on purpose —
+  // a 429 counts as a retry failure client-side, and 5 failures drop the op.
+  const rl = rateLimit(`sync:${userId}`, { limit: 300, windowMs: 60_000 });
+  if (!rl.success) {
+    return NextResponse.json(
+      { success: false, error: "Too many requests" },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+    );
   }
 
   let body: { op: string; id?: string; payload?: Record<string, unknown> };
