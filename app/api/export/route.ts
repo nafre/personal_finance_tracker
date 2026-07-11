@@ -58,8 +58,14 @@ export async function GET(req: NextRequest) {
       : new Response("Export failed", { status: 500 });
   }
 
-  // Double up embedded quotes so commas/quotes in any field can't break the row
-  const esc = (s: string) => s.replace(/"/g, '""');
+  // Double up embedded quotes so commas/quotes in any field can't break the
+  // row, and neutralize spreadsheet formula injection: Excel/Sheets execute
+  // cells starting with = + - @ (or tab/CR) as formulas, so prefix those with
+  // a literal apostrophe.
+  const esc = (s: string) => {
+    const quoted = s.replace(/"/g, '""');
+    return /^[=+\-@\t\r]/.test(quoted) ? `'${quoted}` : quoted;
+  };
   const rows = transactions.map((tx) => {
     const date     = new Date(tx.date).toISOString().split("T")[0];
     const category = esc(tx.category);
