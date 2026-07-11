@@ -2,6 +2,8 @@
 
 Ideas that were scoped but not fully implemented. Each open item has an effort estimate (S/M/L) and a suggested file to start from. Items marked **DONE** have since been implemented.
 
+> **Jul 2026:** several open items now have full implementation plans in the [feature roadmap](features/README.md) (`docs/features/`). Those items are marked **Superseded** below — the feature doc is the authoritative plan; the entry here is kept only as a historical pointer.
+
 ---
 
 ## UX / Features
@@ -10,11 +12,15 @@ Ideas that were scoped but not fully implemented. Each open item has an effort e
 Implemented as `GET /api/export` — see `app/api/export/route.ts`. The transactions page has an **Export CSV ↓** button in the filter bar.
 
 ### 1e — Bulk Select + Bulk Delete (M, medium)
+> **Superseded** — full plan: [features/23-bulk-edit.md](features/23-bulk-edit.md) (extends this item with bulk recategorize / add-label / off-chart).
+
 Add multi-select checkboxes to `TransactionList`, a "Delete selected" action, and optionally "Add label to selected".
 - Start: `components/TransactionList.tsx` — add a `selectable` prop and checkbox column.
 - Add `deleteTransactions(ids: string[])` server action to `lib/actions.ts`.
 
 ### 1f — Undo for Delete (S, medium)
+> **Superseded** — full plan: [features/27-undo-delete.md](features/27-undo-delete.md) (chooses delete-then-restore over the deferred-delete sketch below; the ToastContext action-button extension carries over).
+
 5-second toast with "Undo" that re-inserts the deleted record before the server confirms deletion.
 - Start: `components/TransactionList.tsx` `handleDelete` — stash the deleted record in a ref, show toast, cancel deletion on undo.
 - `context/ToastContext.tsx` now exists (Jul 2026) — extend `showToast` with an optional action button (`{ label, onClick }`) instead of building a one-off toast. The exit animation plumbing (`usePresence`) is already there.
@@ -23,6 +29,8 @@ Add multi-select checkboxes to `TransactionList`, a "Delete selected" action, an
 Implemented as a unified chip row in `ExpenseInput` (icon + colour tint, recently-used first, then all categories). Categories are fetched server-side on the dashboard page and passed down as `CategoryOption[]`; the transactions page reuses its existing on-mount fetch.
 
 ### 1h — Duplicate Detection (S, medium)
+> **Superseded** — full plan: [features/22-duplicate-detection.md](features/22-duplicate-detection.md) (adds a same-day passive hint and a review grouping on `/transactions`).
+
 On add, check if a transaction with the same amount + category was created in the last 60 seconds and show an inline "looks like a duplicate" confirm.
 - Start: `components/ExpenseInput.tsx` — in `handleSubmit`, check the most recent transactions list before calling `addTransaction`.
 
@@ -31,6 +39,8 @@ On add, check if a transaction with the same amount + category was created in th
 - ~~Month selector at 390px~~ DONE (Jul 2026 UI polish pass): no longer wraps; chevron icons, 44px arrow targets, `whitespace-nowrap` toggle. See `docs/UI_POLISH_JUL2026.md` for the full pass (icons, touch targets, dialog a11y, filter bar, safe areas).
 
 ### 1k — Transaction Templates / Favorites (M, high)
+> **Superseded** — full plan: [features/20-transaction-templates.md](features/20-transaction-templates.md) (keeps the two-phase approach below and adds the `Template` model spec).
+
 One-tap re-add for complete frequent transactions (category + amount + note + labels) — goes beyond the recently-used *category* chips, which still require typing the amount.
 - Phase 1 (derived, no schema change): compute the top repeated `(category, amount, note)` tuples from recent transactions (client-side, `hooks/useDashboardState.ts`) and render a template chip row in `ExpenseInput`; tapping pre-fills the input text so the user can confirm/tweak before submit.
 - Phase 2 (optional): explicit "Save as template" action on a `TransactionList` row — needs a small `Template` model (or pinned flag) + CRUD in `lib/actions.ts`.
@@ -44,12 +54,16 @@ All three shipped (Jul 2026):
 - **Due this week** — month-view summary card above the recurring section (`data-testid="due-week-card"`): count + expense/income totals for rules due within 7 days (overdue included); computed in the consolidated recurring memo in `useDashboardState`; "Review →" expands the recurring list. Hidden when nothing qualifies.
 
 ### 1l — CSV Import (M, medium)
+> **Superseded** — full plan: [features/18-csv-import.md](features/18-csv-import.md) (adds column mapping for foreign formats, date-format handling, and chunked batch inserts).
+
 Companion to the CSV export: upload a CSV (own export format first; bank formats later) and bulk-create transactions. Makes the export/backup story round-trip.
 - Parse client-side, preview rows in a table with per-row include checkboxes, then submit via a new `addTransactions(rows[])` server action (Zod-validate each row; cap batch size).
 - Dedupe against existing data by `(date, amount, category)` and flag suspected duplicates in the preview rather than silently skipping.
 - Start: new `components/ImportDialog.tsx` (use `hooks/useDialogBehavior.ts`), `lib/actions.ts`.
 
 ### 1m — Auto-Post Recurring Rules (M, medium)
+> **Superseded** — full plan: [features/21-auto-post-recurring.md](features/21-auto-post-recurring.md) (adds the action-core extraction and timezone notes; same `autoPost` + `CRON_SECRET` design).
+
 Posting is manual today (Post button / backfill). An opt-in `autoPost` flag per rule plus a daily cron (Vercel Cron → `app/api/cron/route.ts`) would post due rules server-side without opening the app.
 - Idempotency comes free: `postRecurringTransaction` advances `lastRun` atomically, so a re-run posts nothing new. Reuse `backfillRecurringTransaction` semantics for rules more than one period behind.
 - Guard the route with `CRON_SECRET` (Vercel sends it as a Bearer header).
@@ -119,14 +133,20 @@ Fixed in two halves: (1) `TransactionList`'s online edit/delete now write throug
 Implemented as the Year / All-time dashboard views (`?period=` param, monthly trend granularity). See `app/(dashboard)/dashboard/page.tsx` and the "Dashboard — year view" e2e tests.
 
 ### 4b — Forecast / Runway (M, medium)
+> **Superseded** — full plan: [features/02-cashflow-forecast.md](features/02-cashflow-forecast.md) (adds the `lib/forecast.ts` pure module, median-based projection, and the all-time runway line).
+
 Use recurring rules + average daily spend to project end-of-month net balance.
 - Add a `ForecastCard` component in `components/` that consumes `dailyData` + `initialRecurring`.
 
 ### 4c — Category Drilldown Page (M, medium)
+> **Superseded** — full plan: [features/04-category-drilldown.md](features/04-category-drilldown.md) (adds the `getCategoryDetail` action and the `getTrendRows` category-param extension).
+
 Click a pie slice → `/transactions?category=X` works today but a dedicated drilldown with a 30-day sparkline is better.
 - Add `app/(dashboard)/categories/[name]/page.tsx`.
 
 ### 4d — Spending Heatmap (S, low)
+> **Superseded** — full plan: [features/03-spending-heatmap.md](features/03-spending-heatmap.md) (reuses `getDailyRows` instead of a new action; quantile bucketing + snapshot-masking strategy).
+
 Daily intensity grid (GitHub contribution-style) for the year.
 - Pure visualization component consuming a `getDailySpend(year)` action.
 
@@ -203,6 +223,8 @@ No production error visibility. Sentry's free tier covers a single-user app.
 - `npm install @sentry/nextjs`, add `sentry.client.config.ts` and `sentry.server.config.ts`.
 
 ### 6c — Backup / Export (S, low)
+> **Superseded** — full plan: [features/26-json-backup-restore.md](features/26-json-backup-restore.md) (adds the restore half: versioned envelope, merge/replace modes, pending-sync-queue guard).
+
 Monthly "Download backup JSON" button in settings (or a scheduled email).
 - Server action `exportAllData()` that returns JSON of all transactions, categories, and recurring rules.
 
@@ -240,12 +262,16 @@ Twelve bars stacked by top-5 categories + "Other", consistent colours across mon
 - Start: `lib/actions.ts`, new `components/charts/StackedMonthlyChart.tsx`.
 
 ### 7e — Savings Rate Trend (S, medium) — year view
+> **Superseded** — full plan: [features/07-savings-rate-trend.md](features/07-savings-rate-trend.md) (settles on a separate small chart card, ledger basis, deriving from `initialWealthData`).
+
 Line of `(income − expenses) / income` per month with a 0% reference line. The rate tracks financial health better than absolute numbers.
 - **Partially covered**: the Net stat card now shows the current period's savings rate as its subtitle ("X% saved" / "X% overspent" — `savingsRate` in `useDashboardState`). The per-month *trend* line is still unbuilt.
 - Pure client-side arithmetic over the year view's existing monthly totals (`wealthData`/`dailyData` buckets already carry per-month income and expense).
 - Start: `hooks/useDashboardState.ts`, new sparkline in `components/StatCard.tsx` or a line in `MonthlyBarChart`'s tooltip.
 
 ### 7f — Fixed vs Variable Split (M, medium) — year view
+> **Superseded** — full plan: [features/08-fixed-vs-discretionary.md](features/08-fixed-vs-discretionary.md) (upgrades the rule-matching approximation below to an explicit per-category `spendType` column).
+
 Stacked area per month: spend from recurring rules (rent, subscriptions) vs everything else — shows what portion of spending is actually controllable. Approximation is fine: sum `toMonthlyAmount()` over active rules as the fixed band, or match transactions to rules by category + amount tolerance.
 - Start: `lib/utils.ts` (`toMonthlyAmount` already exported), new chart component.
 
@@ -253,10 +279,14 @@ Stacked area per month: spend from recurring rules (rent, subscriptions) vs ever
 `components/charts/WealthCurve.tsx` (lazy-loaded): running net balance over the all-time monthly buckets, rendered as the hero chart directly below the stat cards in `?period=all`. Ledger basis since Jul 2026 (off-chart transactions count — a cumulative balance must reflect every real money movement): consumes the dedicated `initialWealthData` series fetched via `getRangeDashboardData(…, withWealthSeries: true)`. Headline figure is derived from the plotted data so it always matches the curve's endpoint; a dashed zero reference line appears if the balance ever goes negative.
 
 ### 7h — Year-over-Year Overlay (M, low — until 2+ years of data) — all-time view
+> **Superseded** — full plan: [features/09-year-over-year.md](features/09-year-over-year.md) (adds YoY stat-card badges in the year view; keeps the defer-until-2-years advice — the component hides below 2 years of data).
+
 Cumulative spend per year plotted Jan→Dec as overlaid lines (current year brighter). Catches seasonal comparisons ("am I spending more than last year at this point?") that MoM deltas miss.
 - Same monthly data, pivoted by year client-side. Defer until a second year of data exists.
 
 ### 7i — Budget Burndown Mini-Chart (S, medium) — cross-view
+> **Superseded** — full plan: [features/15-budget-history-burndown.md](features/15-budget-history-burndown.md) (adds the 6-month history strip and the lazy `getBudgetHistory` action alongside the sparkline below).
+
 Small sparkline of remaining budget through the period inside each `BudgetProgress`. The bar says "70% used"; the burndown says "used it all in the first ten days."
 - Budget spend is already computed client-side in `computeBudgetSpent` — derive the daily series with the same loop plus a date bucket.
 - Start: `hooks/useDashboardState.ts`, `components/budgets/BudgetProgress.tsx`.
