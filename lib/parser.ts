@@ -128,7 +128,10 @@ export function parseExpenseInput(input: string): ParsedExpense | null {
 
   const note = noteTokens.join(" ") || undefined;
 
-  // Determine type based on first category word
+  // Determine type based on first category word only — scanning every token
+  // misclassifies payer-case phrasing ("paid salary 5000" is an expense) as
+  // income, since the income noun is still present later in the sentence.
+  // See docs/IMPROVEMENTS_BACKLOG.md 5h for the evaluated-and-rejected alternative.
   const firstWord = (categoryTokens[0] ?? "").toLowerCase();
   const type: "income" | "expense" = INCOME_KEYWORDS.has(firstWord)
     ? "income"

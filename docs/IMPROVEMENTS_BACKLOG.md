@@ -203,6 +203,10 @@ Natural follow-on to 5c: `parseLabels`, `encodeLabels`, `parseBudgetArray`, `enc
 ### 5g — Keep `.github/copilot-instructions.md` Regenerated (S, low)
 The auto-generated SigMap signature file was last regenerated 2026-06-03 — it predates the Prisma 7 / React 19 / Tailwind 4 / Vitest changes, so any tool consuming it sees stale signatures. Re-run `gen-context.js` and ideally wire it into a pre-commit hook or CI step so it can't drift; alternatively delete the file if nothing uses Copilot here.
 
+### 5h — Income-Keyword Detection: Widen to All Tokens — **Rejected** (evaluated Jul 2026)
+`parseExpenseInput`'s type inference checks only `categoryTokens[0]` against `INCOME_KEYWORDS` (`lib/parser.ts`). This misses phrasing like `"monthly salary 5000"` (silently defaults to expense). Widening the check to scan *all* category tokens was evaluated and rejected: it fixes that miss but regresses the payer-case — `"paid salary 5000"` (an expense — you're paying *someone else's* salary) would flip to income, since `"salary"` is still present in the token list. Same failure hits `"pay rent 1200"`, `"gave bonus 50"`, `"sent commission 300"`. A flat keyword-over-tokens match can't distinguish subject from object; a real fix would need an expense-verb override list (`paid`, `pay`, `gave`, `sent`, `spent`, `owed`, `for` — still gameable) or accepting the added complexity isn't worth it for a heuristic with a manual escape hatch.
+**Decision:** keep the current first-token-only heuristic as-is. The Exp/Inc toggle pill in `ExpenseInput` is the correct fallback for the cases it misses. Do not re-propose "scan all tokens" without also solving the payer-case regression above.
+
 ---
 
 ## Security & Hygiene
