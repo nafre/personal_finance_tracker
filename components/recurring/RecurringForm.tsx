@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { cn } from "@/lib/utils";
+import { evaluateAmountInput, normalizeAmountOnBlur } from "@/lib/math-eval";
 import { createRecurringTransaction, updateRecurringTransaction, getCategories } from "@/lib/actions";
 import { CategoryCombobox } from "@/components/CategoryCombobox";
 import type { CategoryOption } from "@/types";
@@ -65,10 +66,10 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const parsedAmount = parseFloat(amount);
+    const parsedAmount = evaluateAmountInput(amount);
     if (!name.trim()) return setError("Name is required.");
     if (!category.trim()) return setError("Category is required.");
-    if (!parsedAmount || parsedAmount <= 0) return setError("Enter a valid amount.");
+    if (parsedAmount === null || parsedAmount <= 0) return setError("Enter a valid amount.");
     setError("");
 
     startTransition(async () => {
@@ -131,12 +132,12 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
           <label className="text-xs text-slate-400 mb-1 block">Amount (RM)</label>
           <input
             className="input-base w-full text-base sm:text-sm"
-            type="number"
-            min="0.01"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             placeholder="0.00"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            onBlur={() => setAmount((v) => normalizeAmountOnBlur(v))}
           />
         </div>
 

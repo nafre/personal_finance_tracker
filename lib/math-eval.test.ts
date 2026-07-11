@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { evaluateExpression } from "./math-eval";
+import {
+  evaluateExpression,
+  evaluateAmountInput,
+  normalizeAmountOnBlur,
+} from "./math-eval";
 
 describe("evaluateExpression", () => {
   describe("arithmetic", () => {
@@ -82,5 +86,61 @@ describe("evaluateExpression", () => {
       expect(evaluateExpression("(".repeat(9) + "1" + ")".repeat(9))).toBeNull();
       expect(evaluateExpression("(".repeat(8) + "1" + ")".repeat(8))).toBe(1);
     });
+  });
+});
+
+describe("evaluateAmountInput", () => {
+  it("passes plain numbers through", () => {
+    expect(evaluateAmountInput("12.50")).toBe(12.5);
+    expect(evaluateAmountInput("20")).toBe(20);
+  });
+
+  it("evaluates expressions", () => {
+    expect(evaluateAmountInput("84.60/3+12.50")).toBe(40.7);
+    expect(evaluateAmountInput("(23+9)/2")).toBe(16);
+  });
+
+  it("allows internal whitespace (no token ambiguity in a lone field)", () => {
+    expect(evaluateAmountInput("12 + 8.5")).toBe(20.5);
+    expect(evaluateAmountInput(" 20 ")).toBe(20);
+  });
+
+  it("strips thousands separators", () => {
+    expect(evaluateAmountInput("1,200+300")).toBe(1500);
+    expect(evaluateAmountInput("1,200")).toBe(1200);
+  });
+
+  it("returns null for empty or non-numeric input", () => {
+    expect(evaluateAmountInput("")).toBeNull();
+    expect(evaluateAmountInput("   ")).toBeNull();
+    expect(evaluateAmountInput("abc")).toBeNull();
+    expect(evaluateAmountInput("12abc")).toBeNull();
+    expect(evaluateAmountInput("12+")).toBeNull();
+    expect(evaluateAmountInput("5/0")).toBeNull();
+  });
+
+  it("returns negatives and zero (sign policy is the caller's)", () => {
+    expect(evaluateAmountInput("2-5")).toBe(-3);
+    expect(evaluateAmountInput("3-3")).toBe(0);
+  });
+});
+
+describe("normalizeAmountOnBlur", () => {
+  it("replaces a valid expression with its evaluated value", () => {
+    expect(normalizeAmountOnBlur("84.60/3+12.50")).toBe("40.7");
+    expect(normalizeAmountOnBlur("12 + 8")).toBe("20");
+    expect(normalizeAmountOnBlur("(23+9)/2")).toBe("16");
+  });
+
+  it("leaves plain numbers untouched (no trailing-zero loss)", () => {
+    expect(normalizeAmountOnBlur("12.50")).toBe("12.50");
+    expect(normalizeAmountOnBlur("20")).toBe("20");
+    expect(normalizeAmountOnBlur("")).toBe("");
+  });
+
+  it("leaves invalid input untouched for submit-time validation", () => {
+    expect(normalizeAmountOnBlur("12+")).toBe("12+");
+    expect(normalizeAmountOnBlur("5/0")).toBe("5/0");
+    expect(normalizeAmountOnBlur("abc-def")).toBe("abc-def");
   });
 });

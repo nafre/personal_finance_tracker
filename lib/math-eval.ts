@@ -34,6 +34,30 @@ export function evaluateExpression(expr: string): number | null {
   return Math.round(value * 100) / 100;
 }
 
+// Dedicated amount fields (transaction edit form, RecurringForm,
+// BudgetManager) accept the same expressions as quick-add, but a lone input
+// holds a single value — there is no token ambiguity — so internal whitespace
+// and thousands-commas are allowed and stripped before evaluation.
+
+/** Evaluate a raw amount-field string. Plain numbers pass through unchanged
+ * ("12.50" → 12.5); anything non-numeric returns null. Sign policy (rejecting
+ * <= 0) stays with the caller, same as evaluateExpression. */
+export function evaluateAmountInput(raw: string): number | null {
+  const cleaned = raw.replace(/[\s,]/g, "");
+  if (!cleaned) return null;
+  return evaluateExpression(cleaned);
+}
+
+/** Blur normalizer for amount fields: if the text contains an operator and
+ * evaluates, return the result as a string ("84.60/3+12.50" → "40.7").
+ * Plain numbers and invalid input come back untouched — submit-time
+ * validation reports the latter. */
+export function normalizeAmountOnBlur(raw: string): string {
+  if (!/[+*/()-]/.test(raw)) return raw;
+  const v = evaluateAmountInput(raw);
+  return v === null ? raw : String(v);
+}
+
 function tokenize(expr: string): Token[] | null {
   const tokens: Token[] = [];
   let i = 0;

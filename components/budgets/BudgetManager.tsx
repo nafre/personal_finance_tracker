@@ -5,6 +5,7 @@ import { getBudgets, saveBudget, deleteBudget, getCategories, getUsedLabels } fr
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { useDialogBehavior } from "@/hooks/useDialogBehavior";
+import { evaluateAmountInput, normalizeAmountOnBlur } from "@/lib/math-eval";
 import { Trash2, X } from "lucide-react";
 import type { Budget, BudgetType } from "@/types";
 
@@ -114,8 +115,8 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
   }
 
   async function handleSave() {
-    const parsed = parseFloat(formAmount);
-    if (!parsed || parsed <= 0) { setError("Enter a valid amount."); return; }
+    const parsed = evaluateAmountInput(formAmount);
+    if (parsed === null || parsed <= 0) { setError("Enter a valid amount."); return; }
     if (formType === "category" && !formCategory) { setError("Select a category."); return; }
     if (formType === "excluded" && formExcluded.length === 0) { setError("Exclude at least one category."); return; }
     if (formType === "label" && formLabels.length === 0) { setError("Select at least one label."); return; }
@@ -439,12 +440,12 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Monthly limit (RM)</label>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={formAmount}
                 onChange={(e) => setFormAmount(e.target.value)}
+                onBlur={() => setFormAmount((v) => normalizeAmountOnBlur(v))}
                 placeholder="0.00"
-                min="0"
-                step="0.01"
                 className="input-base w-full text-base sm:text-sm tabular-nums"
               />
             </div>

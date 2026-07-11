@@ -2,7 +2,7 @@
 
 **UX & PWA polish** · Effort: **S** · Inspired by: Actual Budget's math-in-amount-fields, Soulver-style entry · Backlog: — · Depends on: —
 
-> **Status: DONE (Jul 2026)** — shipped in commit `41f4094` (quick-add v1): `lib/math-eval.ts` + the `extractNumericValue` expression path in `lib/parser.ts`, with full unit coverage (`lib/math-eval.test.ts`, extended `lib/parser.test.ts`). Also fixed a latent mis-parse (`food 12+8.5` used to parse as 12). Still open: the v1.1 extension to the edit-form/RecurringForm/BudgetManager amount fields (§2 last bullet); the optional placeholder example was skipped (known snapshot-flake surface).
+> **Status: DONE (Jul 2026)** — shipped in commit `41f4094` (quick-add v1): `lib/math-eval.ts` + the `extractNumericValue` expression path in `lib/parser.ts`, with full unit coverage (`lib/math-eval.test.ts`, extended `lib/parser.test.ts`). Also fixed a latent mis-parse (`food 12+8.5` used to parse as 12). **v1.1 also shipped (Jul 2026)**: the amount fields in the `TransactionList` inline edit form, `RecurringForm`, and `BudgetManager` accept expressions via new `lib/math-eval.ts` exports `evaluateAmountInput` (whitespace/commas allowed — no token ambiguity in a lone field) and `normalizeAmountOnBlur` (expression → evaluated value on blur); the three inputs switched from `type="number"` to `type="text" inputMode="decimal"` (mobile keeps the decimal keypad, so expressions there are a hardware-keyboard affordance). The optional placeholder example was skipped (known snapshot-flake surface).
 
 ## 1. Summary & inspiration
 
@@ -13,7 +13,7 @@ Splitting a bill or adding up a receipt currently means reaching for a calculato
 - Quick-add accepts `+ - * / ( )` in the amount token: `food 12+8.5`, `grab (23+9)/2`, `share 84.60/3`.
 - The input's live parse preview (the existing category/amount feedback in `ExpenseInput`) shows the **evaluated** result — `= RM40.70` — before submit, so there's never a surprise commit.
 - Invalid math (`12+`, `5/0`) → parser returns null for the amount → same behavior as any unparseable input today (submit disabled / no preview).
-- Also honor expressions in the `TransactionList` inline edit form's amount field and `RecurringForm`/`BudgetManager` amount inputs (same evaluator on blur) — v1.1; quick-add first.
+- Also honor expressions in the `TransactionList` inline edit form's amount field and `RecurringForm`/`BudgetManager` amount inputs (same evaluator on blur) — v1.1; quick-add first. *(Shipped — see Status above.)*
 
 ## 3. Data model
 

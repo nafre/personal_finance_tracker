@@ -8,6 +8,7 @@ import { CategoryCombobox } from "@/components/CategoryCombobox";
 import { useSyncContext } from "@/context/SyncProvider";
 import { useToast } from "@/context/ToastContext";
 import { formatCurrency, formatDate, cn, stringToColor } from "@/lib/utils";
+import { evaluateAmountInput, normalizeAmountOnBlur } from "@/lib/math-eval";
 import { ChevronDown, Pencil, Trash2, X } from "lucide-react";
 
 interface Transaction {
@@ -236,8 +237,8 @@ const TransactionRow = memo(function TransactionRow({
   const { isOnline, userId, refreshPendingCount } = useSyncContext();
 
   function handleSave() {
-    const amount = parseFloat(editAmount);
-    if (isNaN(amount) || amount <= 0) return;
+    const amount = evaluateAmountInput(editAmount);
+    if (amount === null || amount <= 0) return;
     setRowError("");
 
     const updateData = {
@@ -365,12 +366,12 @@ const TransactionRow = memo(function TransactionRow({
           <div>
             <label className="text-xs text-slate-400 mb-1 block">Amount</label>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               className="input-base w-full text-base sm:text-sm"
               value={editAmount}
               onChange={(e) => setEditAmount(e.target.value)}
-              min="0"
-              step="0.01"
+              onBlur={() => setEditAmount((v) => normalizeAmountOnBlur(v))}
             />
           </div>
           <div>
