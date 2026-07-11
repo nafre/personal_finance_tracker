@@ -593,6 +593,7 @@ export async function updateRecurringTransaction(
   }>
 ) {
   const userId = await getAuthenticatedUserId();
+  recurringUpdateSchema.parse(data);
   const existing = await db.recurringTransaction.findFirst({ where: { id, userId } });
   if (!existing) throw new Error("Recurring transaction not found");
   const rec = await db.recurringTransaction.update({ where: { id }, data });
