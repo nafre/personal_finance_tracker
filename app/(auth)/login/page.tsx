@@ -27,7 +27,11 @@ function LoginForm() {
       });
 
       if (result?.error) {
-        setError("Invalid email or password");
+        setError(
+          result.error === "RateLimited"
+            ? "Too many attempts. Try again in a few minutes."
+            : "Invalid email or password"
+        );
       } else {
         router.push(callbackUrl);
         router.refresh();
