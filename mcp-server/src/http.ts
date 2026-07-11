@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import express from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { buildServer } from "./server.js";
@@ -11,7 +12,20 @@ import { buildServer } from "./server.js";
 // OAuth 2.1 (PKCE + dynamic client registration). To support those, replace the
 // bearer check below with the MCP SDK's auth router/provider, or front this
 // service with an OAuth gateway (e.g. Cloudflare Access / oauth2-proxy).
-// Financial data is exposed publicly here — do NOT deploy without real auth.
+
+// Fail closed: this server exposes financial data, so a missing token must be
+// a fatal misconfiguration, never a silently-open deployment.
+const BEARER_TOKEN = process.env.MCP_BEARER_TOKEN;
+if (!BEARER_TOKEN) {
+  console.error(
+    "[expense-tracker-mcp] MCP_BEARER_TOKEN is not set — refusing to start. " +
+      "Set it to a long random secret before exposing this server."
+  );
+  process.exit(1);
+}
+// Hash both sides so timingSafeEqual gets equal-length buffers regardless of
+// what the client sent.
+const TOKEN_DIGEST = createHash("sha256").update(`Bearer ${BEARER_TOKEN}`).digest();
 
 const app = express();
 app.use(express.json());
@@ -20,11 +34,11 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-// Shared-secret guard (interim). No-op if MCP_BEARER_TOKEN is unset.
+// Shared-secret guard (constant-time comparison).
 app.use((req, res, next) => {
-  const token = process.env.MCP_BEARER_TOKEN;
-  if (!token) return next();
-  if (req.headers.authorization === `Bearer ${token}`) return next();
+  const supplied = req.headers.authorization ?? "";
+  const suppliedDigest = createHash("sha256").update(supplied).digest();
+  if (timingSafeEqual(suppliedDigest, TOKEN_DIGEST)) return next();
   res.status(401).json({ error: "unauthorized" });
 });
 

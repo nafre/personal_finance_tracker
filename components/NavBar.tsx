@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
+import { clearLocalDataForSignOut } from "@/lib/sync";
 import { useSidebar } from "@/context/SidebarContext";
 import { useState, useEffect } from "react";
 import {
@@ -26,6 +27,13 @@ function dispatchNavStart(href: string, currentPathname: string) {
   if (currentPathname !== href) {
     window.dispatchEvent(new Event("nav-start"));
   }
+}
+
+// Wipe the IDB mirror + SW page caches before dropping the session so
+// financial data isn't readable offline by the next person on this device.
+async function handleSignOut() {
+  await clearLocalDataForSignOut();
+  await signOut({ callbackUrl: "/login" });
 }
 
 export function NavBar() {
@@ -113,7 +121,7 @@ export function NavBar() {
         {/* Bottom actions */}
         <div className="pt-2 border-t border-slate-800/60">
           <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={handleSignOut}
             title={collapsed ? "Sign out" : undefined}
             aria-label={collapsed ? "Sign out" : undefined}
             className={cn(
@@ -150,7 +158,7 @@ export function NavBar() {
           );
         })}
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={handleSignOut}
           className="flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium text-slate-500 hover:text-rose-400 transition-colors"
         >
           <LogOut className="w-5 h-5" aria-hidden="true" />

@@ -2,11 +2,21 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getTransactions } from "@/lib/actions";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return new Response("Unauthorized", { status: 401 });
+  }
+
+  // Exports scan up to 10k rows — cap how fast they can be hammered.
+  const rl = rateLimit(`export:${session.user.userId ?? "anon"}`, { limit: 20, windowMs: 60_000 });
+  if (!rl.success) {
+    return new Response("Too many requests", {
+      status: 429,
+      headers: { "Retry-After": String(rl.retryAfterSec) },
+    });
   }
 
   const p = req.nextUrl.searchParams;
@@ -48,8 +58,14 @@ export async function GET(req: NextRequest) {
       : new Response("Export failed", { status: 500 });
   }
 
-  // Double up embedded quotes so commas/quotes in any field can't break the row
-  const esc = (s: string) => s.replace(/"/g, '""');
+  // Double up embedded quotes so commas/quotes in any field can't break the
+  // row, and neutralize spreadsheet formula injection: Excel/Sheets execute
+  // cells starting with = + - @ (or tab/CR) as formulas, so prefix those with
+  // a literal apostrophe.
+  const esc = (s: string) => {
+    const quoted = s.replace(/"/g, '""');
+    return /^[=+\-@\t\r]/.test(quoted) ? `'${quoted}` : quoted;
+  };
   const rows = transactions.map((tx) => {
     const date     = new Date(tx.date).toISOString().split("T")[0];
     const category = esc(tx.category);

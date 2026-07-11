@@ -148,6 +148,19 @@ async function main() {
   const adminEmail  = (process.env.ADMIN_EMAIL ?? "admin@example.com").toLowerCase();
   const adminHash   = process.env.ADMIN_PASSWORD_HASH ?? "";
 
+  // Well-known credentials (the demo account, and the "changeme" admin
+  // fallback) are only acceptable in local SQLite dev. Seeding a shared
+  // Postgres DB with them requires an explicit opt-in.
+  const allowInsecureSeed = IS_SQLITE || process.env.SEED_DEMO === "1";
+
+  if (!adminHash && !allowInsecureSeed) {
+    throw new Error(
+      "[seed] ADMIN_PASSWORD_HASH is not set. Refusing to seed a non-SQLite DB " +
+        "with the default 'changeme' password. Set ADMIN_PASSWORD_HASH, or set " +
+        "SEED_DEMO=1 if you really want insecure defaults."
+    );
+  }
+
   // ── 1. Upsert admin User ───────────────────────────────────────────────────
   console.log(`[seed] Upserting admin user id=${adminUserId}`);
   await prisma.user.upsert({
@@ -169,7 +182,13 @@ async function main() {
   console.log("[seed] Seeding categories for admin user");
   await seedCategories(adminUserId);
 
-  // ── 3. Upsert demo User ────────────────────────────────────────────────────
+  // ── 3. Upsert demo User (local dev / explicit opt-in only) ────────────────
+  if (!allowInsecureSeed) {
+    console.log("[seed] Skipping demo user (publicly known credentials; set SEED_DEMO=1 to include it)");
+    console.log("[seed] Done — admin + categories seeded");
+    return;
+  }
+
   const demoId = "demo-user";
   const demoEmail = "demo@example.com";
   const demoHash = await bcrypt.hash("demo1234", 12);

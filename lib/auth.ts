@@ -2,6 +2,12 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { rateLimit } from "@/lib/rate-limit";
+
+// Hash of a random throwaway string. Compared against on unknown-email paths so
+// a miss costs the same bcrypt work as a hit — otherwise response timing
+// reveals which emails have accounts.
+const DUMMY_HASH = "$2b$12$Yd0WN0ZVz7.XLTBuheXWLO3DtT.NZoONOqc2iu3FPCJ0DY9iceYka";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -14,9 +20,16 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        const email = credentials.email.toLowerCase();
+
+        // Brute-force throttle, keyed by target account. Applied before any
+        // bcrypt work so throttled attempts are also cheap to reject.
+        const rl = rateLimit(`login:${email}`, { limit: 10, windowMs: 15 * 60_000 });
+        if (!rl.success) throw new Error("RateLimited");
+
         // Primary path: look up the user in the DB
         const dbUser = await db.user.findUnique({
-          where: { email: credentials.email.toLowerCase() },
+          where: { email },
         });
 
         if (dbUser) {
@@ -38,10 +51,14 @@ export const authOptions: NextAuthOptions = {
 
         if (!adminEmail || !adminPasswordHash) {
           console.error("[auth] No user in DB and ADMIN_EMAIL/ADMIN_PASSWORD_HASH not set");
+          await bcrypt.compare(credentials.password, DUMMY_HASH); // timing equalization
           return null;
         }
 
-        if (credentials.email.toLowerCase() !== adminEmail.toLowerCase()) return null;
+        if (email !== adminEmail.toLowerCase()) {
+          await bcrypt.compare(credentials.password, DUMMY_HASH); // timing equalization
+          return null;
+        }
 
         const ok = await bcrypt.compare(credentials.password, adminPasswordHash);
         if (!ok) return null;
@@ -51,7 +68,7 @@ export const authOptions: NextAuthOptions = {
           where: { id: adminUserId },
           create: {
             id: adminUserId,
-            email: adminEmail.toLowerCase(),
+            email,
             name: "Me",
             passwordHash: adminPasswordHash,
             role: "admin",

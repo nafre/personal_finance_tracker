@@ -10,11 +10,32 @@ import {
   updateQueuedOp,
   seedIDBFromServer,
   reconcileWithServer,
+  clearAllLocalData,
   type LocalTransaction,
 } from "@/lib/idb";
 import { getTransactionIds } from "@/lib/actions";
 
 export { seedIDBFromServer };
+
+// Sign-out hygiene: wipe the IndexedDB mirror and every Cache Storage entry
+// (the SW caches authenticated pages for offline use) so financial data isn't
+// readable by the next person on a shared device. Best-effort — a failure here
+// must never block the actual sign-out.
+export async function clearLocalDataForSignOut(): Promise<void> {
+  try {
+    await clearAllLocalData();
+  } catch {
+    // ignore — IDB may be unavailable
+  }
+  try {
+    if (typeof caches !== "undefined") {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch {
+    // ignore — Cache Storage may be unavailable
+  }
+}
 
 const MAX_RETRIES = 5;
 // Exponential backoff between retry attempts: 30s → 1m → 2m → 4m → 8m.

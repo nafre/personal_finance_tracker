@@ -7,7 +7,8 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getNextDueDate, DEFAULT_CATEGORIES, enumerateMonths, MAX_BACKFILL, type RecurringFrequency } from "@/lib/utils";
 import { IS_SQLITE, encodeLabels, normalizeTx, getLabelFilter, getTrendRows, type TrendGranularity, normalizeBudget, encodeBudgetArray, parseLabels } from "@/lib/db-adapter";
-import { transactionSchema, categorySchema, budgetSchema, recurringSchema, passwordSchema } from "@/lib/validation";
+import { transactionSchema, categorySchema, budgetSchema, recurringSchema, recurringUpdateSchema, passwordSchema, roleSchema } from "@/lib/validation";
+import { rateLimit } from "@/lib/rate-limit";
 import bcrypt from "bcryptjs";
 
 // ─── Auth helpers ──────────────────────────────────────────────────────────────
@@ -33,12 +34,24 @@ const getAuthenticatedUserId = cache(async (): Promise<string> => {
   return userId;
 });
 
+// Like getAuthenticatedUserId, this must not trust the JWT alone: the role and
+// sessionVersion are re-checked against the DB so a demoted or deleted admin
+// loses access immediately instead of at JWT expiry (30 days).
 async function requireAdmin(): Promise<string> {
   const session = await getServerSession(authOptions);
   if (!session?.user) throw new Error("Unauthorized");
-  if (session.user.role !== "admin") throw new Error("Forbidden");
   const userId = session.user.userId;
   if (!userId) throw new Error("Unauthorized");
+
+  const dbUser = await db.user.findUnique({
+    where: { id: userId },
+    select: { role: true, sessionVersion: true },
+  });
+  if (!dbUser) throw new Error("Unauthorized");
+  if (dbUser.sessionVersion !== (session.user.sessionVersion ?? 1)) {
+    throw new Error("Unauthorized");
+  }
+  if (dbUser.role !== "admin") throw new Error("Forbidden");
   return userId;
 }
 
@@ -592,6 +605,7 @@ export async function updateRecurringTransaction(
   }>
 ) {
   const userId = await getAuthenticatedUserId();
+  recurringUpdateSchema.parse(data);
   const existing = await db.recurringTransaction.findFirst({ where: { id, userId } });
   if (!existing) throw new Error("Recurring transaction not found");
   const rec = await db.recurringTransaction.update({ where: { id }, data });
@@ -786,6 +800,10 @@ export async function changePassword(
   const session = await getServerSession(authOptions);
   if (session?.user?.role === "demo") throw new Error("Demo accounts cannot change their password");
 
+  // The current-password check below is an offline-crackable oracle — throttle it.
+  const rl = rateLimit(`changepw:${userId}`, { limit: 5, windowMs: 15 * 60_000 });
+  if (!rl.success) throw new Error("Too many attempts. Try again later.");
+
   passwordSchema.parse(newPassword);
 
   const user = await db.user.findUnique({ where: { id: userId } });
@@ -811,10 +829,10 @@ export async function createUser(data: {
   name?: string;
   role?: "user" | "admin" | "demo";
 }): Promise<{ id: string; email: string }> {
-  const session = await getServerSession(authOptions);
-  if (session?.user?.role !== "admin") throw new Error("Forbidden: admin only");
+  await requireAdmin();
   if (!data.email || !data.password) throw new Error("Email and password are required");
   passwordSchema.parse(data.password);
+  if (data.role !== undefined) roleSchema.parse(data.role);
 
   const existing = await db.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (existing) throw new Error("A user with that email already exists");
@@ -877,21 +895,24 @@ export async function updateUser(
   data: { name?: string; role?: "admin" | "user" | "demo" }
 ): Promise<{ id: string; email: string; name: string; role: string }> {
   await requireAdmin();
+  if (data.role !== undefined) roleSchema.parse(data.role);
 
-  if (data.role && data.role !== "admin") {
-    const target = await db.user.findUnique({ where: { id }, select: { role: true } });
-    if (!target) throw new Error("Not found");
-    if (target.role === "admin") {
-      const adminCount = await db.user.count({ where: { role: "admin" } });
-      if (adminCount <= 1) throw new Error("Cannot demote the last admin account");
-    }
+  const target = await db.user.findUnique({ where: { id }, select: { role: true } });
+  if (!target) throw new Error("Not found");
+  const roleChanged = data.role !== undefined && data.role !== target.role;
+
+  if (roleChanged && data.role !== "admin" && target.role === "admin") {
+    const adminCount = await db.user.count({ where: { role: "admin" } });
+    if (adminCount <= 1) throw new Error("Cannot demote the last admin account");
   }
 
   const updated = await db.user.update({
     where: { id },
     data: {
       ...(data.name !== undefined && { name: data.name }),
-      ...(data.role !== undefined && { role: data.role }),
+      // A role change invalidates the target's existing JWTs so the old role
+      // can't be exercised until the token would naturally expire.
+      ...(roleChanged && { role: data.role, sessionVersion: { increment: 1 } }),
     },
     select: { id: true, email: true, name: true, role: true },
   });

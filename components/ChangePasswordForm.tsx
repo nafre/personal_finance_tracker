@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { signOut } from "next-auth/react";
 import { changePassword } from "@/lib/actions";
+import { clearLocalDataForSignOut } from "@/lib/sync";
 import { Eye, EyeOff } from "lucide-react";
 
 export function ChangePasswordForm() {
@@ -31,7 +32,9 @@ export function ChangePasswordForm() {
     setIsLoading(true);
     try {
       await changePassword(currentPassword, newPassword);
-      // Sign out to clear the now-stale JWT — session version was incremented
+      // Sign out to clear the now-stale JWT — session version was incremented.
+      // Also wipe local IDB/cache copies, same as the NavBar sign-out.
+      await clearLocalDataForSignOut();
       await signOut({ callbackUrl: "/login" });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
