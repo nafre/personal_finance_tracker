@@ -10,7 +10,8 @@
       "Bash(npm run *)",
       "mcp__playwright__browser_take_screenshot",
       "mcp__playwright__browser_press_key",
-      "mcp__playwright__browser_run_code_unsafe"
+      "mcp__playwright__browser_run_code_unsafe",
+      "mcp__playwright__browser_resize"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -161,18 +161,16 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
   const hasOverall = budgets.some((b) => b.budgetType === "overall");
 
   return (
-    <div
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="budget-manager-title"
       className={cn(
-        "fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs",
+        "dialog-shell open:flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-xs",
         closing ? "animate-fade-out" : "animate-fade-in"
       )}
       onClick={requestClose}
     >
       <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="budget-manager-title"
         className={cn(
           "card w-full sm:max-w-lg max-h-[90dvh] flex flex-col rounded-b-none sm:rounded-2xl overflow-hidden",
           !closing && "animate-scale-in"
@@ -469,6 +467,6 @@ export function BudgetManager({ onClose }: BudgetManagerProps) {
           </div>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

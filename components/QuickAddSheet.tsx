@@ -18,10 +18,11 @@ interface QuickAddSheetProps {
 
 export function QuickAddSheet({ open, onClose, recentCategories, categories, onAdd, onReplace, onRemove }: QuickAddSheetProps) {
   // Keep mounted through the exit so the slide-down can play; `visible` flips a
-  // frame after mount so the enter transition runs too. Focus/Escape behavior
-  // keys off `visible` — the container must exist before it tries to focus.
+  // frame after mount so the enter transition runs too. The dialog keys off
+  // `mounted`, not `visible` — closing it early would display:none the sheet
+  // and swallow the exit animation.
   const { mounted, visible } = usePresence(open, 300);
-  const sheetRef = useDialogBehavior(visible, onClose);
+  const sheetRef = useDialogBehavior(mounted, onClose);
 
   if (!mounted) return null;
 
@@ -31,7 +32,11 @@ export function QuickAddSheet({ open, onClose, recentCategories, categories, onA
   }
 
   return (
-    <>
+    <dialog
+      ref={sheetRef}
+      aria-label="Quick add transaction"
+      className="dialog-shell bg-transparent"
+    >
       <div
         className={cn(
           "bottom-sheet-overlay transition-opacity duration-300",
@@ -40,14 +45,7 @@ export function QuickAddSheet({ open, onClose, recentCategories, categories, onA
         onClick={onClose}
         aria-hidden="true"
       />
-      <div
-        ref={sheetRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Quick add transaction"
-        className={cn("bottom-sheet", visible ? "translate-y-0" : "translate-y-full")}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className={cn("bottom-sheet", visible ? "translate-y-0" : "translate-y-full")}>
         <div className="bottom-sheet-handle" aria-hidden="true" />
         <div className="px-4 pb-4">
           <ExpenseInput
@@ -60,6 +58,6 @@ export function QuickAddSheet({ open, onClose, recentCategories, categories, onA
           />
         </div>
       </div>
-    </>
+    </dialog>
   );
 }

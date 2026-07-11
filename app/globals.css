@@ -142,6 +142,20 @@
   @apply w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-2;
 }
 
+@utility dialog-shell {
+  /* Neutralize UA <dialog> styles (fit-content sizing, auto margins, border,
+     padding, CanvasText color, calc(100% - 6px) max-size) so the element
+     behaves like a plain fixed full-viewport overlay. The ::backdrop is
+     blanked because consumers draw their own scrim — a DOM element can fade
+     in/out with the content, the ::backdrop can't. Consumers must set their
+     own background (UA default is Canvas, i.e. opaque white). */
+  @apply fixed inset-0 m-0 p-0 w-full h-full max-w-none max-h-none border-0 text-inherit overflow-visible;
+
+  &::backdrop {
+    background: transparent;
+  }
+}
+
 @utility card {
   @apply bg-slate-900 rounded-2xl border border-slate-800/60 p-4;
   box-shadow:
