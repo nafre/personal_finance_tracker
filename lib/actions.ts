@@ -34,12 +34,24 @@ const getAuthenticatedUserId = cache(async (): Promise<string> => {
   return userId;
 });
 
+// Like getAuthenticatedUserId, this must not trust the JWT alone: the role and
+// sessionVersion are re-checked against the DB so a demoted or deleted admin
+// loses access immediately instead of at JWT expiry (30 days).
 async function requireAdmin(): Promise<string> {
   const session = await getServerSession(authOptions);
   if (!session?.user) throw new Error("Unauthorized");
-  if (session.user.role !== "admin") throw new Error("Forbidden");
   const userId = session.user.userId;
   if (!userId) throw new Error("Unauthorized");
+
+  const dbUser = await db.user.findUnique({
+    where: { id: userId },
+    select: { role: true, sessionVersion: true },
+  });
+  if (!dbUser) throw new Error("Unauthorized");
+  if (dbUser.sessionVersion !== (session.user.sessionVersion ?? 1)) {
+    throw new Error("Unauthorized");
+  }
+  if (dbUser.role !== "admin") throw new Error("Forbidden");
   return userId;
 }
 
@@ -817,10 +829,10 @@ export async function createUser(data: {
   name?: string;
   role?: "user" | "admin" | "demo";
 }): Promise<{ id: string; email: string }> {
-  const session = await getServerSession(authOptions);
-  if (session?.user?.role !== "admin") throw new Error("Forbidden: admin only");
+  await requireAdmin();
   if (!data.email || !data.password) throw new Error("Email and password are required");
   passwordSchema.parse(data.password);
+  if (data.role !== undefined) roleSchema.parse(data.role);
 
   const existing = await db.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (existing) throw new Error("A user with that email already exists");
@@ -883,21 +895,24 @@ export async function updateUser(
   data: { name?: string; role?: "admin" | "user" | "demo" }
 ): Promise<{ id: string; email: string; name: string; role: string }> {
   await requireAdmin();
+  if (data.role !== undefined) roleSchema.parse(data.role);
 
-  if (data.role && data.role !== "admin") {
-    const target = await db.user.findUnique({ where: { id }, select: { role: true } });
-    if (!target) throw new Error("Not found");
-    if (target.role === "admin") {
-      const adminCount = await db.user.count({ where: { role: "admin" } });
-      if (adminCount <= 1) throw new Error("Cannot demote the last admin account");
-    }
+  const target = await db.user.findUnique({ where: { id }, select: { role: true } });
+  if (!target) throw new Error("Not found");
+  const roleChanged = data.role !== undefined && data.role !== target.role;
+
+  if (roleChanged && data.role !== "admin" && target.role === "admin") {
+    const adminCount = await db.user.count({ where: { role: "admin" } });
+    if (adminCount <= 1) throw new Error("Cannot demote the last admin account");
   }
 
   const updated = await db.user.update({
     where: { id },
     data: {
       ...(data.name !== undefined && { name: data.name }),
-      ...(data.role !== undefined && { role: data.role }),
+      // A role change invalidates the target's existing JWTs so the old role
+      // can't be exercised until the token would naturally expire.
+      ...(roleChanged && { role: data.role, sessionVersion: { increment: 1 } }),
     },
     select: { id: true, email: true, name: true, role: true },
   });
