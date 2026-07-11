@@ -71,6 +71,53 @@ describe("parseExpenseInput", () => {
     expect(parseExpenseInput("just some words")).toBeNull();
   });
 
+  describe("math expressions in the amount", () => {
+    it.each([
+      ["food 12+8.5", 20.5],
+      ["share 84.60/3", 28.2],
+      ["grab (23+9)/2", 16],
+      ["lunch 84.60/3+12.50", 40.7],
+    ])("evaluates %s -> %d", (input, expected) => {
+      expect(parseExpenseInput(input)?.amount).toBe(expected);
+    });
+
+    it("strips a currency prefix before evaluating", () => {
+      expect(parseExpenseInput("food rm12+3")?.amount).toBe(15);
+    });
+
+    it("strips thousands separators before evaluating and keeps income detection", () => {
+      const result = parseExpenseInput("salary 1,200+300");
+      expect(result?.amount).toBe(1500);
+      expect(result?.type).toBe("income");
+    });
+
+    it("keeps note and label extraction around an expression amount", () => {
+      const result = parseExpenseInput("lunch 84.60/3+12.50 kfc #work");
+      expect(result?.amount).toBe(40.7);
+      expect(result?.category).toBe("Lunch");
+      expect(result?.note).toBe("kfc");
+      expect(result?.labels).toEqual(["work"]);
+    });
+
+    it("falls through past an invalid expression to the next numeric token", () => {
+      const result = parseExpenseInput("food 12+ 20");
+      expect(result?.amount).toBe(20);
+      expect(result?.category).toBe("Food 12+");
+    });
+
+    it("keeps mixed alphanumeric tokens as notes, not expressions", () => {
+      const result = parseExpenseInput("food 20 2-in-1");
+      expect(result?.amount).toBe(20);
+      expect(result?.note).toBe("2-in-1");
+    });
+
+    it("does not evaluate across spaces (no-internal-spaces rule)", () => {
+      const result = parseExpenseInput("coffee 12 + 8");
+      expect(result?.amount).toBe(12);
+      expect(result?.note).toBe("+ 8");
+    });
+  });
+
   it("returns null for empty or whitespace-only input", () => {
     expect(parseExpenseInput("")).toBeNull();
     expect(parseExpenseInput("   ")).toBeNull();

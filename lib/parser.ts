@@ -1,3 +1,5 @@
+import { evaluateExpression } from "./math-eval";
+
 export interface ParsedExpense {
   category: string;
   amount: number;
@@ -36,11 +38,23 @@ const INCOME_KEYWORDS = new Set([
   "sold",
 ]);
 
-// Strip currency symbols / prefixes from a token and return the numeric value
+// Strip currency symbols / prefixes from a token and return the numeric value.
+// Tokens that are pure arithmetic expressions ("12+8.5", "(23+9)/2") are
+// evaluated; anything mixed ("2-in-1", "20abc") stays on the legacy
+// parseFloat path below so pre-expression behavior is preserved exactly.
 function extractNumericValue(token: string): number | null {
   // Remove common currency prefixes: rm, $, €, £, ¥, ₹, usd, etc.
   const cleaned = token.replace(/^[a-z$€£¥₹]+/i, "").replace(/,/g, "");
   if (!cleaned) return null;
+  // Expression path: full charset match + contains a digit + an operator/paren.
+  if (
+    /^[\d+\-*/().]+$/.test(cleaned) &&
+    /\d/.test(cleaned) &&
+    /[+\-*/()]/.test(cleaned)
+  ) {
+    const val = evaluateExpression(cleaned);
+    return val === null || val <= 0 ? null : val;
+  }
   const num = parseFloat(cleaned);
   return isNaN(num) || num <= 0 ? null : num;
 }
@@ -59,6 +73,12 @@ function capitalize(str: string): string {
  *   "grab rm15 #transport"       → { category: "Grab",      amount: 15,   type: "expense", labels: ["transport"] }
  *   "salary 5000 #work"          → { category: "Salary",    amount: 5000, type: "income",  labels: ["work"] }
  *   "coffee 4.5 starbucks #date" → { category: "Coffee",    amount: 4.5,  type: "expense", note: "starbucks", labels: ["date"] }
+ *   "lunch 84.60/3+12.50 #work"  → { category: "Lunch",     amount: 40.7, type: "expense", labels: ["work"] }
+ *
+ * The amount may be an arithmetic expression (+ - * / and parens) with no
+ * internal spaces — tokens are whitespace-split, so "12 + 8" parses the
+ * amount as 12 with note "+ 8". That's deliberate: it keeps notes like
+ * "coffee 3 + friends" unambiguous.
  */
 export function parseExpenseInput(input: string): ParsedExpense | null {
   const trimmed = input.trim();
