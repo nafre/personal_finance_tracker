@@ -44,6 +44,18 @@ describe("parseExpenseInput", () => {
     expect(result?.note).toBe("note 30");
   });
 
+  it("rejects a mixed alphanumeric token as the amount instead of truncating it, falling through to the real amount", () => {
+    const result = parseExpenseInput("buy 2-in-1 pack 15");
+    expect(result?.amount).toBe(15);
+    expect(result?.category).toBe("Buy 2-in-1 Pack");
+  });
+
+  it("rejects a number with a trailing unit suffix rather than silently dropping the suffix", () => {
+    expect(parseExpenseInput("rent 2k")).toBeNull();
+    const result = parseExpenseInput("rent 2k 2000");
+    expect(result?.amount).toBe(2000);
+  });
+
   it("detects income only from the first category token", () => {
     expect(parseExpenseInput("salary 5000")?.type).toBe("income");
     // "payment" is an income keyword but isn't the first token here, so this stays an expense.
@@ -54,6 +66,11 @@ describe("parseExpenseInput", () => {
     const result = parseExpenseInput("coffee 4.5 starbucks #date #Work");
     expect(result?.note).toBe("starbucks");
     expect(result?.labels).toEqual(["date", "work"]);
+  });
+
+  it("dedupes repeated #label tokens, case-insensitively", () => {
+    const result = parseExpenseInput("coffee 4.5 #work #Work #date #work");
+    expect(result?.labels).toEqual(["work", "date"]);
   });
 
   it("returns no note when nothing follows the amount", () => {
