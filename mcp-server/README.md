@@ -106,8 +106,10 @@ _"how am I doing this month?"_. Claude will call the tools and respond.
 2. Env vars: `DATABASE_READONLY_URL`, `EXPENSE_USER_ID`, and an auth secret.
 3. **Auth (required — data is public on the internet):**
    - Interim/testing: set `MCP_BEARER_TOKEN` to a long random secret; the `/mcp`
-     endpoint then demands `Authorization: Bearer <token>`. Works with MCP
-     Inspector and Claude Desktop custom connectors that send a header.
+     endpoint then demands `Authorization: Bearer <token>` (compared in constant
+     time). The HTTP server **refuses to start without it** (fail-closed) — there
+     is no unauthenticated fallback. Works with MCP Inspector and Claude Desktop
+     custom connectors that send a header.
    - Claude.ai web/mobile connectors require **OAuth 2.1** (PKCE + dynamic client
      registration). Implement it with the MCP SDK's auth router/provider, or put
      an OAuth gateway (Cloudflare Access / oauth2-proxy) in front. This is the
