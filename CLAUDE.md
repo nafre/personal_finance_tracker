@@ -88,7 +88,7 @@ Then generate initial snapshots: `npm run test:ui:update`
 
 ## Unit Testing
 
-Vitest covers the pure logic in `lib/parser.ts`, `lib/utils.ts`, and `lib/sync.ts` — files with no
+Vitest covers the pure logic in `lib/parser.ts`, `lib/math-eval.ts`, `lib/utils.ts`, and `lib/sync.ts` — files with no
 Playwright coverage since the visual suite doesn't assert behavior. Tests live alongside their source
 as `lib/*.test.ts` (distinct from Playwright's `e2e/*.spec.ts`, so `vitest.config.ts` scopes
 `test.include` to `lib/**/*.test.ts` and the two runners never collide). Config: `vitest.config.ts`
@@ -214,7 +214,8 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `lib/validation.ts` | Zod schemas: `transactionSchema`, `categorySchema`, `budgetSchema`, `recurringSchema`, `passwordSchema`. Applied at the top of every mutation in `actions.ts`. |
 | `lib/idb.ts` | IndexedDB singleton (DB version 2): `transactions` and `syncQueue` stores. Typed with `idb@8`. `LocalTransaction` mirrors the server record incl. `labels`, `excludedBudgetIds`, and `excludeFromStats`. `QueuedOp` has `retryCount?: number`. Key exports: `putTransaction`, `patchTransaction`, `getTransactionsByMonth`, `getTransactionFromIDB`, `deleteTransactionFromIDB`, `replaceTempId`, `enqueueOp`, `getAllQueuedOps`, `deleteQueuedOp`, `updateQueuedOp`, `getPendingCount`, `getFailedSyncCount`, `seedIDBFromServer`, `reconcileWithServer`. |
 | `lib/sync.ts` | Offline mutation logic: `applyLocalMutation`, `drainQueue` (MAX_RETRIES=5, increments retryCount on failure), `seedIDBFromServer`, `reconcileAfterSync`. |
-| `lib/parser.ts` | Parses natural-language input into `{category, amount, type, note, labels}`. Type inferred from `INCOME_KEYWORDS`. Labels parsed from `#tag` tokens (e.g. `food 20 #date`). |
+| `lib/parser.ts` | Parses natural-language input into `{category, amount, type, note, labels}`. Type inferred from `INCOME_KEYWORDS`. Labels parsed from `#tag` tokens (e.g. `food 20 #date`). The amount may be an arithmetic expression with no internal spaces (`lunch 84.60/3+12.50`), evaluated via `lib/math-eval.ts`; mixed tokens (`2-in-1`) stay on the plain-number path. |
+| `lib/math-eval.ts` | `evaluateExpression(expr)` — strict whitelist arithmetic evaluator (`+ - * /`, parens, unary minus; recursive descent, never `eval`). Returns `null` on syntax errors/division-by-zero/non-finite; rounds to 2dp; 64-char and 8-depth caps. Sign policy (rejecting ≤ 0) belongs to the caller. |
 | `lib/utils.ts` | `cn`, `formatCurrency`, `formatDate`, `formatDateShort`, `getMonthName`, `getCurrentMonthYear`, `getPrevMonth`, `getNextMonth`, `getNextDueDate`, `getRecurringStatus`, `isPostedThisPeriod`, `toMonthlyAmount`, `countRemainingPayments`, `countMissedPeriods` (+ `MAX_BACKFILL`, kept in sync with the server cap), `stringToColor`. Also exports `DEFAULT_CATEGORIES` (used server-side only — do not import in client components to avoid Turbopack module boundary conflicts). |
 | `lib/auth.ts` | NextAuth config. JWT callback stores `sessionVersion` alongside `userId`/`role`. Bootstrap path seeds default categories for the admin user on first login. |
 | `context/SyncProvider.tsx` | React context: online state, pending count, failed count, sync trigger, SW registration. Exposes `{ isOnline, pendingCount, failedCount, isSyncing, reconcileCount, syncNow, refreshPendingCount, userId }` (`syncNow(opts?)` accepts `{ force?: boolean }` to bypass retry backoff). Runs `reconcileAfterSync` on first load while online and bumps `reconcileCount` when it purges records. Must be inside `SessionProvider`. |

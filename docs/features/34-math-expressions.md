@@ -2,6 +2,8 @@
 
 **UX & PWA polish** · Effort: **S** · Inspired by: Actual Budget's math-in-amount-fields, Soulver-style entry · Backlog: — · Depends on: —
 
+> **Status: DONE (Jul 2026)** — shipped in commit `41f4094` (quick-add v1): `lib/math-eval.ts` + the `extractNumericValue` expression path in `lib/parser.ts`, with full unit coverage (`lib/math-eval.test.ts`, extended `lib/parser.test.ts`). Also fixed a latent mis-parse (`food 12+8.5` used to parse as 12). Still open: the v1.1 extension to the edit-form/RecurringForm/BudgetManager amount fields (§2 last bullet); the optional placeholder example was skipped (known snapshot-flake surface).
+
 ## 1. Summary & inspiration
 
 Splitting a bill or adding up a receipt currently means reaching for a calculator: "my share is 84.60/3 plus the 12.50 parking". Actual Budget lets every amount field evaluate arithmetic. Here it belongs in the parser: `lunch 84.60/3+12.50 #work` → RM40.70. Pure `lib/parser.ts` work — the safest, most test-friendly feature in this roadmap.

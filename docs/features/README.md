@@ -56,13 +56,13 @@ Each feature has its own file following a fixed template: **Summary & inspiratio
 | [31](31-command-palette.md) | Command palette & global search | Linear, Raycast | M | 32 (soft) | — |
 | [32](32-better-search-filters.md) | Better search & filters | Lunch Money | S | — | — |
 | [33](33-privacy-mode.md) | Privacy mode (blur amounts) | bank apps | S | — | — |
-| [34](34-math-expressions.md) | Math expressions in quick-add | Actual Budget | S | — | — |
+| [34](34-math-expressions.md) | ~~Math expressions in quick-add~~ **DONE** (Jul 2026) | Actual Budget | S | — | — |
 | [35](35-swipe-actions.md) | Swipe actions on mobile rows | iOS Mail, Spendee | M | — | — |
 
 ## Suggested build order
 
 **Phase 1 — quick wins (all S, no schema changes):**
-34 math expressions → 33 privacy mode → 32 better search/filters → 27 undo delete → 22 duplicate detection → 29 PWA install → 03 heatmap → 07 savings-rate trend → 16 auto-budget suggestions → 09 YoY (deferred until 2+ years of data exist).
+~~34 math expressions~~ (DONE Jul 2026) → 33 privacy mode → 32 better search/filters → 27 undo delete → 22 duplicate detection → 29 PWA install → 03 heatmap → 07 savings-rate trend → 16 auto-budget suggestions → 09 YoY (deferred until 2+ years of data exist).
 
 **Phase 2 — automation foundations:**
 21 auto-post cron (unlocks server-side scheduling) → 14 budget alerts → 20 templates → 18 CSV import → 19 rules engine (reuses import's batch path) → 23 bulk edit (reuses rules' batch mutations).
