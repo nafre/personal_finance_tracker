@@ -40,8 +40,11 @@ const INCOME_KEYWORDS = new Set([
 
 // Strip currency symbols / prefixes from a token and return the numeric value.
 // Tokens that are pure arithmetic expressions ("12+8.5", "(23+9)/2") are
-// evaluated; anything mixed ("2-in-1", "20abc") stays on the legacy
-// parseFloat path below so pre-expression behavior is preserved exactly.
+// evaluated. Anything else must be a fully-numeric token ("20", "4.5") to be
+// accepted — a token with trailing non-numeric characters ("2-in-1", "20abc",
+// "2k") is rejected rather than silently truncated to its leading digits via
+// parseFloat, which used to produce a wrong amount (e.g. "2-in-1" -> 2)
+// instead of falling through to the real numeric token later in the input.
 function extractNumericValue(token: string): number | null {
   // Remove common currency prefixes: rm, $, €, £, ¥, ₹, usd, etc.
   const cleaned = token.replace(/^[a-z$€£¥₹]+/i, "").replace(/,/g, "");
@@ -55,8 +58,9 @@ function extractNumericValue(token: string): number | null {
     const val = evaluateExpression(cleaned);
     return val === null || val <= 0 ? null : val;
   }
+  if (!/^\d+(\.\d+)?$/.test(cleaned)) return null;
   const num = parseFloat(cleaned);
-  return isNaN(num) || num <= 0 ? null : num;
+  return num <= 0 ? null : num;
 }
 
 function capitalize(str: string): string {
@@ -105,12 +109,17 @@ export function parseExpenseInput(input: string): ParsedExpense | null {
   const categoryTokens = tokens.slice(0, amountIndex);
   const afterAmountTokens = tokens.slice(amountIndex + 1);
 
-  // Split #label tokens from note tokens
+  // Split #label tokens from note tokens, deduping repeated tags
   const labels: string[] = [];
+  const seenLabels = new Set<string>();
   const noteTokens: string[] = [];
   for (const tok of afterAmountTokens) {
     if (tok.startsWith("#") && tok.length > 1) {
-      labels.push(tok.slice(1).toLowerCase());
+      const label = tok.slice(1).toLowerCase();
+      if (!seenLabels.has(label)) {
+        seenLabels.add(label);
+        labels.push(label);
+      }
     } else {
       noteTokens.push(tok);
     }
