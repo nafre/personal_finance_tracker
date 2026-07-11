@@ -52,7 +52,7 @@ export function useDialogBehavior(open: boolean, onClose: () => void) {
     // this effect re-opened the dialog (StrictMode mounts do exactly that) —
     // only treat the event as real if the dialog is still closed.
     function handleClose() {
-      if (!dialog.open) onCloseRef.current();
+      if (dialog && !dialog.open) onCloseRef.current();
     }
     dialog.addEventListener("cancel", handleCancel);
     dialog.addEventListener("close", handleClose);
