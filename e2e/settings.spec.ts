@@ -14,6 +14,14 @@ test.describe("Settings", () => {
     });
   });
 
+  test("preferences tab — toggle rows", async ({ page }) => {
+    await page.getByRole("tab", { name: "Preferences" }).click();
+    const panel = page.locator('[data-testid="preferences-panel"]');
+    await expect(panel).toHaveScreenshot("preferences-panel.png", {
+      animations: "disabled",
+    });
+  });
+
   test("category list", async ({ page }) => {
     // Admin users default to the Users tab — click Categories first
     const categoriesTab = page.getByRole("tab", { name: "Categories" });

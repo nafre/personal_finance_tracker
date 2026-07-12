@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { formatCurrency } from "@/lib/utils";
 import { useChartAnimation } from "@/hooks/useChartAnimation";
+import { usePreferences } from "@/context/PreferencesContext";
 import type { DailyData } from "@/types";
 
 interface MonthlyBarChartProps {
@@ -68,6 +69,9 @@ function CustomTooltip({ active, payload, label }: any) {
 // stay visible without polluting the "typical month" reading.
 export function MonthlyBarChart({ data, wealthData, emptyMessage }: MonthlyBarChartProps) {
   const anim = useChartAnimation();
+  // Privacy mode: hide currency axis ticks and the tooltip (SVG text is out of
+  // reach of the [data-private] .tabular-nums blur).
+  const { isPrivate } = usePreferences();
   const wealthByDate = new Map((wealthData ?? []).map((w) => [w.date, w]));
   const merged = data.map((d) => ({
     ...d,
@@ -114,12 +118,14 @@ export function MonthlyBarChart({ data, wealthData, emptyMessage }: MonthlyBarCh
             interval={0}
           />
           <YAxis
-            tick={{ fill: "#64748b", fontSize: 11 }}
+            tick={isPrivate ? false : { fill: "#64748b", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
             tickFormatter={(v) => (v === 0 ? "0" : `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`)}
           />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+          {!isPrivate && (
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+          )}
           <Bar dataKey="income" name="income" fill="#10b981" radius={[3, 3, 0, 0]} maxBarSize={28} {...anim} />
           {/* Recharts only introspects direct children — the stacked pair
               must not be wrapped in a fragment. When stacked, the top

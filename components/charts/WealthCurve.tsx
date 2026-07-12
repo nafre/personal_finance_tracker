@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useChartAnimation } from "@/hooks/useChartAnimation";
+import { usePreferences } from "@/context/PreferencesContext";
 import type { DailyData } from "@/types";
 
 interface WealthCurveProps {
@@ -44,6 +45,9 @@ function WealthTooltip({ active, payload, label }: any) {
 // curve endpoint exactly.
 export function WealthCurve({ data }: WealthCurveProps) {
   const anim = useChartAnimation();
+  // Privacy mode: hide currency axis ticks and the tooltip (SVG text is out of
+  // reach of the [data-private] .tabular-nums blur).
+  const { isPrivate } = usePreferences();
   const { points, finalBalance, hasNegative } = useMemo(() => {
     let running = 0;
     let hasNegative = false;
@@ -107,14 +111,14 @@ export function WealthCurve({ data }: WealthCurveProps) {
               interval={step - 1}
             />
             <YAxis
-              tick={{ fill: "#64748b", fontSize: 11 }}
+              tick={isPrivate ? false : { fill: "#64748b", fontSize: 11 }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) =>
                 v === 0 ? "0" : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`
               }
             />
-            <Tooltip content={<WealthTooltip />} />
+            {!isPrivate && <Tooltip content={<WealthTooltip />} />}
             {hasNegative && (
               <ReferenceLine y={0} stroke="#475569" strokeDasharray="4 3" />
             )}

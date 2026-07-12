@@ -195,6 +195,32 @@ test.describe("Dashboard", () => {
     });
   });
 
+  // ── Privacy mode ──────────────────────────────────────────────────────────
+  // Desktop-only (one viewport is enough — the blur is a global CSS rule).
+  // Fixed past month so the underlying data is stable; masks stay applied for
+  // safety even though the blurred regions no longer vary.
+
+  test("privacy mode — amounts blur when toggled", async ({ page }) => {
+    const sidebar = page.locator('[data-testid="sidebar"]');
+    if (!(await sidebar.isVisible())) return; // mobile/tablet — skip
+
+    await page.goto("/dashboard?month=5&year=2026");
+    await waitForReady(page);
+
+    await sidebar.locator('[aria-label="Hide amounts"]').click({ force: true });
+    await expect(page.locator("html")).toHaveAttribute("data-private", "");
+
+    await expect(page).toHaveScreenshot("dashboard-private.png", {
+      fullPage: true,
+      animations: "disabled",
+      mask: amountMasks(page),
+    });
+
+    // Reset — the preference persists in localStorage
+    await sidebar.locator('[aria-label="Show amounts"]').click({ force: true });
+    await expect(page.locator("html")).not.toHaveAttribute("data-private");
+  });
+
   // ── Period selector ───────────────────────────────────────────────────────
 
   test("period selector — month / year / all-time toggle", async ({ page }) => {

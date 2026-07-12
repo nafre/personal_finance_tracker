@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useChartAnimation } from "@/hooks/useChartAnimation";
+import { usePreferences } from "@/context/PreferencesContext";
 import type { DailyData } from "@/types";
 
 interface PaceChartProps {
@@ -49,6 +50,9 @@ function PaceTooltip({ active, payload, label }: any) {
 // overall budget and last month's cumulative curve (muted). Month view only.
 export function PaceChart({ dailyData, prevDailyData, budgetAmount, month, year }: PaceChartProps) {
   const anim = useChartAnimation();
+  // Privacy mode: hide currency axis ticks and the tooltip (SVG text is out of
+  // reach of the [data-private] .tabular-nums blur).
+  const { isPrivate } = usePreferences();
   const { points, spentToDate, paceToDate, cutoff, isCurrentMonth } = useMemo(() => {
     const daysInMonth = dailyData.length;
     const today = new Date();
@@ -136,14 +140,14 @@ export function PaceChart({ dailyData, prevDailyData, budgetAmount, month, year 
                 interval={step - 1}
               />
               <YAxis
-                tick={{ fill: "#64748b", fontSize: 11 }}
+                tick={isPrivate ? false : { fill: "#64748b", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v) =>
                   v === 0 ? "0" : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`
                 }
               />
-              <Tooltip content={<PaceTooltip />} />
+              {!isPrivate && <Tooltip content={<PaceTooltip />} />}
               {prevDailyData.length > 0 && (
                 <Line
                   type="monotone"

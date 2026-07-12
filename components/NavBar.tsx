@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { clearLocalDataForSignOut } from "@/lib/sync";
 import { useSidebar } from "@/context/SidebarContext";
+import { usePreferences } from "@/context/PreferencesContext";
 import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
@@ -14,6 +15,8 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  EyeOff,
   type LucideIcon,
 } from "lucide-react";
 
@@ -39,7 +42,10 @@ async function handleSignOut() {
 export function NavBar() {
   const pathname = usePathname();
   const { collapsed, toggle } = useSidebar();
+  const { privacyFeatureEnabled, isPrivate, togglePrivate } = usePreferences();
   const [mounted, setMounted] = useState(false);
+
+  const privacyLabel = isPrivate ? "Show amounts" : "Hide amounts";
 
   useEffect(() => {
     setMounted(true);
@@ -120,6 +126,25 @@ export function NavBar() {
 
         {/* Bottom actions */}
         <div className="pt-2 border-t border-slate-800/60">
+          {privacyFeatureEnabled && (
+            <button
+              onClick={togglePrivate}
+              title={collapsed ? privacyLabel : undefined}
+              aria-label={privacyLabel}
+              aria-pressed={isPrivate}
+              className={cn(
+                "flex items-center rounded-lg text-sm text-slate-500 hover:text-slate-100 hover:bg-slate-800 transition-colors w-full",
+                collapsed ? "justify-center py-3" : "gap-3 px-3 py-2.5"
+              )}
+            >
+              {isPrivate ? (
+                <EyeOff className="w-5 h-5 shrink-0" aria-hidden="true" />
+              ) : (
+                <Eye className="w-5 h-5 shrink-0" aria-hidden="true" />
+              )}
+              {!collapsed && <span className="whitespace-nowrap">{privacyLabel}</span>}
+            </button>
+          )}
           <button
             onClick={handleSignOut}
             title={collapsed ? "Sign out" : undefined}
@@ -157,6 +182,24 @@ export function NavBar() {
             </Link>
           );
         })}
+        {privacyFeatureEnabled && (
+          <button
+            onClick={togglePrivate}
+            aria-label={privacyLabel}
+            aria-pressed={isPrivate}
+            className={cn(
+              "flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors",
+              isPrivate ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
+            )}
+          >
+            {isPrivate ? (
+              <EyeOff className="w-5 h-5" aria-hidden="true" />
+            ) : (
+              <Eye className="w-5 h-5" aria-hidden="true" />
+            )}
+            Privacy
+          </button>
+        )}
         <button
           onClick={handleSignOut}
           className="flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium text-slate-500 hover:text-rose-400 transition-colors"

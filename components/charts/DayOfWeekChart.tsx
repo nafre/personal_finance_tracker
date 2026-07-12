@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { formatCurrency } from "@/lib/utils";
 import { useChartAnimation } from "@/hooks/useChartAnimation";
+import { usePreferences } from "@/context/PreferencesContext";
 import type { Transaction } from "@/types";
 
 interface DayOfWeekChartProps {
@@ -54,6 +55,9 @@ function CustomTooltip({ active, payload, label }: any) {
 // days don't inflate the profile.
 export function DayOfWeekChart({ transactions, rangeStartISO, rangeEndISO }: DayOfWeekChartProps) {
   const anim = useChartAnimation();
+  // Privacy mode: hide currency axis ticks and the tooltip (SVG text is out of
+  // reach of the [data-private] .tabular-nums blur).
+  const { isPrivate } = usePreferences();
   const totals = Array(7).fill(0);
   for (const tx of transactions) {
     if (tx.type !== "expense" || tx.excludeFromStats) continue;
@@ -107,12 +111,14 @@ export function DayOfWeekChart({ transactions, rangeStartISO, rangeEndISO }: Day
           interval={0}
         />
         <YAxis
-          tick={{ fill: "#64748b", fontSize: 11 }}
+          tick={isPrivate ? false : { fill: "#64748b", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           tickFormatter={(v) => (v === 0 ? "0" : `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`)}
         />
-        <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+        {!isPrivate && (
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+        )}
         <Bar dataKey="avg" name="avg" fill="#6366f1" radius={[3, 3, 0, 0]} maxBarSize={40} {...anim} />
       </BarChart>
     </ResponsiveContainer>

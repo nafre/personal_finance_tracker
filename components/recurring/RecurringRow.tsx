@@ -220,7 +220,7 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
         </div>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className={cn(
-            "text-sm font-semibold",
+            "text-sm font-semibold tabular-nums",
             rec.type === "income" ? "text-emerald-400" : "text-rose-400"
           )}>
             {rec.type === "income" ? "+" : "-"}{formatCurrency(rec.amount)}

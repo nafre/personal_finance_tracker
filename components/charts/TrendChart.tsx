@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { formatCurrency } from "@/lib/utils";
 import { useChartAnimation } from "@/hooks/useChartAnimation";
+import { usePreferences } from "@/context/PreferencesContext";
 
 interface DailyData {
   date: string;
@@ -53,6 +54,9 @@ function CustomTooltip({ active, payload, label }: any) {
 
 export function TrendChart({ data, labelEvery, emptyMessage, showCumulative }: TrendChartProps) {
   const anim = useChartAnimation();
+  // Privacy mode: SVG axis text can't be blurred by the CSS hook, so hide the
+  // currency ticks and suppress the tooltip entirely while private.
+  const { isPrivate } = usePreferences();
   // Running balance per bucket — only computed/rendered when requested.
   const chartData = useMemo(() => {
     if (!showCumulative) return data;
@@ -105,7 +109,7 @@ export function TrendChart({ data, labelEvery, emptyMessage, showCumulative }: T
           interval={step - 1}
         />
         <YAxis
-          tick={{ fill: "#64748b", fontSize: 11 }}
+          tick={isPrivate ? false : { fill: "#64748b", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           tickFormatter={(v) => (v === 0 ? "0" : `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`)}
@@ -114,7 +118,7 @@ export function TrendChart({ data, labelEvery, emptyMessage, showCumulative }: T
           <YAxis
             yAxisId="balance"
             orientation="right"
-            tick={{ fill: "#a16207", fontSize: 11 }}
+            tick={isPrivate ? false : { fill: "#a16207", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
             width={36}
@@ -123,7 +127,7 @@ export function TrendChart({ data, labelEvery, emptyMessage, showCumulative }: T
             }
           />
         )}
-        <Tooltip content={<CustomTooltip />} />
+        {!isPrivate && <Tooltip content={<CustomTooltip />} />}
 
         <Area
           type="monotone"

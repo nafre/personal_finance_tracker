@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CategoryManager } from "@/components/CategoryManager";
 import { ChangePasswordForm } from "@/components/ChangePasswordForm";
+import { PreferencesPanel } from "@/components/PreferencesPanel";
 import { UserManager, type UserRecord } from "@/components/UserManager";
 
 interface Category {
@@ -27,6 +28,7 @@ export function SettingsTabs({ role, currentUserId, categories, users }: Setting
   const tabs = [
     ...(isAdmin ? [{ id: "users", label: "Users" }] : []),
     { id: "categories", label: "Categories" },
+    { id: "preferences", label: "Preferences" },
     { id: "account", label: "Account" },
   ];
 
@@ -57,6 +59,8 @@ export function SettingsTabs({ role, currentUserId, categories, users }: Setting
       {activeTab === "categories" && (
         <CategoryManager initialCategories={categories} />
       )}
+
+      {activeTab === "preferences" && <PreferencesPanel />}
 
       {activeTab === "account" && (
         role === "demo" ? (

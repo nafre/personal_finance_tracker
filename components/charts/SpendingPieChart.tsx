@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { formatCurrency, stringToColor } from "@/lib/utils";
 import { useChartAnimation } from "@/hooks/useChartAnimation";
+import { usePreferences } from "@/context/PreferencesContext";
 import type { CategoryData, CategoryOption } from "@/types";
 
 interface SpendingPieChartProps {
@@ -51,6 +52,9 @@ function DonutTooltip({ active, payload, total }: any) {
 export function SpendingPieChart({ categoryData, categories, month, year }: SpendingPieChartProps) {
   const router = useRouter();
   const anim = useChartAnimation();
+  // Privacy mode: suppress the tooltip — the centre total is HTML with
+  // .tabular-nums, so the CSS blur already covers it.
+  const { isPrivate } = usePreferences();
 
   const { slices, total } = useMemo(() => {
     const total = categoryData.reduce((s, c) => s + c.value, 0);
@@ -98,7 +102,7 @@ export function SpendingPieChart({ categoryData, categories, month, year }: Spen
           <div className="relative">
             <ResponsiveContainer width="100%" height={200}>
               <PieChart accessibilityLayer={false}>
-                <Tooltip content={<DonutTooltip total={total} />} />
+                {!isPrivate && <Tooltip content={<DonutTooltip total={total} />} />}
                 <Pie
                   data={slices}
                   dataKey="value"

@@ -285,3 +285,19 @@
     100% { width: 100%; opacity: 0; }
   }
 }
+
+/* Privacy mode — PreferencesContext sets data-private on <html>. Every currency
+   figure carries .tabular-nums (the same hook the e2e amount masks use), so one
+   rule blurs them all. Inputs are unaffected: none carry the class. */
+[data-private] .tabular-nums {
+  filter: blur(6px);
+  user-select: none;
+}
+
+/* Printing is a deliberate act — always reveal. */
+@media print {
+  [data-private] .tabular-nums {
+    filter: none;
+    user-select: auto;
+  }
+}
