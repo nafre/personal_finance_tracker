@@ -18,21 +18,14 @@ Add multi-select checkboxes to `TransactionList`, a "Delete selected" action, an
 - Start: `components/TransactionList.tsx` — add a `selectable` prop and checkbox column.
 - Add `deleteTransactions(ids: string[])` server action to `lib/actions.ts`.
 
-### 1f — Undo for Delete (S, medium)
-> **Superseded** — full plan: [features/27-undo-delete.md](features/27-undo-delete.md) (chooses delete-then-restore over the deferred-delete sketch below; the ToastContext action-button extension carries over).
-
-5-second toast with "Undo" that re-inserts the deleted record before the server confirms deletion.
-- Start: `components/TransactionList.tsx` `handleDelete` — stash the deleted record in a ref, show toast, cancel deletion on undo.
-- `context/ToastContext.tsx` now exists (Jul 2026) — extend `showToast` with an optional action button (`{ label, onClick }`) instead of building a one-off toast. The exit animation plumbing (`usePresence`) is already there.
+### ~~1f — Undo for Delete~~ DONE
+Implemented (Jul 2026) per [features/27-undo-delete.md](features/27-undo-delete.md): delete-then-restore with a 5s Undo toast (`showToast` gained the optional `action: { label, onClick }` button — the extension item 3g also wanted), online + offline paths, toggleable in Settings → Preferences.
 
 ### ~~1g — Visual Category Picker in Quick-Add~~ DONE
 Implemented as a unified chip row in `ExpenseInput` (icon + colour tint, recently-used first, then all categories). Categories are fetched server-side on the dashboard page and passed down as `CategoryOption[]`; the transactions page reuses its existing on-mount fetch.
 
-### 1h — Duplicate Detection (S, medium)
-> **Superseded** — full plan: [features/22-duplicate-detection.md](features/22-duplicate-detection.md) (adds a same-day passive hint and a review grouping on `/transactions`).
-
-On add, check if a transaction with the same amount + category was created in the last 60 seconds and show an inline "looks like a duplicate" confirm.
-- Start: `components/ExpenseInput.tsx` — in `handleSubmit`, check the most recent transactions list before calling `addTransaction`.
+### ~~1h — Duplicate Detection~~ DONE
+Implemented (Jul 2026) per [features/22-duplicate-detection.md](features/22-duplicate-detection.md): 60s confirm strip in quick-add (`lib/duplicates.ts` registry), same-day passive dot on the Add button, and a review banner with filtered toggle on `/transactions`.
 
 ### ~~1i — Mobile Polish~~ DONE
 - ~~Top-category label on mobile~~ DONE: the "Top spend" header label now renders at all widths (wraps below the month selector at 390px).
@@ -113,7 +106,7 @@ Minimal `context/ToastContext.tsx` (no new dependency): `useToast().showToast(me
 
 ### 3g — Service Worker Update Notification (S, medium)
 `public/sw.js` serves `/_next/static/**` cache-first, so after a deploy users can run a stale bundle until the new SW activates on a later visit — the same staleness documented as a dev gotcha, but in production. Detect the waiting worker and offer a refresh.
-- In `SyncProvider`'s registration effect, listen for `registration.waiting` / `updatefound` → show a persistent "New version available — Refresh" toast (needs the ToastContext action-button extension from 1f); on click, `postMessage({ type: "SKIP_WAITING" })` to the SW then reload.
+- In `SyncProvider`'s registration effect, listen for `registration.waiting` / `updatefound` → show a persistent "New version available — Refresh" toast (the ToastContext action button now exists — shipped with 1f/feature 27; a persistent duration variant would still be needed); on click, `postMessage({ type: "SKIP_WAITING" })` to the SW then reload.
 - Start: `context/SyncProvider.tsx`, `public/sw.js` (add the `SKIP_WAITING` message handler).
 
 ### 3h — E2E Coverage for the Offline Flow (M, medium)

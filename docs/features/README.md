@@ -39,12 +39,12 @@ Each feature has its own file following a fixed template: **Summary & inspiratio
 | [19](19-rules-engine.md) | Auto-categorization rules engine | Firefly III | L | 18 (soft) | — |
 | [20](20-transaction-templates.md) | Transaction templates / favorites | Money Manager | M | — | 1k |
 | [21](21-auto-post-recurring.md) | Auto-post recurring (cron) | subscription trackers | M | — | 1m |
-| [22](22-duplicate-detection.md) | Duplicate detection | Monarch | S | — | 1h |
+| [22](22-duplicate-detection.md) | ~~Duplicate detection~~ **DONE** (Jul 2026) | Monarch | S | — | 1h |
 | [23](23-bulk-edit.md) | Bulk select & bulk edit | Lunch Money | M | — | 1e |
 | [24](24-split-transactions.md) | Split transactions | YNAB, Spendee | L | — | — |
 | [25](25-receipt-attachments.md) | Receipt / photo attachments | Spendee, Wallet | L | — | — |
 | [26](26-json-backup-restore.md) | Full JSON backup & restore | Actual Budget | M | — | 6c |
-| [27](27-undo-delete.md) | Undo delete | Monarch, Gmail | S | — | 1f |
+| [27](27-undo-delete.md) | ~~Undo delete~~ **DONE** (Jul 2026) | Monarch, Gmail | S | — | 1f |
 
 ## D. UX & PWA polish
 
@@ -54,15 +54,15 @@ Each feature has its own file following a fixed template: **Summary & inspiratio
 | [29](29-pwa-install.md) | PWA install prompt + app shortcuts | native-app parity | S | — | — |
 | [30](30-web-push.md) | Web Push notifications | PocketGuard, banks | L | 21, 14 | — |
 | [31](31-command-palette.md) | Command palette & global search | Linear, Raycast | M | 32 (soft) | — |
-| [32](32-better-search-filters.md) | Better search & filters | Lunch Money | S | — | — |
-| [33](33-privacy-mode.md) | Privacy mode (blur amounts) | bank apps | S | — | — |
+| [32](32-better-search-filters.md) | ~~Better search & filters~~ **DONE** (Jul 2026) | Lunch Money | S | — | — |
+| [33](33-privacy-mode.md) | ~~Privacy mode (blur amounts)~~ **DONE** (Jul 2026) | bank apps | S | — | — |
 | [34](34-math-expressions.md) | ~~Math expressions in quick-add~~ **DONE** (Jul 2026) | Actual Budget | S | — | — |
 | [35](35-swipe-actions.md) | Swipe actions on mobile rows | iOS Mail, Spendee | M | — | — |
 
 ## Suggested build order
 
 **Phase 1 — quick wins (all S, no schema changes):**
-~~34 math expressions~~ (DONE Jul 2026) → 33 privacy mode → 32 better search/filters → 27 undo delete → 22 duplicate detection → 29 PWA install → 03 heatmap → 07 savings-rate trend → 16 auto-budget suggestions → 09 YoY (deferred until 2+ years of data exist).
+~~34 math expressions~~ (DONE Jul 2026) → ~~33 privacy mode~~ → ~~32 better search/filters~~ → ~~27 undo delete~~ → ~~22 duplicate detection~~ (all four DONE Jul 2026; 33/27 gained on/off switches in a new Settings → Preferences tab) → 29 PWA install → 03 heatmap → 07 savings-rate trend → 16 auto-budget suggestions → 09 YoY (deferred until 2+ years of data exist).
 
 **Phase 2 — automation foundations:**
 21 auto-post cron (unlocks server-side scheduling) → 14 budget alerts → 20 templates → 18 CSV import → 19 rules engine (reuses import's batch path) → 23 bulk edit (reuses rules' batch mutations).

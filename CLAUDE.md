@@ -62,9 +62,9 @@ The dev server must be running (`npm run dev`) before using these tools. The MCP
 | File | What it covers |
 |------|----------------|
 | `e2e/login.spec.ts` | Login layout, error state |
-| `e2e/dashboard.spec.ts` | Full page, stat cards, quick-add, transaction list, recurring section, due-week card, navigation, category donut, pace chart (fixed past month), past-month read-only view (badge + absence of edit affordances + month-scoped view-all link), wealth curve (all-time), day-of-week profile (presence only — its bars drift daily, so the year/all-time full-page tests mask the `[data-testid="dow-chart"]` card) |
-| `e2e/transactions.spec.ts` | Full page, filter bar, summary strip, transaction list, category filter |
-| `e2e/settings.spec.ts` | Settings page: categories tab, account tab, users tab (admin) |
+| `e2e/dashboard.spec.ts` | Full page, stat cards, quick-add, transaction list, recurring section, due-week card, navigation, category donut, pace chart (fixed past month), privacy mode (blur toggle snapshot, fixed past month, tablet/desktop), past-month read-only view (badge + absence of edit affordances + month-scoped view-all link), wealth curve (all-time), day-of-week profile (presence only — its bars drift daily, so the year/all-time full-page tests mask the `[data-testid="dow-chart"]` card) |
+| `e2e/transactions.spec.ts` | Full page, filter bar, summary strip, transaction list, category filter; functional (non-snapshot): type pill / case-insensitive search / amount range, undo delete, duplicate detection. The last two create or delete rows and restore the data before finishing. Gotcha: use `scrollIntoViewIfNeeded()` + plain `.click()` on row buttons — a `force: true` click at coordinates behind the fixed mobile bottom nav dispatches to the nav (it once hit Sign out) |
+| `e2e/settings.spec.ts` | Settings page: categories tab, preferences tab (toggle rows), account tab, users tab (admin) |
 
 Tests run at three viewports: **mobile (390px)**, **tablet (768px)**, **desktop (1280px)**.
 
@@ -88,7 +88,8 @@ Then generate initial snapshots: `npm run test:ui:update`
 
 ## Unit Testing
 
-Vitest covers the pure logic in `lib/parser.ts`, `lib/math-eval.ts`, `lib/utils.ts`, and `lib/sync.ts` — files with no
+Vitest covers the pure logic in `lib/parser.ts`, `lib/math-eval.ts`, `lib/utils.ts`, `lib/sync.ts`,
+`lib/duplicates.ts`, and the search helpers in `lib/db-adapter.ts` — files with no
 Playwright coverage since the visual suite doesn't assert behavior. Tests live alongside their source
 as `lib/*.test.ts` (distinct from Playwright's `e2e/*.spec.ts`, so `vitest.config.ts` scopes
 `test.include` to `lib/**/*.test.ts` and the two runners never collide). Config: `vitest.config.ts`
@@ -103,6 +104,11 @@ as `lib/*.test.ts` (distinct from Playwright's `e2e/*.spec.ts`, so `vitest.confi
   **both** a fresh IndexedDB backend (`vi.stubGlobal("indexedDB", new FDBFactory())` from
   `fake-indexeddb/lib/FDBFactory`) **and** a fresh module instance (`vi.resetModules()` before
   re-importing `@/lib/sync`/`@/lib/idb`) — resetting only one leaks state across tests.
+
+`lib/db-adapter.test.ts` mocks `@/lib/db` (`vi.mock("@/lib/db", () => ({ db: {} }))` — importing the
+real module eagerly constructs a Prisma client) and, because `IS_SQLITE` is computed from
+`DATABASE_URL` at module load, re-imports the adapter per dialect via `vi.resetModules()` +
+`vi.stubEnv("DATABASE_URL", …)`.
 
 ## Environment
 
@@ -136,7 +142,7 @@ The dashboard uses a **hybrid render pattern**:
 
 Props passed to `DashboardContent`: `initialTransactions`, `initialTotalIncome`, `initialTotalExpenses`, `initialCategoryData`, `initialDailyData`, `initialTopCategory`, `initialRecurring`, `initialBudgets`, `initialCategories`, `month`, `year`, `prevTotalExpenses`, `prevTotalIncome`, `prevCategoryData`, `prevDailyData` (prev period's daily buckets — consumed by `PaceChart`; empty array in the all-time view), `initialWealthData` (ledger-basis monthly buckets — populated in the year and all-time views, empty array in month view; feeds `WealthCurve` and the off-chart overlay on `MonthlyBarChart`).
 
-The transactions page (`/transactions`) is a **fully client-side** page. It fetches data via the `getTransactions` server action through **SWR**, keyed by a serialized filter object (`month`, `year`, `category`, `label`, `q`, `from`, `to`) — re-visiting a previously-seen filter returns cached data instantly while revalidating in the background. Cursor-based "Load more" pagination appends pages outside SWR; categories and budgets are fetched once on mount. A drop in `pendingCount` (sync completed) triggers a silent `mutate()` to clear "Pending" badges.
+The transactions page (`/transactions`) is a **fully client-side** page. It fetches data via the `getTransactions` server action through **SWR**, keyed by a serialized filter object (`month`, `year`, `category`, `label`, `q`, `type`, `min`, `max`, `from`, `to`) — re-visiting a previously-seen filter returns cached data instantly while revalidating in the background. SWR results are copied into local state via an effect on `data` — NOT `onSuccess`, because returning to a cached key (e.g. Clear all inside SWR's 2s dedupe window) never fires `onSuccess` and would leave the list stale. Cursor-based "Load more" pagination appends pages outside SWR; categories and budgets are fetched once on mount. A drop in `pendingCount` (sync completed) triggers a silent `mutate()` to clear "Pending" badges. The page's quick-add wires `onReplace`/`onRemove` so the optimistic temp id is swapped for the real server id when the background add resolves — without this, fresh rows keep their temp id (and "Pending" badge) and editing/deleting them 404s server-side.
 
 **Historical note (fixed in React 19):** Prior to the React 19 upgrade, `startTransition(async fn)` did not reliably track async transitions, so this codebase used a manual `useState` loading flag instead (still present in several components — see `ChangePasswordForm.tsx`, `BudgetManager.tsx`, `CategoryManager.tsx`, `ExpenseInput.tsx`, `TransactionList.tsx`, `app/(dashboard)/transactions/page.tsx`, `UserManager.tsx`, `SyncProvider.tsx`, `RecurringRow.tsx`). React 19 tracks async transitions correctly, so `login/page.tsx` and `RecurringForm.tsx` now use `startTransition(async fn)` safely; the `useState`-flag components were left as-is (not strictly necessary anymore, but harmless) to avoid unrelated scope creep in the upgrade.
 
@@ -210,7 +216,8 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 |------|------|
 | `types/index.ts` | Shared TypeScript interfaces: `Transaction`, `CategoryData`, `DailyData`, `RecurringTransaction`, `Budget`, `CategoryOption`. Import from here — do not redeclare locally. |
 | `lib/actions.ts` | All server actions (CRUD + data fetch). Single source of truth for DB access. All mutations are Zod-validated via `lib/validation.ts`. Exports: `addTransaction`, `updateTransaction`, `deleteTransaction`, `getTransactionIds`, `getDashboardData`, `getTransactions`, `getCategories`, `addCategory`, `updateCategory`, `deleteCategory`, `addDefaultCategories`, `getRecurringTransactions`, `createRecurringTransaction`, `updateRecurringTransaction`, `deleteRecurringTransaction`, `postRecurringTransaction`, `skipRecurringTransaction`, `backfillRecurringTransaction`, `getBudgets`, `saveBudget`, `deleteBudget`, `changePassword`, `createUser`, `getSessionRole`, `getUsers`, `deleteUser`, `updateUser`, `adminResetPassword`. |
-| `lib/db-adapter.ts` | DB-dialect abstraction: `IS_SQLITE`, `parseLabels`, `encodeLabels`, `parseBudgetArray`, `encodeBudgetArray`, `normalizeTx` (transactions, incl. `excludeFromStats`), `normalizeBudget`, `getLabelFilter`, `getTrendRows` (optional `includeOffChart` for the ledger-basis wealth series), `getDailyRows`. Keeps all SQLite/Postgres branching out of `actions.ts`. |
+| `lib/db-adapter.ts` | DB-dialect abstraction: `IS_SQLITE`, `parseLabels`, `encodeLabels`, `parseBudgetArray`, `encodeBudgetArray`, `normalizeTx` (transactions, incl. `excludeFromStats`), `normalizeBudget`, `getLabelFilter`, `getSearchFilter` (multi-field case-insensitive `q` OR-clause: note/category substring, exact label, exact amount; `{}` on SQLite), `matchesSearch` (the JS-side SQLite mirror of `getSearchFilter`), `parseAmountQuery` (strips `rm` prefix + commas), `getTrendRows` (optional `includeOffChart` for the ledger-basis wealth series), `getDailyRows`. Keeps all SQLite/Postgres branching out of `actions.ts`. |
+| `lib/duplicates.ts` | Pure duplicate-detection logic (feature 22): module-level `recentAdds` registry (`recordAdd`/`clearRecentAdds` — fed by quick-add commits, since `createdAt` isn't in the client Transaction shape), `findRecentDuplicate` (60s same amount+category window), `hasSameDayDuplicate` (passive hint), `groupPossibleDuplicates` (key: local day\|amount\|category, notes ignored). |
 | `lib/validation.ts` | Zod schemas: `transactionSchema`, `categorySchema`, `budgetSchema`, `recurringSchema`, `recurringUpdateSchema` (partial variant used by `updateRecurringTransaction`), `passwordSchema`, `roleSchema` (`"admin"\|"user"\|"demo"` enum). Applied at the top of every mutation in `actions.ts`. All string/array fields carry `max()` length caps so oversized values can't reach the DB. |
 | `lib/rate-limit.ts` | Fixed-window in-memory rate limiter (`rateLimit(key, { limit, windowMs })`). Per server instance (a brute-force speed bump, not a hard distributed quota — back with Redis for that). Applied to login (10/15min per email), `/api/sync` (300/min), `/api/export` (20/min), `changePassword` (5/15min). |
 | `lib/idb.ts` | IndexedDB singleton (DB version 2): `transactions` and `syncQueue` stores. Typed with `idb@8`. `LocalTransaction` mirrors the server record incl. `labels`, `excludedBudgetIds`, and `excludeFromStats`. `QueuedOp` has `retryCount?: number`. Key exports: `putTransaction`, `patchTransaction`, `getTransactionsByMonth`, `getTransactionFromIDB`, `deleteTransactionFromIDB`, `replaceTempId`, `enqueueOp`, `getAllQueuedOps`, `deleteQueuedOp`, `updateQueuedOp`, `getPendingCount`, `getFailedSyncCount`, `seedIDBFromServer`, `reconcileWithServer`. |
@@ -220,7 +227,8 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `lib/utils.ts` | `cn`, `formatCurrency`, `formatDate`, `formatDateShort`, `getMonthName`, `getCurrentMonthYear`, `getPrevMonth`, `getNextMonth`, `getNextDueDate`, `getRecurringStatus`, `isPostedThisPeriod`, `toMonthlyAmount`, `countRemainingPayments`, `countMissedPeriods` (+ `MAX_BACKFILL`, kept in sync with the server cap), `stringToColor`. Also exports `DEFAULT_CATEGORIES` (used server-side only — do not import in client components to avoid Turbopack module boundary conflicts). |
 | `lib/auth.ts` | NextAuth config. JWT callback stores `sessionVersion` alongside `userId`/`role`. Bootstrap path seeds default categories for the admin user on first login. Login is rate-limited (10/15min per email, before any bcrypt work) and equalizes response timing — unknown-email paths run a dummy `bcrypt.compare` against a throwaway hash so a miss costs the same as a hit (no user enumeration). |
 | `context/SyncProvider.tsx` | React context: online state, pending count, failed count, sync trigger, SW registration. Exposes `{ isOnline, pendingCount, failedCount, isSyncing, reconcileCount, syncNow, refreshPendingCount, userId }` (`syncNow(opts?)` accepts `{ force?: boolean }` to bypass retry backoff). Runs `reconcileAfterSync` on first load while online and bumps `reconcileCount` when it purges records. Must be inside `SessionProvider`. |
-| `context/ToastContext.tsx` | Global toast system (no external dependency). `useToast().showToast(message, type?)` — types `"success" \| "error" \| "info"`, max 3 visible, 5s auto-dismiss, manual dismiss, `role="alert"` for errors. Container renders above the mobile bottom nav. Mounted in `Providers` (above `SyncProvider`). Used for mutation failures that inline errors can't reach (e.g. background add failure after `QuickAddSheet` closes, delete-failed-restored). |
+| `context/ToastContext.tsx` | Global toast system (no external dependency). `useToast().showToast(message, type?, action?)` — types `"success" \| "error" \| "info"`, optional `action: { label, onClick }` renders an inline button (e.g. Undo) that runs then dismisses, max 3 visible, 5s auto-dismiss, manual dismiss, `role="alert"` for errors. Container renders above the mobile bottom nav. Mounted in `Providers` (above `SyncProvider`). Used for mutation failures that inline errors can't reach (e.g. background add failure after `QuickAddSheet` closes, delete-failed-restored) and the undo-delete toast. |
+| `context/PreferencesContext.tsx` | Device-level preferences, one localStorage JSON key (`app-preferences`), cross-tab synced via the `storage` event. Exposes `{ privacyFeatureEnabled, isPrivate, undoDeleteEnabled, togglePrivate, setPreference }`. `isPrivate` is already gated on `privacyFeatureEnabled`; an effect toggles `data-private` on `<html>` (the CSS blur hook). Mounted in `Providers` inside `ToastProvider`. |
 | `hooks/useDashboardState.ts` | All dashboard state, effects, memos, and handlers extracted from `DashboardContent`. Returns everything the JSX needs including `handleAdd`, `handleReplace`, `handleDelete`, `handleUpdate`. |
 | `hooks/useOnlineStatus.ts` | Thin hook: `navigator.onLine` + `online`/`offline` events. |
 | `hooks/useDialogBehavior.ts` | Shared modal/sheet behavior built on native `<dialog>`/`showModal()`: real focus trap (top layer + inert page), Escape via the `cancel` event (intercepted so exit animations play), body scroll lock, focus-on-open/restore-on-close. Attach its ref to a `<dialog>` styled with the `dialog-shell` utility (see `BudgetManager` / `QuickAddSheet`) — native semantics replace `role="dialog"`/`aria-modal`. Keep the element mounted through the exit animation (key the hook off `mounted`, not `visible`). |
@@ -229,8 +237,8 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `public/sw.js` | Service worker: static caching + BackgroundSync drain. Plain JS, raw IDB cursor API. |
 | `components/DashboardContent.tsx` | Thin client orchestrator: calls `useDashboardState(props)` and renders JSX. No state or logic lives here directly. |
 | `components/StatCard.tsx` | Standalone stat card with gradient background, MoM delta badge, and income/expense/balance colour variants. |
-| `components/ExpenseInput.tsx` | Quick-add input with Exp/Inc type toggle pill and a visual category chip row (`categories: CategoryOption[]` prop — icon + colour tint, recently-used first; tap pre-fills the category token). Offline-aware: routes to `applyLocalMutation` when offline. |
-| `components/TransactionList.tsx` | Renders rows with label badges, amber "Pending" badge for unsynced items, and a grey "Off-chart" badge when `excludeFromStats` is set; inline edit/delete are offline-aware, and their online paths write through to the IDB mirror (`patchTransaction` / `deleteTransactionFromIDB` after server success) so other pages can't resurrect stale copies. The inline edit form includes a `LabelEditor`, a `BudgetExcludeSelect` (per-transaction `excludedBudgetIds`, expenses only), and an "Exclude from charts" checkbox (`excludeFromStats`, all types). Delete uses an inline two-step confirm (no native `confirm()`) and shows a spinner while in-flight; edit form dims (`opacity-50`) while saving. `CategoryCombobox` receives `CategoryOption[]` for icon display. |
+| `components/ExpenseInput.tsx` | Quick-add input with Exp/Inc type toggle pill and a visual category chip row (`categories: CategoryOption[]` prop — icon + colour tint, recently-used first; tap pre-fills the category token). Offline-aware: routes to `applyLocalMutation` when offline. Duplicate detection: a same (amount, category) commit within 60s swaps the input row for an amber confirm strip ([Add anyway] re-submits with a bypass flag; Cancel keeps the draft); a same-day match (via the `recentTransactions` prop) lights a passive amber dot on the Add button. Every commit calls `recordAdd`. |
+| `components/TransactionList.tsx` | Renders rows with label badges, amber "Pending" badge for unsynced items, and a grey "Off-chart" badge when `excludeFromStats` is set; inline edit/delete are offline-aware, and their online paths write through to the IDB mirror (`patchTransaction` / `deleteTransactionFromIDB` after server success) so other pages can't resurrect stale copies. The inline edit form includes a `LabelEditor`, a `BudgetExcludeSelect` (per-transaction `excludedBudgetIds`, expenses only), and an "Exclude from charts" checkbox (`excludeFromStats`, all types). Delete uses an inline two-step confirm (no native `confirm()`) and shows a spinner while in-flight; after a successful delete (and `undoDeleteEnabled`), an Undo toast re-creates the stashed record via `addTransaction`/`applyLocalMutation("add")` (new id; re-enters through `onUndone` → `reinsertRow` → parent `onRestore`). Edit form dims (`opacity-50`) while saving. `CategoryCombobox` receives `CategoryOption[]` for icon display. |
 | `components/CategoryCombobox.tsx` | Searchable category dropdown. Accepts `categories: CategoryOption[]` — renders icon alongside name. Has "Use …" option for free-text entry. |
 | `components/CategoryManager.tsx` | Settings category list with inline edit mode for custom categories (name + icon + colour picker). Default categories show a "Default" badge; custom categories show pencil + delete icons. |
 | `components/budgets/BudgetManager.tsx` | Dashboard modal to create/edit/delete budgets. Supports the four `budgetType`s (overall / category / excluded / label). Dynamically imported. |
@@ -239,8 +247,9 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `components/MonthSelector.tsx` | Month/year navigation control used on the dashboard. |
 | `components/SpendingInsights.tsx` | Spending pace/burn-rate analysis card. |
 | `components/QuickAddSheet.tsx` | Bottom-sheet wrapper for `ExpenseInput` on mobile. |
-| `components/NavBar.tsx` | Navigation shell: fixed desktop sidebar (collapsible, width synced via `SidebarContext`) + fixed mobile bottom nav with safe-area padding. Lucide icons. |
-| `components/Providers.tsx` | Composes `SessionProvider` + `ToastProvider` + `SyncProvider` at the app root. |
+| `components/NavBar.tsx` | Navigation shell: fixed desktop sidebar (collapsible, width synced via `SidebarContext`) + fixed mobile bottom nav with safe-area padding. Lucide icons. Hosts the privacy-mode eye toggle (sidebar footer + a 5th bottom-nav slot), rendered only while `privacyFeatureEnabled`. |
+| `components/Providers.tsx` | Composes `SessionProvider` + `ToastProvider` + `PreferencesProvider` + `SyncProvider` at the app root. |
+| `components/PreferencesPanel.tsx` | Settings → Preferences tab: toggle-switch rows for `privacyFeatureEnabled` and `undoDeleteEnabled` (device-level, localStorage-backed via `PreferencesContext`). |
 | `components/charts/TrendChart.tsx` | Daily income/expense area chart (Recharts). |
 | `components/charts/PaceChart.tsx` | Month-view cumulative spend vs last month's curve vs an even-pace line to the month's cap (an `overall` budget, else an `excluded`-type budget's amount; category/label budgets never draw the line). Spend is chart-basis, consistent with `SpendingInsights`. Consumes `dailyData` (optimistically patched) + `prevDailyData` prop. In the current month the spend line stops at today — e2e masks the whole card in the month full-page snapshot; the dedicated test uses a fixed past month. Lazy-loaded. |
 | `components/charts/SpendingPieChart.tsx` | Month-view donut of top-6 categories + "Other" using stored category colours (fallback `stringToColor`). HTML centre total (`tabular-nums`, maskable). Slice/legend click → `/transactions?month=&year=&category=X`. Lazy-loaded. |
@@ -251,7 +260,7 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `components/recurring/RecurringForm.tsx` | Create/edit form for recurring rules. Passes `CategoryOption[]` to `CategoryCombobox`. |
 | `components/DashboardErrorBoundary.tsx` | Error boundary isolating IDB/render failures. Page-level (no props) shows a full-height fallback; with a `section` prop it renders a compact card fallback — `DashboardContent` wraps each section (quick add, recurring, insights, trend chart, monthly chart, budgets, recent transactions) individually. |
 | `components/UserManager.tsx` | Admin-only client component: user list (avatar, role badge, inline reset-password expand) + create form. Exports `UserRecord` interface. |
-| `components/SettingsTabs.tsx` | Client component wrapping all settings sections in a tab bar (Users / Categories / Account). Admins default to Users tab; non-admins default to Categories tab. |
+| `components/SettingsTabs.tsx` | Client component wrapping all settings sections in a tab bar (Users / Categories / Preferences / Account). Admins default to Users tab; non-admins default to Categories tab. |
 | `prisma/schema.prisma` | Five models: `User`, `Transaction`, `Category`, `Budget`, `RecurringTransaction`. |
 | `prisma/schema.sqlite.prisma` | SQLite-compatible variant of the schema (used when `DATABASE_URL` is set). |
 
@@ -281,7 +290,7 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 
 #### User management (admin only)
 
-Admin users see a **Users** tab in Settings (non-admins see only Categories and Account tabs). The tab UI is owned by `SettingsTabs.tsx`. `UserManager.tsx` renders the user list and create form.
+Admin users see a **Users** tab in Settings (non-admins see only Categories, Preferences, and Account tabs). The tab UI is owned by `SettingsTabs.tsx`. `UserManager.tsx` renders the user list and create form.
 
 - **Create**: Admin fills name, email, password, role → calls `createUser()` → optimistic update
 - **Reset password**: Inline expand per row → calls `adminResetPassword()` — no old password required
@@ -320,7 +329,7 @@ Rules stored in `RecurringTransaction` table. Displayed in a collapsible card on
 
 #### CSV export
 
-The transactions page has an **Export CSV ↓** button in the filter bar. It calls `GET /api/export` with the current `month`, `year`, `category`, `label`, `q`, and (when a date range is active) `from`/`to` params. The route returns a `text/csv` attachment (`expenses-YYYY-MM.csv`, or `expenses-<from>-to-<to>.csv` for a date range) with columns: `Date, Category, Type, Amount (RM), Note, Labels`. Up to 10,000 rows are included.
+The transactions page has an **Export CSV ↓** button in the filter bar. It calls `GET /api/export` with the current `month`, `year`, `category`, `label`, `q`, `type`, `min`/`max` (amount range), and (when a date range is active) `from`/`to` params. The route returns a `text/csv` attachment (`expenses-YYYY-MM.csv`, or `expenses-<from>-to-<to>.csv` for a date range) with columns: `Date, Category, Type, Amount (RM), Note, Labels`. Up to 10,000 rows are included.
 
 #### Category management
 
@@ -352,6 +361,25 @@ A per-transaction **boolean** toggle ("Exclude from charts" checkbox in the inli
 - **Chart basis (respects the flag):** category breakdown (pie chart, "Top spend", `SpendingInsights`), daily trend chart, pace chart, **Daily Avg** (past-month view), **Avg Spend/mo** (all-time view), and the **spending mix** discretionary side. The latter three derive from `chartExpenses` in `useDashboardState` (sum of the already-filtered `dailyData` buckets).
 
 Because the charts are aggregated **server-side**, the filtering happens in `_fetchDashboardData` (`lib/actions.ts`): totals come from an unfiltered `groupBy(["type"])`, while the category breakdown uses a separate `groupBy(["category"])` with `where: { excludeFromStats: false }`; `getTrendRows` appends the `excludeFromStats` filter to its raw SQL unless called with `includeOffChart: true` — the ledger-basis variant fetched as a second `wealthData` series when the year or all-time view requests it (`getRangeDashboardData(…, withWealthSeries: true)`), passed down via the `initialWealthData` prop to `WealthCurve` and to `MonthlyBarChart`, which stacks each month's off-chart expense (`wealthData` minus `dailyData` per bucket) on the chart-basis expense bar as a hatched segment. The optimistic handlers in `useDashboardState` (`handleAdd`/`handleUpdate`/`handleDelete`) mirror the split: totals always update, but `categoryData`/`dailyData` are only patched when `!excludeFromStats` (with `handleUpdate` accounting for the flag toggling). `SpendingInsights` derives its own total from the already-filtered `categoryData` so its bars, burn rate, and pace badge stay on the same basis as the charts. A future "overall dashboard" can reuse the same `excludeFromStats: false` filter.
+
+#### Search & filters (transactions page)
+
+Search (`q`) matches note + category (substring, case-insensitive on both dialects), labels (exact, case-insensitive — substring isn't expressible on a `String[]` column), and exact amount when the query parses as a number (`45`, `rm45`, `1,200`). Postgres uses `getSearchFilter`'s `OR` clause; SQLite extends the existing JS-side filter path with `matchesSearch`. The filter bar has an All/Expense/Income segmented pill (buttons, not a `<select>` — the e2e category test selects `select.first()` positionally) and a "More filters" collapsible row holding the date-range and amount min/max inputs (debounced into the URL; the row auto-opens when any of its filters is active). `type`/`min`/`max` serialize to URL params like the rest; inverted min/max are swapped server-side in `getTransactions`.
+
+#### Privacy mode (feature 33)
+
+An eye toggle in the nav (sidebar footer + mobile bottom-nav slot) blurs every currency figure: `PreferencesContext` sets `data-private` on `<html>`, and one global rule — `[data-private] .tabular-nums { filter: blur(6px) }` in `globals.css` — covers everything, because currency consistently carries `.tabular-nums` (the same hook `amountMasks` uses in e2e). `@media print` always reveals. SVG chart text is out of CSS reach, so all six chart components read `isPrivate` and pass `tick={false}` to currency Y-axes and skip rendering their `<Tooltip>`. The feature itself is toggleable in Settings → Preferences (`privacyFeatureEnabled`, default on) — turning it off hides the eye and un-blurs immediately. Shoulder-surfing shield only, not a security boundary; inputs are never blurred (none carry the class).
+
+#### Undo delete (feature 27)
+
+Delete-then-restore: the server delete commits immediately (unchanged flow), the deleted record is stashed in the toast action's closure, and the 5s "Transaction deleted — Undo" toast re-creates it via `addTransaction` with the original `date`/`labels`/`excludedBudgetIds`/`excludeFromStats` (new id — nothing references transaction ids externally). Offline deletes offer the same Undo through `applyLocalMutation("add")`, which also covers never-synced rows whose queued add the delete cancelled. The re-created row re-enters through `TransactionList.reinsertRow` → parent `onRestore` (dashboard: `handleTransactionPosted` → `handleAdd`, which patches totals/chart slices incl. the basis split). Toggleable in Settings → Preferences (`undoDeleteEnabled`, default on).
+
+#### Duplicate detection (feature 22)
+
+Three client-side advisory layers (`lib/duplicates.ts`; the server never content-matches — identical legitimate purchases are common, only `clientId` retry-dedup exists server-side):
+- **60s confirm strip** in quick-add: same (amount, category) committed within the last minute swaps the input row for an amber "add anyway?" strip. Interrupts at most once per submission; the draft survives Cancel. Source of truth is a module-level `recentAdds` registry fed by every commit (loaded lists can't power this — `createdAt` isn't in the client Transaction shape, and `date` is the user-chosen date).
+- **Same-day hint**: a match of any age today only lights a passive amber dot on the Add button (needs the `recentTransactions` prop — dashboard passes `mergedTransactions.slice(0, 20)`, transactions page its loaded rows).
+- **Review banner** on `/transactions`: same (local day, amount, category) groups among loaded rows raise a dismissible banner with a filtered review toggle. Session-local; notes are ignored in the key and left for the human to judge.
 
 #### Offline / pending transactions
 
@@ -421,7 +449,7 @@ components\recurring\RecurringRow.tsx ← RecurringForm
 components\DashboardContent.tsx ← hooks/useDashboardState, StatCard
 components\budgets\BudgetManager.tsx ← hooks/useDialogBehavior
 components\QuickAddSheet.tsx ← hooks/useDialogBehavior, hooks/usePresence, ExpenseInput
-components\charts\*.tsx ← hooks/useChartAnimation
+components\charts\*.tsx ← hooks/useChartAnimation, context/PreferencesContext (privacy: tick={false} + tooltip suppression)
 components\StatCard.tsx ← hooks/useCountUp
 ```
 
@@ -465,9 +493,11 @@ hook useMemo
 hook useSWR
 handler setFilter
 handler handleSearchChange
+handler handleAmountChange
 handler clearAllFilters
 handler handleExport
 handler handleAdd
+handler handleReplace
 handler handleDelete
 handler handleRestore
 handler handleUpdate
@@ -668,14 +698,17 @@ hook useEffect
 hook useCallback
 hook useSyncContext
 hook useToast
+hook usePreferences
 export TransactionList
 handler addLabel
 handler handleKeyDown
 handler toggle
 handler handleSave
 handler handleDelete
+handler undoDelete
 handler handleUpdate
 handler handleRestore
+handler reinsertRow
 ```
 
 ### components\budgets\BudgetProgress.tsx
@@ -762,7 +795,7 @@ export ExpenseInput
 handler handleChange
 handler handleKeyDown
 handler clearInput
-handler handleSubmit
+handler handleSubmit(bypassDupCheck?)
 ```
 
 ### components\MainWrapper.tsx
@@ -784,6 +817,14 @@ hook useTransition
 export MonthSelector
 handler go
 handler switchPeriod
+```
+
+### components\PreferencesPanel.tsx
+```
+component PreferencesPanel
+component ToggleRow
+hook usePreferences
+export PreferencesPanel
 ```
 
 ### components\Providers.tsx
@@ -912,6 +953,17 @@ handler handleOnline
 handler handleOffline
 ```
 
+### context\PreferencesContext.tsx
+```
+component PreferencesProvider
+hook useState
+hook useEffect
+hook useCallback
+hook useContext
+export PreferencesProvider
+export usePreferences  → { privacyFeatureEnabled, isPrivate, undoDeleteEnabled, togglePrivate, setPreference }
+```
+
 ### context\SidebarContext.tsx
 ```
 component SidebarProvider
@@ -994,7 +1046,7 @@ export async function getTransactionIds() → Promise<string[]>
 export async function getDashboardData(month, year)
 export async function getRangeDashboardData(startISO, endISO, granularity, withWealthSeries?)
 export async function getEarliestTransactionDate() → Promise<string | null>
-export async function getTransactions(filters) → Promise<{ transactions, nextCursor, totalCount, totalIncome, totalExpenses }>
+export async function getTransactions(filters incl. type?/amountMin?/amountMax?) → Promise<{ transactions, nextCursor, totalCount, totalIncome, totalExpenses }>
 export const getCategories (React.cache'd)
 export async function addCategory(data)
 export async function updateCategory(id, data)
@@ -1030,6 +1082,9 @@ export function parseBudgetArray(val) → string[]
 export function encodeBudgetArray(arr) → unknown
 export function normalizeBudget(b) → object
 export function getLabelFilter(label?) → Record<string, unknown>
+export function parseAmountQuery(q) → number | null
+export function getSearchFilter(q?) → Record<string, unknown>
+export function matchesSearch(tx, q) → boolean
 export type TrendGranularity
 export async function getTrendRows(userId, start, end, granularity?, includeOffChart?) → Promise<Array<{ day, type, total }>>
 export function getDailyRows(userId, start, end) → Promise<...>
@@ -1083,6 +1138,16 @@ export async function getPendingCount() → Promise<number>
 export async function getFailedSyncCount() → Promise<number>
 export async function seedIDBFromServer(serverTransactions, userId) → Promise<void>
 export async function reconcileWithServer(serverIds, userId) → Promise<number>
+```
+
+### lib\duplicates.ts
+```
+export const RECENT_WINDOW_MS
+export function recordAdd(entry) → void
+export function clearRecentAdds() → void
+export function findRecentDuplicate(draft, now?, windowMs?) → RecentAdd | null
+export function hasSameDayDuplicate(draft, recent, today?) → boolean
+export function groupPossibleDuplicates(txs) → DuplicateGroup[]
 ```
 
 ### lib\parser.ts
