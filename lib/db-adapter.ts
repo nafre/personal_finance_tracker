@@ -47,6 +47,50 @@ export function getLabelFilter(label?: string): Record<string, unknown> {
   return { labels: { has: label } };
 }
 
+// Normalizes a search token that looks like an amount ("45", "rm45", "1,200.50")
+// to a positive number, or null when it isn't numeric.
+export function parseAmountQuery(q: string): number | null {
+  const cleaned = q.trim().replace(/^rm\s*/i, "").replace(/,/g, "");
+  if (!/^\d+(\.\d+)?$/.test(cleaned)) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+// Multi-field search clause for `q`: note/category substring (case-insensitive),
+// exact label match (labels are short tags — substring matching isn't expressible
+// on a string[] column), and exact amount when the query parses as a number.
+// SQLite: returns {} and the caller filters in JS via matchesSearch (labels are
+// JSON strings there) — same escape hatch as getLabelFilter.
+export function getSearchFilter(q?: string): Record<string, unknown> {
+  if (!q) return {};
+  if (IS_SQLITE) return {};
+  const amount = parseAmountQuery(q);
+  return {
+    OR: [
+      { note: { contains: q, mode: "insensitive" } },
+      { category: { contains: q, mode: "insensitive" } },
+      { labels: { has: q } },
+      ...(amount !== null ? [{ amount }] : []),
+    ],
+  };
+}
+
+// JS-side predicate mirroring getSearchFilter, for the SQLite path (runs on
+// normalized transactions).
+export function matchesSearch(
+  tx: { note?: string | null; category: string; labels: string[]; amount: number },
+  q: string
+): boolean {
+  const needle = q.toLowerCase();
+  const amount = parseAmountQuery(q);
+  return (
+    (tx.note ?? "").toLowerCase().includes(needle) ||
+    tx.category.toLowerCase().includes(needle) ||
+    tx.labels.some((l) => l.toLowerCase() === needle) ||
+    (amount !== null && tx.amount === amount)
+  );
+}
+
 export type TrendGranularity = "day" | "month";
 
 // Aggregated income/expense totals bucketed by day or by month, depending on

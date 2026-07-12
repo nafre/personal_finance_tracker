@@ -6,7 +6,7 @@ import { revalidatePath, updateTag, unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getNextDueDate, DEFAULT_CATEGORIES, enumerateMonths, MAX_BACKFILL, type RecurringFrequency } from "@/lib/utils";
-import { IS_SQLITE, encodeLabels, normalizeTx, getLabelFilter, getTrendRows, type TrendGranularity, normalizeBudget, encodeBudgetArray, parseLabels } from "@/lib/db-adapter";
+import { IS_SQLITE, encodeLabels, normalizeTx, getLabelFilter, getSearchFilter, matchesSearch, getTrendRows, type TrendGranularity, normalizeBudget, encodeBudgetArray, parseLabels } from "@/lib/db-adapter";
 import { transactionSchema, categorySchema, budgetSchema, recurringSchema, recurringUpdateSchema, passwordSchema, roleSchema } from "@/lib/validation";
 import { rateLimit } from "@/lib/rate-limit";
 import bcrypt from "bcryptjs";
@@ -369,6 +369,9 @@ export async function getTransactions(filters: {
   category?: string;
   label?: string;
   q?: string;
+  type?: string;
+  amountMin?: number;
+  amountMax?: number;
   from?: Date;
   to?: Date;
   cursor?: string;
@@ -387,19 +390,34 @@ export async function getTransactions(filters: {
   const start = filters.from ?? new Date(filters.year, filters.month - 1, 1);
   const end = filters.to ?? new Date(filters.year, filters.month, 0, 23, 59, 59, 999);
 
+  // Forgiving validation: whitelist type, drop non-finite bounds, swap inverted ranges.
+  const type = filters.type === "income" || filters.type === "expense" ? filters.type : undefined;
+  let min = typeof filters.amountMin === "number" && Number.isFinite(filters.amountMin) ? filters.amountMin : undefined;
+  let max = typeof filters.amountMax === "number" && Number.isFinite(filters.amountMax) ? filters.amountMax : undefined;
+  if (min !== undefined && max !== undefined && min > max) [min, max] = [max, min];
+
   const baseWhere = {
     userId,
     date: { gte: start, lte: end },
     ...(filters.category ? { category: filters.category } : {}),
-    ...(filters.q ? { note: { contains: filters.q } } : {}),
+    ...(type ? { type } : {}),
+    ...(min !== undefined || max !== undefined
+      ? { amount: { ...(min !== undefined ? { gte: min } : {}), ...(max !== undefined ? { lte: max } : {}) } }
+      : {}),
+    ...getSearchFilter(filters.q),
   };
 
-  // SQLite: no native array `has` — fetch all matching then apply label filter + cursor in JS
-  if (IS_SQLITE && filters.label) {
+  // SQLite: no native array `has` and no case-insensitive multi-field OR over
+  // JSON-string labels — fetch all matching then apply label/search filter +
+  // cursor in JS
+  if (IS_SQLITE && (filters.label || filters.q)) {
     const rows = (await db.transaction.findMany({
       where: baseWhere,
       orderBy: [{ date: "desc" }, { id: "desc" }],
-    })).map(normalizeTx).filter((tx) => tx.labels.includes(filters.label!));
+    })).map(normalizeTx).filter((tx) =>
+      (!filters.label || tx.labels.includes(filters.label)) &&
+      (!filters.q || matchesSearch(tx, filters.q))
+    );
 
     const cursorIdx = filters.cursor ? rows.findIndex((r) => r.id === filters.cursor) : -1;
     const startIdx = cursorIdx >= 0 ? cursorIdx + 1 : 0;

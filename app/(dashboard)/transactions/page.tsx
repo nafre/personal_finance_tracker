@@ -8,7 +8,7 @@ import { useSyncContext } from "@/context/SyncProvider";
 import { TransactionList } from "@/components/TransactionList";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ExpenseInput } from "@/components/ExpenseInput";
-import { formatCurrency, getCurrentMonthYear, stringToColor } from "@/lib/utils";
+import { cn, formatCurrency, getCurrentMonthYear, stringToColor } from "@/lib/utils";
 
 interface Transaction {
   id: string;
@@ -40,6 +40,9 @@ export default function TransactionsPage() {
   const categoryFilter = searchParams.get("category") ?? "";
   const labelFilter = searchParams.get("label") ?? "";
   const qFilter = searchParams.get("q") ?? "";
+  const typeFilter = searchParams.get("type") ?? "";
+  const minFilter = searchParams.get("min") ?? "";
+  const maxFilter = searchParams.get("max") ?? "";
   const fromFilter = searchParams.get("from") ?? "";
   const toFilter = searchParams.get("to") ?? "";
 
@@ -64,6 +67,21 @@ export default function TransactionsPage() {
     setSearchInput(qFilter);
   }, [qFilter]);
 
+  // Amount-range inputs — same debounce-into-URL pattern as search
+  const [minInput, setMinInput] = useState(minFilter);
+  const [maxInput, setMaxInput] = useState(maxFilter);
+  const amountDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    setMinInput(minFilter);
+    setMaxInput(maxFilter);
+  }, [minFilter, maxFilter]);
+
+  // "More filters" row — auto-opens whenever one of its filters is active
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  useEffect(() => {
+    if (fromFilter || toFilter || minFilter || maxFilter) setShowMoreFilters(true);
+  }, [fromFilter, toFilter, minFilter, maxFilter]);
+
   function setFilter(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set(key, value);
@@ -79,11 +97,23 @@ export default function TransactionsPage() {
     }, 300);
   }
 
+  function handleAmountChange(key: "min" | "max", value: string) {
+    if (key === "min") setMinInput(value);
+    else setMaxInput(value);
+    clearTimeout(amountDebounceRef.current);
+    amountDebounceRef.current = setTimeout(() => {
+      setFilter(key, value);
+    }, 300);
+  }
+
   function clearAllFilters() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("category");
     params.delete("label");
     params.delete("q");
+    params.delete("type");
+    params.delete("min");
+    params.delete("max");
     params.delete("from");
     params.delete("to");
     router.push(`${pathname}?${params.toString()}`);
@@ -96,6 +126,9 @@ export default function TransactionsPage() {
     if (categoryFilter) params.set("category", categoryFilter);
     if (labelFilter) params.set("label", labelFilter);
     if (qFilter) params.set("q", qFilter);
+    if (typeFilter) params.set("type", typeFilter);
+    if (minFilter) params.set("min", minFilter);
+    if (maxFilter) params.set("max", maxFilter);
     if (fromFilter) params.set("from", fromFilter);
     if (toFilter) params.set("to", toFilter);
     window.location.href = `/api/export?${params.toString()}`;
@@ -107,9 +140,12 @@ export default function TransactionsPage() {
     category: categoryFilter || undefined,
     label: labelFilter || undefined,
     q: qFilter || undefined,
+    type: typeFilter || undefined,
+    amountMin: minFilter ? Number(minFilter) : undefined,
+    amountMax: maxFilter ? Number(maxFilter) : undefined,
     from: fromFilter ? new Date(fromFilter) : undefined,
     to: toFilter ? new Date(toFilter + "T23:59:59") : undefined,
-  }), [month, year, categoryFilter, labelFilter, qFilter, fromFilter, toFilter]);
+  }), [month, year, categoryFilter, labelFilter, qFilter, typeFilter, minFilter, maxFilter, fromFilter, toFilter]);
 
   // Stable cache key — serialized filter dims (no Date objects)
   const filterKey = useMemo(() => JSON.stringify({
@@ -117,26 +153,33 @@ export default function TransactionsPage() {
     category: categoryFilter || undefined,
     label: labelFilter || undefined,
     q: qFilter || undefined,
+    type: typeFilter || undefined,
+    min: minFilter || undefined,
+    max: maxFilter || undefined,
     from: fromFilter || undefined,
     to: toFilter || undefined,
-  }), [month, year, categoryFilter, labelFilter, qFilter, fromFilter, toFilter]);
+  }), [month, year, categoryFilter, labelFilter, qFilter, typeFilter, minFilter, maxFilter, fromFilter, toFilter]);
 
   // SWR manages initial fetch and caches results per filter combination.
   // Re-visiting a previously-seen filter returns the cached data instantly
   // while revalidating in the background.
-  const { isLoading, mutate } = useSWR(
+  const { data, isLoading, mutate } = useSWR(
     filterKey,
-    () => getTransactions(buildFilters()),
-    {
-      onSuccess: (result) => {
-        setTransactions(result.transactions as Transaction[]);
-        setNextCursor(result.nextCursor);
-        setTotalCount(result.totalCount);
-        setTotalIncome(result.totalIncome);
-        setTotalExpenses(result.totalExpenses);
-      },
-    }
+    () => getTransactions(buildFilters())
   );
+
+  // Sync SWR data into the local state that optimistic updates layer onto.
+  // An effect on `data` (rather than onSuccess) also covers cache hits when a
+  // filter key is re-visited — e.g. clearing a filter within SWR's dedupe
+  // window returns cached data without ever firing onSuccess.
+  useEffect(() => {
+    if (!data) return;
+    setTransactions(data.transactions as Transaction[]);
+    setNextCursor(data.nextCursor);
+    setTotalCount(data.totalCount);
+    setTotalIncome(data.totalIncome);
+    setTotalExpenses(data.totalExpenses);
+  }, [data]);
 
   // Fetch categories once on mount — they don't change within a session
   useEffect(() => {
@@ -237,7 +280,7 @@ export default function TransactionsPage() {
   ).sort();
 
   const hasDateRange = !!(fromFilter && toFilter);
-  const hasFilter = !!(categoryFilter || labelFilter || qFilter || fromFilter || toFilter);
+  const hasFilter = !!(categoryFilter || labelFilter || qFilter || typeFilter || minFilter || maxFilter || fromFilter || toFilter);
 
   // Icon/color chips for the quick-add category picker
   const categoryOptions = useMemo(
@@ -250,7 +293,7 @@ export default function TransactionsPage() {
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-slate-100">Transactions</h1>
-        <p className="text-slate-400 text-sm">All your entries, filterable by month, category, label, and search.</p>
+        <p className="text-slate-400 text-sm">All your entries, filterable by month, category, label, type, amount, and search.</p>
       </div>
 
       {/* Quick add */}
@@ -269,8 +312,8 @@ export default function TransactionsPage() {
               type="text"
               value={searchInput}
               onChange={(e) => handleSearchChange(e.target.value)}
-              placeholder="Search notes…"
-              aria-label="Search notes"
+              placeholder="Search notes, categories, labels…"
+              aria-label="Search transactions"
               className="input-base w-full pl-8 text-base sm:text-sm"
             />
           </div>
@@ -278,8 +321,31 @@ export default function TransactionsPage() {
           {!hasDateRange && <MonthSelector period="month" month={month} year={year} showPeriodToggle={false} />}
         </div>
 
-        {/* Row 2: category + label — 2-up grid on mobile, inline row from sm up */}
+        {/* Row 2: type + category + label — 2-up grid on mobile, inline row from sm up */}
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+          <div
+            role="group"
+            aria-label="Filter by type"
+            className="col-span-2 sm:col-span-1 flex rounded-xl border border-slate-700 overflow-hidden w-full sm:w-auto"
+          >
+            {([["", "All"], ["expense", "Expense"], ["income", "Income"]] as const).map(([value, label]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setFilter("type", value)}
+                aria-pressed={typeFilter === value}
+                className={cn(
+                  "flex-1 sm:flex-none px-3 py-2 text-xs font-medium transition-colors",
+                  typeFilter === value
+                    ? "bg-indigo-500/20 text-indigo-300"
+                    : "text-slate-400 hover:text-slate-200"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <select
             value={categoryFilter}
             onChange={(e) => setFilter("category", e.target.value)}
@@ -305,30 +371,17 @@ export default function TransactionsPage() {
           </select>
         </div>
 
-        {/* Row 3: date range + actions */}
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
-          <div>
-            <label htmlFor="filter-from" className="text-[11px] text-slate-500 mb-0.5 block">From</label>
-            <input
-              id="filter-from"
-              type="date"
-              value={fromFilter}
-              onChange={(e) => setFilter("from", e.target.value)}
-              className="input-base text-base sm:text-sm w-full sm:w-40"
-            />
-          </div>
-          <div>
-            <label htmlFor="filter-to" className="text-[11px] text-slate-500 mb-0.5 block">To</label>
-            <input
-              id="filter-to"
-              type="date"
-              value={toFilter}
-              onChange={(e) => setFilter("to", e.target.value)}
-              className="input-base text-base sm:text-sm w-full sm:w-40"
-            />
-          </div>
-
-          <div className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:ml-auto">
+        {/* Row 3: more-filters toggle + actions */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowMoreFilters((v) => !v)}
+            aria-expanded={showMoreFilters}
+            className="text-xs text-slate-400 hover:text-slate-200 transition-colors shrink-0 px-2 py-2"
+          >
+            More filters {showMoreFilters ? "▴" : "▾"}
+          </button>
+          <div className="flex items-center gap-2 ml-auto">
             {hasFilter && (
               <button
                 onClick={clearAllFilters}
@@ -339,12 +392,62 @@ export default function TransactionsPage() {
             )}
             <button
               onClick={handleExport}
-              className="text-xs text-slate-400 hover:text-slate-200 transition-colors shrink-0 border border-slate-700 hover:border-slate-500 px-3 py-2 rounded-lg ml-auto sm:ml-0"
+              className="text-xs text-slate-400 hover:text-slate-200 transition-colors shrink-0 border border-slate-700 hover:border-slate-500 px-3 py-2 rounded-lg"
             >
               Export CSV ↓
             </button>
           </div>
         </div>
+
+        {/* Collapsible row: date range + amount range */}
+        {showMoreFilters && (
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
+            <div>
+              <label htmlFor="filter-from" className="text-[11px] text-slate-500 mb-0.5 block">From</label>
+              <input
+                id="filter-from"
+                type="date"
+                value={fromFilter}
+                onChange={(e) => setFilter("from", e.target.value)}
+                className="input-base text-base sm:text-sm w-full sm:w-40"
+              />
+            </div>
+            <div>
+              <label htmlFor="filter-to" className="text-[11px] text-slate-500 mb-0.5 block">To</label>
+              <input
+                id="filter-to"
+                type="date"
+                value={toFilter}
+                onChange={(e) => setFilter("to", e.target.value)}
+                className="input-base text-base sm:text-sm w-full sm:w-40"
+              />
+            </div>
+            <div>
+              <label htmlFor="filter-min" className="text-[11px] text-slate-500 mb-0.5 block">Min (RM)</label>
+              <input
+                id="filter-min"
+                type="text"
+                inputMode="decimal"
+                value={minInput}
+                onChange={(e) => handleAmountChange("min", e.target.value)}
+                placeholder="0.00"
+                className="input-base text-base sm:text-sm w-full sm:w-28"
+              />
+            </div>
+            <div>
+              <label htmlFor="filter-max" className="text-[11px] text-slate-500 mb-0.5 block">Max (RM)</label>
+              <input
+                id="filter-max"
+                type="text"
+                inputMode="decimal"
+                value={maxInput}
+                onChange={(e) => handleAmountChange("max", e.target.value)}
+                placeholder="0.00"
+                className="input-base text-base sm:text-sm w-full sm:w-28"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Active label filter badge */}

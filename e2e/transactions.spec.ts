@@ -48,6 +48,52 @@ test.describe("Transactions page", () => {
     });
   });
 
+  // ── Search & new filters (feature 32) ─────────────────────────────────────
+
+  test("type filter — Expense zeroes the income total, Income zeroes expenses", async ({ page }) => {
+    const strip = page.locator('[data-testid="summary-strip"]');
+
+    await page.getByRole("button", { name: "Expense", exact: true }).click();
+    await expect(page).toHaveURL(/type=expense/);
+    await expect(strip).toContainText("+RM0.00", { timeout: 5000 });
+
+    await page.getByRole("button", { name: "Income", exact: true }).click();
+    await expect(page).toHaveURL(/type=income/);
+    await expect(strip).toContainText("−RM0.00", { timeout: 5000 });
+
+    await page.getByRole("button", { name: "All", exact: true }).click();
+    await expect(page).not.toHaveURL(/type=/);
+  });
+
+  test("search matches category names case-insensitively", async ({ page }) => {
+    const categorySelect = page.locator("select").first();
+    if ((await categorySelect.locator("option").count()) <= 1) return; // no data — skip
+    const cat = (await categorySelect.locator("option").nth(1).textContent())!.trim();
+
+    const strip = page.locator('[data-testid="summary-strip"]');
+    const search = page.getByLabel("Search transactions");
+
+    // Establish the filtered-to-zero state first so the second assertion
+    // observes a real flip (the strip starts non-zero, so a bare
+    // not-to-contain would pass before the search even applies).
+    await search.fill("zzz-no-match-zzz");
+    await expect(strip).toContainText("0 transactions", { timeout: 5000 });
+
+    await search.fill(cat.toUpperCase());
+    await expect(strip).not.toContainText("0 transactions", { timeout: 5000 });
+  });
+
+  test("amount range filter narrows results", async ({ page }) => {
+    const strip = page.locator('[data-testid="summary-strip"]');
+
+    await page.getByRole("button", { name: /More filters/ }).click();
+    await page.locator("#filter-min").fill("999999");
+    await expect(strip).toContainText("0 transactions", { timeout: 5000 });
+
+    await page.getByRole("button", { name: "Clear all" }).click();
+    await expect(strip).not.toContainText("0 transactions", { timeout: 5000 });
+  });
+
   // ── Category filter ───────────────────────────────────────────────────────
 
   test("category filter applied", async ({ page }) => {

@@ -32,6 +32,18 @@ export async function GET(req: NextRequest) {
   const category = p.get("category") ?? undefined;
   const label    = p.get("label")    ?? undefined;
   const q        = p.get("q")        ?? undefined;
+  const type     = p.get("type")     ?? undefined;
+  if (type !== undefined && type !== "income" && type !== "expense") {
+    return new Response("Invalid type", { status: 400 });
+  }
+  const amountMin = p.get("min") ? Number(p.get("min")) : undefined;
+  const amountMax = p.get("max") ? Number(p.get("max")) : undefined;
+  if (
+    (amountMin !== undefined && !Number.isFinite(amountMin)) ||
+    (amountMax !== undefined && !Number.isFinite(amountMax))
+  ) {
+    return new Response("Invalid min/max amount", { status: 400 });
+  }
   // Same semantics as the transactions page: `to` is inclusive end-of-day
   const from = p.get("from") ? new Date(p.get("from")!) : undefined;
   const to   = p.get("to")   ? new Date(p.get("to")! + "T23:59:59.999") : undefined;
@@ -47,6 +59,9 @@ export async function GET(req: NextRequest) {
       category,
       label,
       q,
+      type,
+      amountMin,
+      amountMax,
       from,
       to,
       limit: 10000,
