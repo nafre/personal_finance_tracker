@@ -202,6 +202,7 @@ export function DashboardContent(props: DashboardContentProps) {
                 onReplace={handleReplace}
                 onRemove={handleDelete}
                 recentCategories={recentCategories}
+                recentTransactions={mergedTransactions.slice(0, 20)}
                 categories={props.initialCategories}
               />
             </DashboardErrorBoundary>
@@ -569,6 +570,7 @@ export function DashboardContent(props: DashboardContentProps) {
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
         recentCategories={recentCategories}
+        recentTransactions={mergedTransactions.slice(0, 20)}
         categories={props.initialCategories}
         onAdd={handleAdd}
         onReplace={handleReplace}

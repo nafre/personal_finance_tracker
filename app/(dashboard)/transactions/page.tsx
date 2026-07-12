@@ -9,6 +9,7 @@ import { TransactionList } from "@/components/TransactionList";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ExpenseInput } from "@/components/ExpenseInput";
 import { cn, formatCurrency, getCurrentMonthYear, stringToColor } from "@/lib/utils";
+import { groupPossibleDuplicates } from "@/lib/duplicates";
 
 interface Transaction {
   id: string;
@@ -81,6 +82,10 @@ export default function TransactionsPage() {
   useEffect(() => {
     if (fromFilter || toFilter || minFilter || maxFilter) setShowMoreFilters(true);
   }, [fromFilter, toFilter, minFilter, maxFilter]);
+
+  // Duplicate review banner state (session-local; dismissals don't persist)
+  const [dupBannerDismissed, setDupBannerDismissed] = useState(false);
+  const [showDupsOnly, setShowDupsOnly] = useState(false);
 
   function setFilter(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -231,6 +236,14 @@ export default function TransactionsPage() {
     [month, year]
   );
 
+  // Swap the optimistic temp id for the real server id once the background
+  // addTransaction resolves — without this the fresh row keeps its temp id
+  // (and "Pending" badge) until the next revalidation, and editing/deleting
+  // it 404s server-side.
+  const handleReplace = useCallback((tempId: string, realTx: Transaction & { isPending?: boolean }) => {
+    setTransactions((prev) => prev.map((t) => (t.id === tempId ? { ...t, ...realTx } : t)));
+  }, []);
+
   const handleDelete = useCallback((id: string) => {
     setTransactions((prev) => {
       const removed = prev.find((t) => t.id === id);
@@ -282,6 +295,17 @@ export default function TransactionsPage() {
   const hasDateRange = !!(fromFilter && toFilter);
   const hasFilter = !!(categoryFilter || labelFilter || qFilter || typeFilter || minFilter || maxFilter || fromFilter || toFilter);
 
+  // Possible duplicates among the loaded rows (same day + amount + category).
+  // Session-local review surface: a dismissible banner toggling a filtered view.
+  const dupGroups = useMemo(() => groupPossibleDuplicates(transactions), [transactions]);
+  const dupIds = useMemo(
+    () => new Set(dupGroups.flatMap((g) => g.transactions.map((t) => t.id))),
+    [dupGroups]
+  );
+  const visibleTransactions = showDupsOnly
+    ? transactions.filter((t) => dupIds.has(t.id))
+    : transactions;
+
   // Icon/color chips for the quick-add category picker
   const categoryOptions = useMemo(
     () => categories.map((c) => ({ name: c.name, icon: c.icon, color: c.color })),
@@ -297,7 +321,13 @@ export default function TransactionsPage() {
       </div>
 
       {/* Quick add */}
-      <ExpenseInput onAdd={handleAdd} categories={categoryOptions} />
+      <ExpenseInput
+        onAdd={handleAdd}
+        onReplace={handleReplace}
+        onRemove={handleDelete}
+        categories={categoryOptions}
+        recentTransactions={transactions.slice(0, 20)}
+      />
 
       {/* Filters */}
       <div data-testid="filter-bar" className="space-y-2">
@@ -470,6 +500,39 @@ export default function TransactionsPage() {
         </div>
       )}
 
+      {/* Possible-duplicates review banner */}
+      {dupGroups.length > 0 && !dupBannerDismissed && (
+        <div
+          data-testid="dup-banner"
+          className="flex flex-wrap items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2.5"
+        >
+          <p className="text-sm text-amber-300 flex-1 min-w-[180px]">
+            {dupGroups.length} possible duplicate {dupGroups.length === 1 ? "group" : "groups"} in
+            the loaded transactions.
+          </p>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowDupsOnly((v) => !v)}
+              className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-medium transition-colors [@media(hover:none)]:min-h-11"
+            >
+              {showDupsOnly ? "Show all" : "Review"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDupBannerDismissed(true);
+                setShowDupsOnly(false);
+              }}
+              aria-label="Dismiss duplicate banner"
+              className="px-2 py-1.5 rounded-lg text-amber-300/60 hover:text-amber-300 text-sm transition-colors [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Summary strip */}
       <div data-testid="summary-strip" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <span className="text-slate-400 whitespace-nowrap">
@@ -517,7 +580,7 @@ export default function TransactionsPage() {
         ) : (
           <>
             <TransactionList
-              transactions={transactions}
+              transactions={visibleTransactions}
               onDelete={handleDelete}
               onUpdate={handleUpdate}
               onRestore={handleRestore}

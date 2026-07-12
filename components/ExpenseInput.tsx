@@ -6,6 +6,7 @@ import type { CategoryOption } from "@/types";
 import { addTransaction } from "@/lib/actions";
 import { putTransaction } from "@/lib/idb";
 import { applyLocalMutation } from "@/lib/sync";
+import { findRecentDuplicate, hasSameDayDuplicate, recordAdd } from "@/lib/duplicates";
 import { useSyncContext } from "@/context/SyncProvider";
 import { useToast } from "@/context/ToastContext";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -26,21 +27,36 @@ interface ExpenseInputProps {
   onReplace?: (tempId: string, realTx: AddedTx) => void;
   onRemove?: (tempId: string) => void;
   recentCategories?: string[];
+  /** Recently-loaded transactions (any age) — powers the passive same-day duplicate hint. */
+  recentTransactions?: { amount: number; category: string; date: Date | string }[];
   categories?: CategoryOption[];
   autoFocus?: boolean;
 }
 
-export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, categories, autoFocus }: ExpenseInputProps) {
+export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, recentTransactions, categories, autoFocus }: ExpenseInputProps) {
   const [value, setValue] = useState("");
   const [preview, setPreview] = useState<ReturnType<typeof parseExpenseInput>>(null);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [manualTypeOverride, setManualTypeOverride] = useState<"income" | "expense" | null>(null);
+  // Duplicate confirm strip (60s same-amount-same-category window) — holds the
+  // draft's parsed amount/category while it replaces the input row.
+  const [dupConfirm, setDupConfirm] = useState<{ amount: number; category: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { isOnline, userId, refreshPendingCount } = useSyncContext();
   const { showToast } = useToast();
 
   const effectiveType = manualTypeOverride ?? preview?.type ?? "expense";
+
+  // Passive hint: a matching (amount, category) transaction already exists
+  // today. Doesn't interrupt — renders an amber dot on the Add button.
+  const sameDayDup = useMemo(() => {
+    if (!preview) return false;
+    return hasSameDayDuplicate(
+      { amount: preview.amount, category: preview.category },
+      recentTransactions ?? []
+    );
+  }, [preview, recentTransactions]);
 
   // Unified chip row: recently-used categories first (resolved to their
   // icon/color when a matching category exists — free-text ones stay plain),
@@ -94,12 +110,22 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, cat
     inputRef.current?.focus();
   }
 
-  function handleSubmit() {
+  function handleSubmit(bypassDupCheck = false) {
     const parsed = parseExpenseInput(value);
     if (!parsed) {
       setError('Try: "food 20" or "salary 5000"');
       return;
     }
+
+    // Fat-finger guard: same (amount, category) committed within the last 60s.
+    // The draft stays in the input; the confirm strip interrupts at most once
+    // per submission ([Add anyway] re-enters with the bypass flag).
+    if (!bypassDupCheck && findRecentDuplicate({ amount: parsed.amount, category: parsed.category })) {
+      setDupConfirm({ amount: parsed.amount, category: parsed.category });
+      return;
+    }
+    setDupConfirm(null);
+    recordAdd({ amount: parsed.amount, category: parsed.category });
 
     if (!isOnline) {
       // Offline path — write to IDB and queue, then update UI
@@ -189,7 +215,38 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, cat
         <span className="text-xs text-slate-500">• Type and press Enter</span>
       </div>
 
-      <div className="flex gap-2 items-start">
+      {dupConfirm && (
+        <div
+          data-testid="dup-confirm"
+          className="flex flex-wrap items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2.5 mb-2"
+        >
+          <p className="text-sm text-amber-300 flex-1 min-w-[180px]">
+            Looks like a duplicate of the {formatCurrency(dupConfirm.amount)} {dupConfirm.category} you
+            just added — add anyway?
+          </p>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => handleSubmit(true)}
+              className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-medium transition-colors [@media(hover:none)]:min-h-11"
+            >
+              Add anyway
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDupConfirm(null);
+                inputRef.current?.focus();
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-medium transition-colors [@media(hover:none)]:min-h-11"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className={cn("flex gap-2 items-start", dupConfirm && "hidden")}>
         <TypeToggle value={effectiveType} onChange={setManualTypeOverride} />
 
         <div className="flex-1 flex flex-col">
@@ -251,12 +308,20 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, cat
         </div>
 
         <button
-          onClick={handleSubmit}
+          onClick={() => handleSubmit()}
           disabled={isSubmitting || !value.trim()}
-          className="btn-primary px-4 flex items-center gap-1.5 shrink-0 disabled:opacity-50 self-start"
+          className="btn-primary relative px-4 flex items-center gap-1.5 shrink-0 disabled:opacity-50 self-start"
           aria-label="Add transaction"
           aria-busy={isSubmitting}
+          title={sameDayDup ? "A matching transaction already exists today" : undefined}
         >
+          {sameDayDup && (
+            <span
+              data-testid="same-day-dup-dot"
+              aria-hidden="true"
+              className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-slate-950"
+            />
+          )}
           {isSubmitting ? (
             <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

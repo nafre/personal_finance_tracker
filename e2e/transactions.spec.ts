@@ -121,6 +121,49 @@ test.describe("Transactions page", () => {
     await expect(page.locator(`[aria-label="${targetLabel}"]`).first()).toBeVisible();
   });
 
+  // ── Duplicate detection (feature 22) ──────────────────────────────────────
+  // Functional, non-snapshot. Adds the same entry twice quickly → the confirm
+  // strip interrupts; [Add anyway] commits; the review banner appears for the
+  // same-day pair. Cleans up both rows so other tests see unchanged data.
+
+  test("duplicate detection — confirm strip, add anyway, review banner", async ({ page }) => {
+    const quickAdd = page.locator('[data-testid="expense-input"]');
+    const input = quickAdd.locator("input").first();
+    const list = page.locator('[data-testid="transaction-list"]');
+    const dupRows = list.getByText("Duptest", { exact: true });
+
+    // First add commits normally; wait for the temp id → server id swap
+    await input.fill("duptest 3.33");
+    await input.press("Enter");
+    await expect(dupRows).toHaveCount(1);
+    await expect(list.getByText("Pending", { exact: true })).toHaveCount(0);
+
+    // Second identical add within 60s → confirm strip, nothing committed yet.
+    // The same-day hint dot also lights up on the Add button while typing.
+    await input.fill("duptest 3.33");
+    await expect(quickAdd.locator('[data-testid="same-day-dup-dot"]')).toBeVisible();
+    await input.press("Enter");
+    await expect(quickAdd.locator('[data-testid="dup-confirm"]')).toBeVisible();
+    await expect(dupRows).toHaveCount(1);
+
+    // [Add anyway] commits the duplicate
+    await quickAdd.getByRole("button", { name: "Add anyway" }).click();
+    await expect(dupRows).toHaveCount(2);
+    await expect(list.getByText("Pending", { exact: true })).toHaveCount(0);
+
+    // Review banner appears for the same-day duplicate pair
+    await expect(page.locator('[data-testid="dup-banner"]')).toBeVisible();
+
+    // Clean up both rows via the two-step confirm (no force-clicks — see undo test)
+    for (let remaining = 1; remaining >= 0; remaining--) {
+      const btn = page.locator('[aria-label="Delete Duptest transaction"]').first();
+      await btn.scrollIntoViewIfNeeded();
+      await btn.click();
+      await page.getByRole("button", { name: "Delete", exact: true }).click();
+      await expect(page.locator('[aria-label="Delete Duptest transaction"]')).toHaveCount(remaining);
+    }
+  });
+
   // ── Category filter ───────────────────────────────────────────────────────
 
   test("category filter applied", async ({ page }) => {
