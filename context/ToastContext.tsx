@@ -13,16 +13,24 @@ import { cn } from "@/lib/utils";
 
 type ToastType = "success" | "error" | "info";
 
+interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface Toast {
   id: number;
   message: string;
   type: ToastType;
+  action?: ToastAction;
   leaving?: boolean;
 }
 
 interface ToastContextValue {
-  /** Show a transient toast. Defaults to type "info"; auto-dismisses after 5s. */
-  showToast: (message: string, type?: ToastType) => void;
+  /** Show a transient toast. Defaults to type "info"; auto-dismisses after 5s.
+      An optional action renders as an inline button (e.g. Undo) and dismisses
+      the toast when clicked. */
+  showToast: (message: string, type?: ToastType, action?: ToastAction) => void;
 }
 
 const ToastContext = createContext<ToastContextValue>({ showToast: () => {} });
@@ -66,9 +74,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const showToast = useCallback(
-    (message: string, type: ToastType = "info") => {
+    (message: string, type: ToastType = "info", action?: ToastAction) => {
       const id = nextIdRef.current++;
-      setToasts((prev) => [...prev.slice(-(MAX_VISIBLE - 1)), { id, message, type }]);
+      setToasts((prev) => [...prev.slice(-(MAX_VISIBLE - 1)), { id, message, type, action }]);
       timersRef.current.set(id, setTimeout(() => dismiss(id), AUTO_DISMISS_MS));
     },
     [dismiss]
@@ -87,7 +95,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         aria-live="polite"
         className="fixed inset-x-0 bottom-[calc(80px+var(--safe-bottom))] md:bottom-6 z-[60] flex flex-col items-center gap-2 px-4 pointer-events-none"
       >
-        {toasts.map(({ id, message, type, leaving }) => {
+        {toasts.map(({ id, message, type, action, leaving }) => {
           const { Icon, iconCls, borderCls } = TYPE_STYLES[type];
           return (
             <div
@@ -102,6 +110,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             >
               <Icon className={cn("w-4 h-4 shrink-0", iconCls)} aria-hidden="true" />
               <span className="text-sm text-slate-200 flex-1 min-w-0">{message}</span>
+              {action && (
+                <button
+                  onClick={() => {
+                    action.onClick();
+                    dismiss(id);
+                  }}
+                  className="text-sm font-semibold text-indigo-400 hover:text-indigo-300 transition-colors shrink-0 px-1.5 py-1.5 -my-1 rounded-lg [@media(hover:none)]:min-h-11 flex items-center"
+                >
+                  {action.label}
+                </button>
+              )}
               <button
                 onClick={() => dismiss(id)}
                 className="p-1.5 -m-1 rounded-lg text-slate-500 hover:text-slate-300 transition-colors shrink-0 [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11 flex items-center justify-center"

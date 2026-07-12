@@ -9,17 +9,21 @@ interface Preferences {
   privacyFeatureEnabled: boolean;
   /** Whether amounts are currently blurred (only effective while the feature is enabled). */
   privateMode: boolean;
+  /** Whether deleting a transaction offers a 5s Undo toast. */
+  undoDeleteEnabled: boolean;
 }
 
 const DEFAULTS: Preferences = {
   privacyFeatureEnabled: true,
   privateMode: false,
+  undoDeleteEnabled: true,
 };
 
 interface PreferencesContextValue {
   privacyFeatureEnabled: boolean;
   /** Effective blur state — always false while the privacy feature is disabled. */
   isPrivate: boolean;
+  undoDeleteEnabled: boolean;
   togglePrivate: () => void;
   setPreference: (patch: Partial<Preferences>) => void;
 }
@@ -27,6 +31,7 @@ interface PreferencesContextValue {
 const PreferencesContext = createContext<PreferencesContextValue>({
   privacyFeatureEnabled: DEFAULTS.privacyFeatureEnabled,
   isPrivate: false,
+  undoDeleteEnabled: DEFAULTS.undoDeleteEnabled,
   togglePrivate: () => {},
   setPreference: () => {},
 });
@@ -83,7 +88,13 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 
   return (
     <PreferencesContext.Provider
-      value={{ privacyFeatureEnabled: prefs.privacyFeatureEnabled, isPrivate, togglePrivate, setPreference }}
+      value={{
+        privacyFeatureEnabled: prefs.privacyFeatureEnabled,
+        isPrivate,
+        undoDeleteEnabled: prefs.undoDeleteEnabled,
+        togglePrivate,
+        setPreference,
+      }}
     >
       {children}
     </PreferencesContext.Provider>

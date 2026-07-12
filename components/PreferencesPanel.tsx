@@ -34,7 +34,7 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
 }
 
 export function PreferencesPanel() {
-  const { privacyFeatureEnabled, setPreference } = usePreferences();
+  const { privacyFeatureEnabled, undoDeleteEnabled, setPreference } = usePreferences();
 
   return (
     <div data-testid="preferences-panel" className="card">
@@ -47,6 +47,12 @@ export function PreferencesPanel() {
           description="Show an eye button in the navigation to blur amounts."
           checked={privacyFeatureEnabled}
           onChange={(checked) => setPreference({ privacyFeatureEnabled: checked })}
+        />
+        <ToggleRow
+          label="Undo delete"
+          description="Show an Undo option for 5 seconds after deleting a transaction."
+          checked={undoDeleteEnabled}
+          onChange={(checked) => setPreference({ undoDeleteEnabled: checked })}
         />
       </div>
     </div>

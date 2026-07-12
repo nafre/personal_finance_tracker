@@ -1,12 +1,13 @@
 "use client";
 
 import { memo, useState, useEffect, useRef, useCallback } from "react";
-import { updateTransaction, deleteTransaction, getCategories } from "@/lib/actions";
+import { updateTransaction, deleteTransaction, addTransaction, getCategories } from "@/lib/actions";
 import { applyLocalMutation } from "@/lib/sync";
-import { patchTransaction, deleteTransactionFromIDB } from "@/lib/idb";
+import { patchTransaction, deleteTransactionFromIDB, putTransaction } from "@/lib/idb";
 import { CategoryCombobox } from "@/components/CategoryCombobox";
 import { useSyncContext } from "@/context/SyncProvider";
 import { useToast } from "@/context/ToastContext";
+import { usePreferences } from "@/context/PreferencesContext";
 import { formatCurrency, formatDate, cn, stringToColor } from "@/lib/utils";
 import { evaluateAmountInput, normalizeAmountOnBlur } from "@/lib/math-eval";
 import { ChevronDown, Pencil, Trash2, X } from "lucide-react";
@@ -195,6 +196,7 @@ const TransactionRow = memo(function TransactionRow({
   onDelete,
   onUpdate,
   onRestore,
+  onUndone,
   compact,
   categories,
   budgets,
@@ -205,6 +207,8 @@ const TransactionRow = memo(function TransactionRow({
   onDelete: (id: string) => void;
   onUpdate: (id: string, data: Partial<Transaction>) => void;
   onRestore: (tx: Transaction) => void;
+  /** Re-insert the re-created transaction after a successful Undo (new server id). */
+  onUndone: (tx: Transaction) => void;
   compact?: boolean;
   categories: CategoryMeta[];
   budgets: BudgetOption[];
@@ -235,6 +239,8 @@ const TransactionRow = memo(function TransactionRow({
   const [leaving, setLeaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const { isOnline, userId, refreshPendingCount } = useSyncContext();
+  const { showToast } = useToast();
+  const { undoDeleteEnabled } = usePreferences();
 
   function handleSave() {
     const amount = evaluateAmountInput(editAmount);
@@ -309,6 +315,71 @@ const TransactionRow = memo(function TransactionRow({
       });
   }
 
+  // Undo a committed delete by re-creating the stashed record (delete-then-
+  // restore: the server delete has already happened, so the restored row gets
+  // a new id — every user-visible field round-trips). Runs from the toast's
+  // action, possibly after this row has unmounted; `tx` is held by closure.
+  async function undoDelete() {
+    try {
+      if (!isOnline) {
+        const { committed } = await applyLocalMutation("add", {
+          userId,
+          category: tx.category,
+          amount: tx.amount,
+          type: tx.type as "income" | "expense",
+          note: tx.note ?? undefined,
+          labels: tx.labels ?? [],
+          excludedBudgetIds: tx.excludedBudgetIds ?? [],
+          excludeFromStats: tx.excludeFromStats ?? false,
+          date: new Date(tx.date).toISOString(),
+        });
+        await refreshPendingCount();
+        if (committed) onUndone({ ...committed, isPending: true });
+      } else {
+        const restored = await addTransaction({
+          category: tx.category,
+          amount: tx.amount,
+          type: tx.type as "income" | "expense",
+          note: tx.note ?? undefined,
+          date: new Date(tx.date),
+          labels: tx.labels ?? [],
+          excludedBudgetIds: tx.excludedBudgetIds ?? [],
+          excludeFromStats: tx.excludeFromStats ?? false,
+        });
+        // Write through to the IDB mirror, same as the quick-add online path.
+        void putTransaction({
+          id: restored.id,
+          userId,
+          category: restored.category,
+          amount: restored.amount,
+          type: restored.type as "income" | "expense",
+          note: restored.note ?? undefined,
+          labels: restored.labels ?? [],
+          excludedBudgetIds: restored.excludedBudgetIds ?? [],
+          excludeFromStats: restored.excludeFromStats ?? false,
+          date: new Date(restored.date).toISOString(),
+          syncStatus: "synced",
+          createdAt: new Date(restored.createdAt).toISOString(),
+        }).catch(() => {});
+        onUndone({
+          id: restored.id,
+          category: restored.category,
+          amount: restored.amount,
+          type: restored.type,
+          note: restored.note,
+          labels: restored.labels ?? [],
+          excludedBudgetIds: restored.excludedBudgetIds ?? [],
+          excludeFromStats: restored.excludeFromStats ?? false,
+          date: restored.date,
+          isPending: false,
+        });
+      }
+      showToast("Transaction restored", "success");
+    } catch {
+      showToast("Couldn't restore the transaction.", "error");
+    }
+  }
+
   function handleDelete() {
     setConfirmingDelete(false);
     setRowError("");
@@ -317,6 +388,11 @@ const TransactionRow = memo(function TransactionRow({
     // keyframe holds opacity 0 via `forwards` until the row unmounts).
     setLeaving(true);
 
+    const offerUndo = () => {
+      if (!undoDeleteEnabled) return;
+      showToast("Transaction deleted", "info", { label: "Undo", onClick: () => void undoDelete() });
+    };
+
     setTimeout(() => {
       if (!isOnline) {
         (async () => {
@@ -324,6 +400,7 @@ const TransactionRow = memo(function TransactionRow({
             await applyLocalMutation("delete", { id: tx.id, userId });
             await refreshPendingCount();
             onDelete(tx.id);
+            offerUndo();
           } catch {
             setIsDeleting(false);
             setLeaving(false);
@@ -341,6 +418,7 @@ const TransactionRow = memo(function TransactionRow({
           // Remove the IDB mirror copy too, or the dashboard's pending-load
           // merge resurrects the row as a ghost until the next reconcile.
           void deleteTransactionFromIDB(tx.id).catch(() => {});
+          offerUndo();
         })
         .catch(() => {
           onRestore(tx);
@@ -626,16 +704,22 @@ export function TransactionList({
     onUpdate?.(id, data);
   }, [onUpdate]);
 
-  // Re-insert a row whose server delete failed (it still exists remotely)
-  const handleRestore = useCallback((tx: Transaction) => {
+  // Re-insert a row sorted by date and let the parent patch its totals — used
+  // by both the delete-failure restore and the post-delete Undo (new id).
+  const reinsertRow = useCallback((tx: Transaction) => {
     setTxs((prev) =>
       prev.some((t) => t.id === tx.id)
         ? prev
         : [...prev, tx].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     );
     onRestore?.(tx);
+  }, [onRestore]);
+
+  // Re-insert a row whose server delete failed (it still exists remotely)
+  const handleRestore = useCallback((tx: Transaction) => {
+    reinsertRow(tx);
     showToast("Delete failed — transaction restored.", "error");
-  }, [onRestore, showToast]);
+  }, [reinsertRow, showToast]);
 
   if (!txs.length) {
     return (
@@ -654,6 +738,7 @@ export function TransactionList({
           onDelete={handleDelete}
           onUpdate={handleUpdate}
           onRestore={handleRestore}
+          onUndone={reinsertRow}
           compact={compact}
           categories={categories}
           budgets={budgets}

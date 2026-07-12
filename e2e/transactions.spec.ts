@@ -94,6 +94,33 @@ test.describe("Transactions page", () => {
     await expect(strip).not.toContainText("0 transactions", { timeout: 5000 });
   });
 
+  // ── Undo delete (feature 27) ──────────────────────────────────────────────
+  // Functional, non-snapshot. Deletes an existing row, restores it from the
+  // toast's Undo action — the restore re-creates the same fields (new id), so
+  // the data other tests see is unchanged.
+
+  test("undo delete restores the transaction", async ({ page }) => {
+    const list = page.locator('[data-testid="transaction-list"]');
+    const deleteButtons = list.locator('[aria-label^="Delete "]');
+    const rowCount = await deleteButtons.count();
+    if (rowCount === 0) return; // no data — skip
+
+    // Delete the first row via the two-step inline confirm. Plain clicks (no
+    // force): on mobile the row can sit behind the fixed bottom nav, and a
+    // force-click at those coordinates hits the nav instead.
+    const firstDelete = deleteButtons.first();
+    const targetLabel = await firstDelete.getAttribute("aria-label");
+    await firstDelete.scrollIntoViewIfNeeded();
+    await firstDelete.click();
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(deleteButtons).toHaveCount(rowCount - 1);
+
+    // Undo from the toast — the row is re-created (new id, same fields)
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect(deleteButtons).toHaveCount(rowCount, { timeout: 5000 });
+    await expect(page.locator(`[aria-label="${targetLabel}"]`).first()).toBeVisible();
+  });
+
   // ── Category filter ───────────────────────────────────────────────────────
 
   test("category filter applied", async ({ page }) => {
