@@ -112,7 +112,7 @@ export function TrendChart({ data, labelEvery, emptyMessage, showCumulative }: T
           tick={isPrivate ? false : { fill: "#64748b", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => (v === 0 ? "0" : `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`)}
+          tickFormatter={(v) => (v === 0 ? "0" : `${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`)}
         />
         {showCumulative && (
           <YAxis

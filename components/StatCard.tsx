@@ -99,7 +99,7 @@ export function StatCard({
 
       <p
         title={`${variant === "balance" && amount < 0 ? "-" : ""}${formatCurrency(Math.abs(amount))}`}
-        className={cn("text-lg sm:text-3xl font-bold tabular-nums truncate relative", colorMap[effectiveKey])}
+        className={cn("text-lg sm:text-2xl 2xl:text-3xl font-bold tabular-nums truncate relative", colorMap[effectiveKey])}
       >
         {variant === "balance" && amount < 0 ? "-" : ""}
         {formatCurrency(Math.abs(displayAmount))}

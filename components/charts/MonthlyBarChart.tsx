@@ -121,7 +121,7 @@ export function MonthlyBarChart({ data, wealthData, emptyMessage }: MonthlyBarCh
             tick={isPrivate ? false : { fill: "#64748b", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
-            tickFormatter={(v) => (v === 0 ? "0" : `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`)}
+            tickFormatter={(v) => (v === 0 ? "0" : `${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`)}
           />
           {!isPrivate && (
             <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
