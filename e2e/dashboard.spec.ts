@@ -138,6 +138,36 @@ test.describe("Dashboard", () => {
     });
   });
 
+  // Functional (non-snapshot): the chip row leads with the most-used categories,
+  // closed off by a divider, then falls through to the rest of the category list.
+  test("category chips lead with the most-used group", async ({ page }) => {
+    const input = page.locator('[data-testid="expense-input"]');
+    if (!(await input.isVisible())) return; // hidden on mobile — skip
+
+    const row = input.locator('[data-testid="category-chip-row"]');
+    const dividerIndex = await row.evaluate((el) =>
+      [...el.children].findIndex((c) => c.tagName === "SPAN")
+    );
+    expect(dividerIndex).toBeGreaterThan(0);
+
+    // Everything after the divider is the untouched category list — alphabetical
+    // server order — so the ranked group has to be the part before it.
+    const tail = await row.evaluate((el, i) =>
+      [...el.children]
+        .slice(i + 1)
+        // Chips render as "<emoji><name>" — keep the name for the sort check.
+        .map((c) => (c.textContent ?? "").replace(/[^\p{L} ]/gu, "").trim()),
+      dividerIndex
+    );
+    expect([...tail].sort()).toEqual(tail);
+
+    // Clicking a chip pre-fills the input with that category.
+    const first = row.locator("button").first();
+    const label = ((await first.textContent()) ?? "").replace(/[^\p{L} ]/gu, "").trim();
+    await first.click();
+    await expect(input.locator('input[type="text"]')).toHaveValue(`${label} `);
+  });
+
   // ── Transaction list ──────────────────────────────────────────────────────
 
   test("transaction list — row alignment and text truncation", async ({

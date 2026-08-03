@@ -8,7 +8,7 @@ import { useSyncContext } from "@/context/SyncProvider";
 import { TransactionList } from "@/components/TransactionList";
 import { MonthSelector } from "@/components/MonthSelector";
 import { ExpenseInput } from "@/components/ExpenseInput";
-import { cn, formatCurrency, getCurrentMonthYear, stringToColor } from "@/lib/utils";
+import { cn, formatCurrency, getCurrentMonthYear, rankCategoriesByUsage, stringToColor } from "@/lib/utils";
 import { groupPossibleDuplicates } from "@/lib/duplicates";
 
 interface Transaction {
@@ -312,6 +312,13 @@ export default function TransactionsPage() {
     [categories]
   );
 
+  // Ranked from the loaded rows, so the chip row reflects whatever slice the
+  // active filters have in view rather than a fixed server order.
+  const frequentCategories = useMemo(
+    () => rankCategoriesByUsage(transactions),
+    [transactions]
+  );
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -326,6 +333,7 @@ export default function TransactionsPage() {
         onReplace={handleReplace}
         onRemove={handleDelete}
         categories={categoryOptions}
+        frequentCategories={frequentCategories}
         recentTransactions={transactions.slice(0, 20)}
       />
 

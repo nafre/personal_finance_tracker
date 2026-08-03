@@ -16,6 +16,7 @@ import {
   stringToColor,
   formatDate,
   formatDateShort,
+  rankCategoriesByUsage,
 } from "./utils";
 
 describe("formatCurrency", () => {
@@ -261,5 +262,56 @@ describe("getCurrentMonthYear", () => {
     vi.setSystemTime(new Date(2026, 2, 10));
     expect(getCurrentMonthYear()).toEqual({ month: 3, year: 2026 });
     vi.useRealTimers();
+  });
+});
+
+describe("rankCategoriesByUsage", () => {
+  const tx = (category: string, date: string, type = "expense") => ({
+    category,
+    type,
+    date,
+  });
+
+  it("orders by how often each category is used, not by recency", () => {
+    expect(
+      rankCategoriesByUsage([
+        tx("Transport", "2026-08-03"),
+        tx("Food", "2026-08-02"),
+        tx("Food", "2026-08-01"),
+        tx("Food", "2026-07-30"),
+        tx("Bills", "2026-07-29"),
+        tx("Bills", "2026-07-28"),
+      ])
+    ).toEqual(["Food", "Bills", "Transport"]);
+  });
+
+  it("breaks count ties on the most recent use", () => {
+    expect(
+      rankCategoriesByUsage([
+        tx("Bills", "2026-07-01"),
+        tx("Food", "2026-08-02"),
+      ])
+    ).toEqual(["Food", "Bills"]);
+  });
+
+  it("ignores income and keeps the first-seen spelling of a category", () => {
+    expect(
+      rankCategoriesByUsage([
+        tx("Salary", "2026-08-03", "income"),
+        tx("Food", "2026-08-02"),
+        tx("food", "2026-08-01"),
+      ])
+    ).toEqual(["Food"]);
+  });
+
+  it("caps the result at the limit", () => {
+    const txs = ["a", "b", "c", "d", "e", "f"].map((c) => tx(c, "2026-08-01"));
+    expect(rankCategoriesByUsage(txs)).toHaveLength(5);
+    expect(rankCategoriesByUsage(txs, 2)).toHaveLength(2);
+  });
+
+  it("returns an empty list when there are no expenses", () => {
+    expect(rankCategoriesByUsage([])).toEqual([]);
+    expect(rankCategoriesByUsage([tx("Salary", "2026-08-03", "income")])).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { Fragment, useState, useRef, useMemo } from "react";
 import { parseExpenseInput } from "@/lib/parser";
 import type { CategoryOption } from "@/types";
 import { addTransaction } from "@/lib/actions";
@@ -26,14 +26,15 @@ interface ExpenseInputProps {
   onAdd?: (tx: AddedTx) => void;
   onReplace?: (tempId: string, realTx: AddedTx) => void;
   onRemove?: (tempId: string) => void;
-  recentCategories?: string[];
+  /** Most-used expense categories, ranked — rendered first in the chip row. */
+  frequentCategories?: string[];
   /** Recently-loaded transactions (any age) — powers the passive same-day duplicate hint. */
   recentTransactions?: { amount: number; category: string; date: Date | string }[];
   categories?: CategoryOption[];
   autoFocus?: boolean;
 }
 
-export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, recentTransactions, categories, autoFocus }: ExpenseInputProps) {
+export function ExpenseInput({ onAdd, onReplace, onRemove, frequentCategories, recentTransactions, categories, autoFocus }: ExpenseInputProps) {
   const [value, setValue] = useState("");
   const [preview, setPreview] = useState<ReturnType<typeof parseExpenseInput>>(null);
   const [error, setError] = useState("");
@@ -58,30 +59,32 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, rec
     );
   }, [preview, recentTransactions]);
 
-  // Unified chip row: recently-used categories first (resolved to their
-  // icon/color when a matching category exists — free-text ones stay plain),
-  // then the remaining categories in server order. Deduped case-insensitively
+  // Unified chip row: most-used categories first (resolved to their icon/color
+  // when a matching category exists — free-text ones stay plain), then the
+  // remaining categories in server order. `frequentCount` marks the boundary so
+  // the row can show where the ranked group ends. Deduped case-insensitively
   // because the parser capitalizes ("food" → "Food") while custom category
   // names keep whatever casing they were created with.
-  const categoryChips = useMemo<CategoryOption[]>(() => {
+  const { chips: categoryChips, frequentCount } = useMemo(() => {
     const all = categories ?? [];
     const byLowerName = new Map(all.map((c) => [c.name.toLowerCase(), c]));
     const seen = new Set<string>();
     const chips: CategoryOption[] = [];
-    for (const name of recentCategories ?? []) {
+    for (const name of frequentCategories ?? []) {
       const key = name.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
       chips.push(byLowerName.get(key) ?? { name });
     }
+    const frequentCount = chips.length;
     for (const c of all) {
       const key = c.name.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
       chips.push(c);
     }
-    return chips;
-  }, [recentCategories, categories]);
+    return { chips, frequentCount };
+  }, [frequentCategories, categories]);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const v = e.target.value;
@@ -341,30 +344,40 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, recentCategories, rec
         <p role="alert" className="text-rose-400 text-xs mt-2">{error}</p>
       )}
 
-      {/* Category picker chips — recently used first, then all categories */}
+      {/* Category picker chips — most used first, then all categories */}
       {categoryChips.length > 0 && (
         <div data-testid="category-chip-row" className="flex gap-2 mt-2 overflow-x-auto pb-1 scrollbar-none sm:flex-wrap sm:overflow-x-visible">
-          {categoryChips.map((cat) => (
-            <button
-              key={cat.name}
-              type="button"
-              onClick={() => {
-                const next = cat.name + " ";
-                setValue(next);
-                setPreview(parseExpenseInput(next));
-                inputRef.current?.focus();
-              }}
-              className="shrink-0 inline-flex items-center gap-1.5 text-xs py-2 px-3 min-h-[36px] [@media(hover:none)]:min-h-11 bg-slate-800 border border-slate-700
-                         hover:border-indigo-500 text-slate-300 rounded-full transition-[color,background-color,border-color,transform] active:scale-95"
-              style={
-                cat.color
-                  ? { borderColor: `${cat.color}55`, backgroundColor: `${cat.color}14` }
-                  : undefined
-              }
-            >
-              {cat.icon && <span aria-hidden="true">{cat.icon}</span>}
-              {cat.name}
-            </button>
+          {categoryChips.map((cat, i) => (
+            <Fragment key={cat.name}>
+              {/* Divider closing the most-used group, so the ranked chips read
+                  as a set rather than blending into the full category list. */}
+              {i === frequentCount && frequentCount > 0 && (
+                <span
+                  aria-hidden="true"
+                  className="shrink-0 self-stretch w-px my-1 bg-slate-700"
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const next = cat.name + " ";
+                  setValue(next);
+                  setPreview(parseExpenseInput(next));
+                  inputRef.current?.focus();
+                }}
+                title={i < frequentCount ? `${cat.name} — one of your most used` : undefined}
+                className="shrink-0 inline-flex items-center gap-1.5 text-xs py-2 px-3 min-h-[36px] [@media(hover:none)]:min-h-11 bg-slate-800 border border-slate-700
+                           hover:border-indigo-500 text-slate-300 rounded-full transition-[color,background-color,border-color,transform] active:scale-95"
+                style={
+                  cat.color
+                    ? { borderColor: `${cat.color}55`, backgroundColor: `${cat.color}14` }
+                    : undefined
+                }
+              >
+                {cat.icon && <span aria-hidden="true">{cat.icon}</span>}
+                {cat.name}
+              </button>
+            </Fragment>
           ))}
         </div>
       )}

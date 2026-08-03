@@ -196,6 +196,42 @@ export function enumerateMonths(
   return result;
 }
 
+// Rank expense categories by how often they are used, most-used first, so the
+// quick-add chip row leads with the categories actually worth one tap. Ties
+// break on the most recent use (a habit that just started beats a stale one),
+// then on name for determinism. Counting beats summing amounts here: the
+// question is "which category do I pick most", not "where does my money go".
+// Keyed case-insensitively because the parser capitalizes ("food" → "Food")
+// while custom category names keep their original casing; the first-seen
+// spelling wins as the display name.
+export function rankCategoriesByUsage(
+  transactions: { category: string; type: string; date: Date | string }[],
+  limit = 5
+): string[] {
+  const stats = new Map<string, { name: string; count: number; lastUsed: number }>();
+  for (const tx of transactions) {
+    if (tx.type !== "expense" || !tx.category) continue;
+    const key = tx.category.toLowerCase();
+    const usedAt = new Date(tx.date).getTime();
+    const entry = stats.get(key);
+    if (entry) {
+      entry.count++;
+      if (usedAt > entry.lastUsed) entry.lastUsed = usedAt;
+    } else {
+      stats.set(key, { name: tx.category, count: 1, lastUsed: usedAt || 0 });
+    }
+  }
+  return [...stats.values()]
+    .sort(
+      (a, b) =>
+        b.count - a.count ||
+        b.lastUsed - a.lastUsed ||
+        a.name.localeCompare(b.name)
+    )
+    .slice(0, limit)
+    .map((c) => c.name);
+}
+
 // Generate a colour deterministically from a string (for dynamic categories)
 export function stringToColor(str: string): string {
   const palette = [

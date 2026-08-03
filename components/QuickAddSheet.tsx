@@ -9,7 +9,7 @@ import type { CategoryOption } from "@/types";
 interface QuickAddSheetProps {
   open: boolean;
   onClose: () => void;
-  recentCategories: string[];
+  frequentCategories: string[];
   recentTransactions?: { amount: number; category: string; date: Date | string }[];
   categories?: CategoryOption[];
   onAdd: (tx: AddedTx) => void;
@@ -17,7 +17,7 @@ interface QuickAddSheetProps {
   onRemove?: (tempId: string) => void;
 }
 
-export function QuickAddSheet({ open, onClose, recentCategories, recentTransactions, categories, onAdd, onReplace, onRemove }: QuickAddSheetProps) {
+export function QuickAddSheet({ open, onClose, frequentCategories, recentTransactions, categories, onAdd, onReplace, onRemove }: QuickAddSheetProps) {
   // Keep mounted through the exit so the slide-down can play; `visible` flips a
   // frame after mount so the enter transition runs too. The dialog keys off
   // `mounted`, not `visible` — closing it early would display:none the sheet
@@ -51,7 +51,7 @@ export function QuickAddSheet({ open, onClose, recentCategories, recentTransacti
         <div className="px-4 pb-4">
           <ExpenseInput
             autoFocus
-            recentCategories={recentCategories}
+            frequentCategories={frequentCategories}
             recentTransactions={recentTransactions}
             categories={categories}
             onAdd={handleAddAndClose}

@@ -5,6 +5,7 @@ import {
   getRecurringTransactions,
   getBudgets,
   getCategories,
+  getFrequentCategories,
 } from "@/lib/actions";
 import { getCurrentMonthYear, getPrevMonth } from "@/lib/utils";
 import { DashboardContent } from "@/components/DashboardContent";
@@ -79,10 +80,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     deltaLabel = "";
   }
 
-  const [recurring, budgets, categories] = await Promise.all([
+  const [recurring, budgets, categories, frequentCategories] = await Promise.all([
     getRecurringTransactions(),
     getBudgets(),
     getCategories(),
+    getFrequentCategories(),
   ]);
   const categoryOptions = categories.map((c) => ({
     name: c.name,
@@ -103,6 +105,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         initialRecurring={recurring}
         initialBudgets={budgets}
         initialCategories={categoryOptions}
+        initialFrequentCategories={frequentCategories}
         period={period}
         month={month}
         year={year}

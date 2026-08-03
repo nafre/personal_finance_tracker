@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useSyncContext } from "@/context/SyncProvider";
 import { seedIDBFromServer, getTransactionsInRange, deleteTransactionFromIDB } from "@/lib/idb";
-import { getNextDueDate, getRecurringStatus, toMonthlyAmount, type RecurringFrequency } from "@/lib/utils";
+import { getNextDueDate, getRecurringStatus, toMonthlyAmount, rankCategoriesByUsage, type RecurringFrequency } from "@/lib/utils";
 import type { Transaction, CategoryData, DailyData, RecurringTransaction, Budget, Period } from "@/types";
 
 // Per-transaction budget spend so an individual transaction can be excluded
@@ -43,6 +43,7 @@ interface UseDashboardStateProps {
   initialTopCategory: CategoryData | null;
   initialRecurring: RecurringTransaction[];
   initialBudgets: Budget[];
+  initialFrequentCategories: string[];
   period: Period;
   month: number;
   year: number;
@@ -61,6 +62,7 @@ export function useDashboardState({
   initialDailyData,
   initialRecurring,
   initialBudgets,
+  initialFrequentCategories,
   period,
   month,
   year,
@@ -267,17 +269,20 @@ export function useDashboardState({
     };
   }, [isMonthView, mergedTransactions, month, year, chartExpenses]);
 
-  const recentCategories = useMemo(() => {
-    const seen = new Set<string>();
-    const result: string[] = [];
-    for (const tx of mergedTransactions) {
-      if (tx.type === "expense" && !seen.has(tx.category) && result.length < 5) {
-        seen.add(tx.category);
-        result.push(tx.category);
-      }
+  // The server's 90-day ranking leads: it's the stable "most used" signal and,
+  // unlike the selected month, it isn't empty on the 1st. Categories used in the
+  // current view fill any leftover slots, so a brand-new category shows up in
+  // the chip row without waiting for the next revalidate.
+  const frequentCategories = useMemo(() => {
+    const merged = [...initialFrequentCategories];
+    const seen = new Set(merged.map((c) => c.toLowerCase()));
+    for (const name of rankCategoriesByUsage(mergedTransactions)) {
+      if (seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      merged.push(name);
     }
-    return result;
-  }, [mergedTransactions]);
+    return merged.slice(0, 5);
+  }, [initialFrequentCategories, mergedTransactions]);
 
   const expenseDelta =
     prevTotalExpenses > 0
@@ -535,7 +540,7 @@ export function useDashboardState({
     discretionarySpend,
     mergedTransactions,
     recentTransactions,
-    recentCategories,
+    frequentCategories,
     displayIncome,
     displayExpenses,
     displayBalance,

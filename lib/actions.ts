@@ -361,6 +361,31 @@ export async function getEarliestTransactionDate(): Promise<string | null> {
   return row ? new Date(row.date).toISOString() : null;
 }
 
+/**
+ * Expense categories ranked by how often they were used in the last 90 days,
+ * most-used first (ties break on the most recent use). Feeds the quick-add chip
+ * row: ranking the *selected month* alone would leave the row unranked for the
+ * first days of every month — exactly when a one-tap category saves the most
+ * typing. Counting, not summing: the question is which category gets picked
+ * most, not where the money goes.
+ */
+export async function getFrequentCategories(limit = 5): Promise<string[]> {
+  const userId = await getAuthenticatedUserId();
+  const since = new Date();
+  since.setDate(since.getDate() - 90);
+
+  const rows = await db.transaction.groupBy({
+    by: ["category"],
+    where: { userId, type: "expense", date: { gte: since } },
+    _count: { category: true },
+    _max: { date: true },
+    orderBy: [{ _count: { category: "desc" } }, { _max: { date: "desc" } }],
+    take: limit,
+  });
+
+  return rows.map((r) => r.category);
+}
+
 // ─── Transactions page ────────────────────────────────────────────────────────
 
 export async function getTransactions(filters: {

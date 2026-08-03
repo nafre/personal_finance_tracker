@@ -68,6 +68,8 @@ interface DashboardContentProps {
   initialRecurring: RecurringTransaction[];
   initialBudgets: Budget[];
   initialCategories: CategoryOption[];
+  /** Most-used expense categories over the last 90 days — leads the quick-add chip row. */
+  initialFrequentCategories: string[];
   period: Period;
   month: number;
   year: number;
@@ -103,7 +105,7 @@ export function DashboardContent(props: DashboardContentProps) {
     discretionarySpend,
     mergedTransactions,
     recentTransactions,
-    recentCategories,
+    frequentCategories,
     displayIncome,
     displayExpenses,
     displayBalance,
@@ -201,7 +203,7 @@ export function DashboardContent(props: DashboardContentProps) {
                 onAdd={handleAdd}
                 onReplace={handleReplace}
                 onRemove={handleDelete}
-                recentCategories={recentCategories}
+                frequentCategories={frequentCategories}
                 recentTransactions={mergedTransactions.slice(0, 20)}
                 categories={props.initialCategories}
               />
@@ -569,7 +571,7 @@ export function DashboardContent(props: DashboardContentProps) {
       <QuickAddSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
-        recentCategories={recentCategories}
+        frequentCategories={frequentCategories}
         recentTransactions={mergedTransactions.slice(0, 20)}
         categories={props.initialCategories}
         onAdd={handleAdd}
