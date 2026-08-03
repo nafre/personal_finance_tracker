@@ -77,21 +77,36 @@ test.describe("Transactions page", () => {
     // observes a real flip (the strip starts non-zero, so a bare
     // not-to-contain would pass before the search even applies).
     await search.fill("zzz-no-match-zzz");
-    await expect(strip).toContainText("0 transactions", { timeout: 5000 });
+    await expect(strip).toContainText(/\b0 transactions/, { timeout: 5000 });
 
     await search.fill(cat.toUpperCase());
-    await expect(strip).not.toContainText("0 transactions", { timeout: 5000 });
+    await expect(strip).not.toContainText(/\b0 transactions/, { timeout: 5000 });
   });
 
   test("amount range filter narrows results", async ({ page }) => {
+    // Pin a range spanning every seeded row instead of relying on the default
+    // current-month view: seed dates are relative to seed time, so the current
+    // month is empty whenever dev.db was seeded in an earlier month — and an
+    // empty baseline makes "filtered down to 0" vacuous.
+    await page.goto("/transactions?from=2000-01-01&to=2100-01-01");
+    await waitForReady(page);
+
     const strip = page.locator('[data-testid="summary-strip"]');
+    await expect(strip).not.toContainText(/\b0 transactions/, { timeout: 5000 });
 
-    await page.getByRole("button", { name: /More filters/ }).click();
-    await page.locator("#filter-min").fill("999999");
-    await expect(strip).toContainText("0 transactions", { timeout: 5000 });
+    // The row auto-opens because from/to are active — only toggle it if it isn't.
+    const min = page.locator("#filter-min");
+    if (!(await min.isVisible())) {
+      await page.getByRole("button", { name: /More filters/ }).click();
+    }
 
-    await page.getByRole("button", { name: "Clear all" }).click();
-    await expect(strip).not.toContainText("0 transactions", { timeout: 5000 });
+    await min.fill("999999");
+    await expect(strip).toContainText(/\b0 transactions/, { timeout: 5000 });
+
+    // Clearing just the amount bound restores the range — "Clear all" would also
+    // drop from/to and drop us back onto the (possibly empty) current month.
+    await min.fill("");
+    await expect(strip).not.toContainText(/\b0 transactions/, { timeout: 5000 });
   });
 
   // ── Undo delete (feature 27) ──────────────────────────────────────────────
