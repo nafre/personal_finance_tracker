@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { amountMasks, waitForReady } from "./helpers";
+import { amountMasks, expandAppShell, waitForReady } from "./helpers";
 
 test.describe("Dashboard", () => {
   test.beforeEach(async ({ page }) => {
@@ -10,6 +10,7 @@ test.describe("Dashboard", () => {
   // ── Full page ─────────────────────────────────────────────────────────────
 
   test("full page layout", async ({ page }) => {
+    await expandAppShell(page);
     await expect(page).toHaveScreenshot("full-page.png", {
       fullPage: true,
       animations: "disabled",
@@ -35,24 +36,44 @@ test.describe("Dashboard", () => {
     });
   });
 
-  // Guards the Firefox-for-Android dynamic-toolbar fix: the bottom nav must
-  // stay a plain fixed element. Any transform / will-change: transform (or a
-  // JS-set inline transform) promotes it out of the compositor's fixed-layer
-  // adjustment, and it detaches from the screen bottom when the URL bar hides.
-  test("bottom nav — not layer-promoted (dynamic toolbar tracking)", async ({
-    page,
-  }) => {
+  // Guards the Android dynamic-toolbar fix. The bottom nav must stay in normal
+  // flow inside a non-scrolling app shell — a `position: fixed` bar is stranded
+  // above the visible bottom the moment Firefox's URL bar retracts, and no
+  // amount of JS compensation tracks that animation smoothly. Two invariants:
+  // the nav is not fixed, and the document itself does not scroll.
+  test("bottom nav — in flow, document does not scroll", async ({ page }) => {
     const bottomNav = page.locator('[data-testid="bottom-nav"]');
     if (!(await bottomNav.isVisible())) return; // desktop uses the sidebar — skip
 
-    const style = await bottomNav.evaluate((el) => {
-      const cs = getComputedStyle(el);
-      return { position: cs.position, transform: cs.transform, willChange: cs.willChange };
+    const layout = await bottomNav.evaluate((el) => {
+      const doc = document.scrollingElement!;
+      return {
+        position: getComputedStyle(el).position,
+        navBottom: el.getBoundingClientRect().bottom,
+        viewportHeight: document.documentElement.clientHeight,
+        docScrollable: doc.scrollHeight - doc.clientHeight,
+      };
     });
 
-    expect(style.position).toBe("fixed");
-    expect(style.transform).toBe("none");
-    expect(style.willChange).toBe("auto");
+    expect(layout.position).toBe("static");
+    // Flush with the bottom edge (sub-pixel rounding only).
+    expect(Math.abs(layout.navBottom - layout.viewportHeight)).toBeLessThan(1);
+    // Root scroller has nothing to scroll → the URL bar never retracts.
+    expect(layout.docScrollable).toBeLessThanOrEqual(1);
+  });
+
+  // The page must still be scrollable — inside <main>, not the document.
+  test("main is the scroll region", async ({ page }) => {
+    const scrollable = await page.evaluate(() => {
+      const main = document.querySelector("[data-scroll-region]") as HTMLElement;
+      return {
+        overflowY: getComputedStyle(main).overflowY,
+        canScroll: main.scrollHeight > main.clientHeight,
+      };
+    });
+
+    expect(scrollable.overflowY).toBe("auto");
+    expect(scrollable.canScroll).toBe(true);
   });
 
   // ── Sidebar collapse (desktop only) ──────────────────────────────────────
@@ -260,6 +281,7 @@ test.describe("Dashboard", () => {
     await sidebar.locator('[aria-label="Hide amounts"]').click({ force: true });
     await expect(page.locator("html")).toHaveAttribute("data-private", "");
 
+    await expandAppShell(page);
     await expect(page).toHaveScreenshot("dashboard-private.png", {
       fullPage: true,
       animations: "disabled",
@@ -296,6 +318,7 @@ test.describe("Dashboard — past month (read-only)", () => {
 
   test("full page layout — view-only badge, no edit affordances", async ({ page }) => {
     await expect(page.locator('[data-testid="view-only-badge"]')).toBeVisible();
+    await expandAppShell(page);
     await expect(page).toHaveScreenshot("past-month-full-page.png", {
       fullPage: true,
       animations: "disabled",
@@ -334,6 +357,7 @@ test.describe("Dashboard — year view", () => {
   });
 
   test("full page layout", async ({ page }) => {
+    await expandAppShell(page);
     await expect(page).toHaveScreenshot("year-full-page.png", {
       fullPage: true,
       animations: "disabled",
@@ -370,6 +394,7 @@ test.describe("Dashboard — all-time view", () => {
   });
 
   test("full page layout", async ({ page }) => {
+    await expandAppShell(page);
     await expect(page).toHaveScreenshot("all-time-full-page.png", {
       fullPage: true,
       animations: "disabled",

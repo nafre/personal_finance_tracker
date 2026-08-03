@@ -27,3 +27,23 @@ export async function waitForReady(page: Page): Promise<void> {
   // Suppress the Next.js dev-mode route-compilation indicator ("N" badge)
   await page.addStyleTag({ content: "nextjs-portal { display: none !important; }" });
 }
+
+/**
+ * Flatten the dashboard's app shell back into an ordinary document scroller.
+ *
+ * `app/(dashboard)/layout.tsx` renders a `h-dvh overflow-hidden` shell whose
+ * only scrollable region is <main>, so the root never scrolls (that's what
+ * keeps the in-flow bottom nav pinned to the visible bottom on Android). The
+ * side effect is that `document.scrollingElement` has nothing to scroll, so
+ * Playwright's `fullPage: true` would capture just the first viewport.
+ *
+ * Call this before any full-page screenshot so the whole page is in view.
+ */
+export async function expandAppShell(page: Page): Promise<void> {
+  await page.addStyleTag({
+    content: `
+      [data-app-shell] { height: auto !important; min-height: 100dvh; overflow: visible !important; }
+      [data-scroll-region] { overflow: visible !important; }
+    `,
+  });
+}

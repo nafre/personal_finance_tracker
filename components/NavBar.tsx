@@ -160,64 +160,85 @@ export function NavBar() {
         </div>
       </aside>
 
-      {/* Mobile bottom nav.
-          Must stay a plain `position: fixed` element — no `transform`,
-          `will-change: transform`, `filter`, or JS-driven offset. Browsers with
-          a dynamic URL bar (Firefox for Android in particular) re-anchor
-          fixed-position layers to the visible viewport bottom on the compositor
-          thread as the toolbar retracts, which is the only way to track that
-          animation frame-for-frame. Promoting this element into its own
-          transform layer opts it out of that adjustment (it detaches and
-          floats a toolbar-height above the bottom), and compensating from JS
-          via `visualViewport` events runs on the main thread — always a few
-          frames behind the compositor, so the nav visibly drags on scroll. */}
-      <nav
-        data-testid="bottom-nav"
-        className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 flex pb-(--safe-bottom)"
-      >
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => dispatchNavStart(item.href, pathname)}
-              className={cn(
-                "flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors",
-                mounted && pathname === item.href ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
-              )}
-            >
-              <Icon className="w-5 h-5" aria-hidden="true" />
-              {item.label}
-            </Link>
-          );
-        })}
-        {privacyFeatureEnabled && (
-          <button
-            onClick={togglePrivate}
-            aria-label={privacyLabel}
-            aria-pressed={isPrivate}
+    </>
+  );
+}
+
+/**
+ * Mobile bottom nav — deliberately **not** `position: fixed`.
+ *
+ * It is the last in-flow child of the app shell in `app/(dashboard)/layout.tsx`,
+ * which is exactly one viewport tall and never scrolls. That matters on
+ * Android: Firefox anchors fixed-position elements to the *layout* viewport,
+ * which stays at the URL-bar-visible height, so a `fixed bottom-0` bar is
+ * stranded a toolbar-height above the real bottom the moment the URL bar
+ * retracts. Compensating from JS (`visualViewport` events) can't work either —
+ * those fire on the main thread, always a few frames behind the compositor-
+ * driven toolbar animation, so the bar visibly drags while scrolling.
+ *
+ * Keeping the bar in normal flow inside a non-scrolling shell sidesteps all of
+ * it: the root scroller never moves, so the URL bar never retracts, and the
+ * bar's position is decided by layout rather than by browser chrome behaviour.
+ * Do not reintroduce `position: fixed` here.
+ */
+export function BottomNav() {
+  const pathname = usePathname();
+  const { privacyFeatureEnabled, isPrivate, togglePrivate } = usePreferences();
+  const [mounted, setMounted] = useState(false);
+
+  const privacyLabel = isPrivate ? "Show amounts" : "Hide amounts";
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  return (
+    <nav
+      data-testid="bottom-nav"
+      className="md:hidden shrink-0 bg-slate-900 border-t border-slate-800 flex pb-(--safe-bottom)"
+    >
+      {NAV_ITEMS.map((item) => {
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={() => dispatchNavStart(item.href, pathname)}
             className={cn(
               "flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors",
-              isPrivate ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
+              mounted && pathname === item.href ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
             )}
           >
-            {isPrivate ? (
-              <EyeOff className="w-5 h-5" aria-hidden="true" />
-            ) : (
-              <Eye className="w-5 h-5" aria-hidden="true" />
-            )}
-            Privacy
-          </button>
-        )}
+            <Icon className="w-5 h-5" aria-hidden="true" />
+            {item.label}
+          </Link>
+        );
+      })}
+      {privacyFeatureEnabled && (
         <button
-          onClick={handleSignOut}
-          className="flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium text-slate-500 hover:text-rose-400 transition-colors"
+          onClick={togglePrivate}
+          aria-label={privacyLabel}
+          aria-pressed={isPrivate}
+          className={cn(
+            "flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors",
+            isPrivate ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
+          )}
         >
-          <LogOut className="w-5 h-5" aria-hidden="true" />
-          Sign out
+          {isPrivate ? (
+            <EyeOff className="w-5 h-5" aria-hidden="true" />
+          ) : (
+            <Eye className="w-5 h-5" aria-hidden="true" />
+          )}
+          Privacy
         </button>
-      </nav>
-    </>
+      )}
+      <button
+        onClick={handleSignOut}
+        className="flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium text-slate-500 hover:text-rose-400 transition-colors"
+      >
+        <LogOut className="w-5 h-5" aria-hidden="true" />
+        Sign out
+      </button>
+    </nav>
   );
 }

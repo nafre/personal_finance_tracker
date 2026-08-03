@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { waitForReady } from "./helpers";
+import { expandAppShell, waitForReady } from "./helpers";
 
 test.describe("Settings", () => {
   test.beforeEach(async ({ page }) => {
@@ -8,6 +8,7 @@ test.describe("Settings", () => {
   });
 
   test("full page layout", async ({ page }) => {
+    await expandAppShell(page);
     await expect(page).toHaveScreenshot("full-page.png", {
       fullPage: true,
       animations: "disabled",

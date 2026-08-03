@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { amountMasks, waitForReady } from "./helpers";
+import { amountMasks, expandAppShell, waitForReady } from "./helpers";
 
 test.describe("Transactions page", () => {
   test.beforeEach(async ({ page }) => {
@@ -10,6 +10,7 @@ test.describe("Transactions page", () => {
   // ── Full page ─────────────────────────────────────────────────────────────
 
   test("full page layout", async ({ page }) => {
+    await expandAppShell(page);
     await expect(page).toHaveScreenshot("full-page.png", {
       fullPage: true,
       animations: "disabled",
@@ -214,6 +215,7 @@ test.describe("Transactions page", () => {
     await waitForReady(page);
     await page.mouse.move(0, 0); // move cursor off the dropdown before screenshot
 
+    await expandAppShell(page);
     await expect(page).toHaveScreenshot("category-filtered.png", {
       fullPage: true,
       animations: "disabled",

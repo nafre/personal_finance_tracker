@@ -247,7 +247,7 @@ All amounts are displayed in Malaysian Ringgit. `formatCurrency(amount)` in `lib
 | `components/MonthSelector.tsx` | Month/year navigation control used on the dashboard. |
 | `components/SpendingInsights.tsx` | Spending pace/burn-rate analysis card. |
 | `components/QuickAddSheet.tsx` | Bottom-sheet wrapper for `ExpenseInput` on mobile. |
-| `components/NavBar.tsx` | Navigation shell: fixed desktop sidebar (collapsible, width synced via `SidebarContext`) + fixed mobile bottom nav with safe-area padding. Lucide icons. Hosts the privacy-mode eye toggle (sidebar footer + a 5th bottom-nav slot), rendered only while `privacyFeatureEnabled`. |
+| `components/NavBar.tsx` | Exports two components. `NavBar` — fixed desktop sidebar (collapsible, width synced via `SidebarContext`). `BottomNav` — mobile bottom bar, **in normal flow** (not `fixed`), rendered as the last child of the app shell (see "App shell" under Styling). Lucide icons; hosts the privacy-mode eye toggle (sidebar footer + a 5th bottom-nav slot), rendered only while `privacyFeatureEnabled`. |
 | `components/Providers.tsx` | Composes `SessionProvider` + `ToastProvider` + `PreferencesProvider` + `SyncProvider` at the app root. |
 | `components/PreferencesPanel.tsx` | Settings → Preferences tab: toggle-switch rows for `privacyFeatureEnabled` and `undoDeleteEnabled` (device-level, localStorage-backed via `PreferencesContext`). |
 | `components/charts/TrendChart.tsx` | Daily income/expense area chart (Recharts). |
@@ -436,6 +436,15 @@ UI conventions (established in the Jul 2026 polish pass — full details in `doc
 - **Inputs**: `text-base sm:text-sm` (16px on mobile prevents iOS focus-zoom).
 - **Destructive actions**: inline two-step confirm (see `TransactionList` / `RecurringRow`), never native `confirm()`.
 - **Dialogs**: native `<dialog>` + `hooks/useDialogBehavior.ts` (`showModal()` gives a real focus trap) + the `dialog-shell` utility in `globals.css`; no `role="dialog"`/`aria-modal` needed. Errors: `role="alert"`; transient status: `role="status"`/`aria-live="polite"`. Cancel buttons: `.btn-ghost`. Neutrals: `slate-*` only.
+
+**App shell (mobile bottom nav)**: `app/(dashboard)/layout.tsx` renders a `h-dvh overflow-hidden` shell (`data-app-shell`); the only scrollable region is `<main>` in `MainWrapper` (`data-scroll-region`, `overflow-y-auto overscroll-contain`). Because the *root* scroller never moves, Android's dynamic URL bar never retracts, which is what lets `BottomNav` sit in normal flow and stay welded to the bottom edge.
+
+This replaces two failed attempts, both worth not repeating: a `fixed bottom-0` bar is stranded a toolbar-height above the visible bottom in Firefox for Android (it anchors fixed elements to the layout viewport, which stays at the URL-bar-visible height), and compensating from JS via `visualViewport` events runs on the main thread — always a few frames behind the compositor-driven toolbar animation, so the bar visibly drags while scrolling. Adding `will-change: transform` makes it worse, not better.
+
+Consequences to preserve:
+- Don't give `BottomNav` `position: fixed`, and don't make the document scrollable again. `e2e/dashboard.spec.ts` guards both ("bottom nav — in flow, document does not scroll", "main is the scroll region").
+- `fullPage: true` screenshots need `expandAppShell(page)` from `e2e/helpers.ts` first — it flattens the shell into a normal document scroller, otherwise Playwright captures only the first viewport.
+- Fixed-position overlays anchored above the nav (`.fab`, the toast container's `bottom-[calc(80px+var(--safe-bottom))]`) still work: the layout viewport now equals the visible viewport, so their offsets are unchanged.
 
 **Dev gotcha**: `public/sw.js` caches `/_next/static/**` cache-first, so a browser with the SW registered serves stale CSS/JS in dev even after a server restart. Unregister the SW + clear `caches` before visually verifying style changes.
 
@@ -663,6 +672,7 @@ component DemoBanner
 ### components\NavBar.tsx
 ```
 component NavBar
+component BottomNav  (in-flow mobile bar — never position:fixed)
 hook usePathname
 hook useSidebar
 hook useState
@@ -998,6 +1008,7 @@ handler showToast
 ```
 export function amountMasks(page) → Locator[]
 export async function waitForReady(page) → Promise<void>
+export async function expandAppShell(page) → Promise<void>  (required before fullPage screenshots)
 ```
 
 ## hooks
