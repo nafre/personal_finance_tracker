@@ -35,6 +35,26 @@ test.describe("Dashboard", () => {
     });
   });
 
+  // Guards the Firefox-for-Android dynamic-toolbar fix: the bottom nav must
+  // stay a plain fixed element. Any transform / will-change: transform (or a
+  // JS-set inline transform) promotes it out of the compositor's fixed-layer
+  // adjustment, and it detaches from the screen bottom when the URL bar hides.
+  test("bottom nav — not layer-promoted (dynamic toolbar tracking)", async ({
+    page,
+  }) => {
+    const bottomNav = page.locator('[data-testid="bottom-nav"]');
+    if (!(await bottomNav.isVisible())) return; // desktop uses the sidebar — skip
+
+    const style = await bottomNav.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { position: cs.position, transform: cs.transform, willChange: cs.willChange };
+    });
+
+    expect(style.position).toBe("fixed");
+    expect(style.transform).toBe("none");
+    expect(style.willChange).toBe("auto");
+  });
+
   // ── Sidebar collapse (desktop only) ──────────────────────────────────────
 
   test("sidebar — collapses to icon-only width on toggle", async ({ page }) => {

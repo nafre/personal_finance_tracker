@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { clearLocalDataForSignOut } from "@/lib/sync";
 import { useSidebar } from "@/context/SidebarContext";
 import { usePreferences } from "@/context/PreferencesContext";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   ReceiptText,
@@ -44,39 +44,11 @@ export function NavBar() {
   const { collapsed, toggle } = useSidebar();
   const { privacyFeatureEnabled, isPrivate, togglePrivate } = usePreferences();
   const [mounted, setMounted] = useState(false);
-  const bottomNavRef = useRef<HTMLElement>(null);
 
   const privacyLabel = isPrivate ? "Show amounts" : "Hide amounts";
 
   useEffect(() => {
     setMounted(true);
-  }, []);
-
-  // Keep the mobile bottom nav glued to the *visible* screen bottom.
-  // Firefox for Android anchors `position: fixed` to the layout viewport
-  // (which stays at the URL-bar-visible height), so when the URL bar
-  // auto-hides mid-scroll the visual viewport grows downward and the nav is
-  // left floating a toolbar-height above the real bottom. Push it back down by
-  // however far the visual viewport bottom sits below the layout viewport
-  // bottom. The Math.max(0, …) clamp means Chrome/iOS Safari — which already
-  // track the visual viewport and yield a <= 0 value — are never touched.
-  useEffect(() => {
-    const vv = window.visualViewport;
-    const nav = bottomNavRef.current;
-    if (!vv || !nav) return;
-
-    const update = () => {
-      const gap = vv.height + vv.offsetTop - document.documentElement.clientHeight;
-      nav.style.transform = `translateY(${Math.max(0, gap)}px)`;
-    };
-
-    update();
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
-    return () => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
-    };
   }, []);
 
   return (
@@ -188,11 +160,20 @@ export function NavBar() {
         </div>
       </aside>
 
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav.
+          Must stay a plain `position: fixed` element — no `transform`,
+          `will-change: transform`, `filter`, or JS-driven offset. Browsers with
+          a dynamic URL bar (Firefox for Android in particular) re-anchor
+          fixed-position layers to the visible viewport bottom on the compositor
+          thread as the toolbar retracts, which is the only way to track that
+          animation frame-for-frame. Promoting this element into its own
+          transform layer opts it out of that adjustment (it detaches and
+          floats a toolbar-height above the bottom), and compensating from JS
+          via `visualViewport` events runs on the main thread — always a few
+          frames behind the compositor, so the nav visibly drags on scroll. */}
       <nav
-        ref={bottomNavRef}
         data-testid="bottom-nav"
-        className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 flex pb-(--safe-bottom) will-change-transform"
+        className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 flex pb-(--safe-bottom)"
       >
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
