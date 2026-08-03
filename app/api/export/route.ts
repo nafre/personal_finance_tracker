@@ -44,8 +44,9 @@ export async function GET(req: NextRequest) {
   ) {
     return new Response("Invalid min/max amount", { status: 400 });
   }
-  // Same semantics as the transactions page: `to` is inclusive end-of-day
-  const from = p.get("from") ? new Date(p.get("from")!) : undefined;
+  // Same semantics as the transactions page: both bounds are local-calendar
+  // days (a bare "yyyy-MM-dd" parses as UTC), `to` inclusive to end-of-day
+  const from = p.get("from") ? new Date(p.get("from")! + "T00:00:00") : undefined;
   const to   = p.get("to")   ? new Date(p.get("to")! + "T23:59:59.999") : undefined;
   if ((from && isNaN(from.getTime())) || (to && isNaN(to.getTime()))) {
     return new Response("Invalid from/to date", { status: 400 });

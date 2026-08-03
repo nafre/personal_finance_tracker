@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import useSWR from "swr";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { getTransactions, getCategories, getBudgets } from "@/lib/actions";
+import { getTransactions, getCategories, getBudgets, getEarliestTransactionDate } from "@/lib/actions";
 import { useSyncContext } from "@/context/SyncProvider";
 import { TransactionList } from "@/components/TransactionList";
 import { MonthSelector } from "@/components/MonthSelector";
@@ -30,6 +30,11 @@ interface Category {
   color: string;
 }
 
+/** Local-calendar yyyy-MM-dd — what a `<input type="date">` expects. */
+function toDateInput(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function TransactionsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -54,6 +59,8 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [budgets, setBudgets] = useState<{ id: string; name: string }[]>([]);
+  // Date of the user's first transaction — the lower bound of the All-time range
+  const [earliestDate, setEarliestDate] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [totalIncome, setTotalIncome] = useState(0);
@@ -87,11 +94,18 @@ export default function TransactionsPage() {
   const [dupBannerDismissed, setDupBannerDismissed] = useState(false);
   const [showDupsOnly, setShowDupsOnly] = useState(false);
 
-  function setFilter(key: string, value: string) {
+  /** Apply several param changes in one navigation (empty value = delete). */
+  function setFilters(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
-    if (value) params.set(key, value);
-    else params.delete(key);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    }
     router.push(`${pathname}?${params.toString()}`);
+  }
+
+  function setFilter(key: string, value: string) {
+    setFilters({ [key]: value });
   }
 
   function handleSearchChange(value: string) {
@@ -124,6 +138,17 @@ export default function TransactionsPage() {
     router.push(`${pathname}?${params.toString()}`);
   }
 
+  // All-time = the full range from the first transaction through today. ISO
+  // date strings compare correctly as plain strings, so a manually widened
+  // range still reads as all-time.
+  const todayInput = toDateInput(new Date());
+  const allTimeFrom = earliestDate ?? todayInput;
+  const isAllTime = !!fromFilter && !!toFilter && fromFilter <= allTimeFrom && toFilter >= todayInput;
+
+  function toggleAllTime() {
+    setFilters(isAllTime ? { from: "", to: "" } : { from: allTimeFrom, to: todayInput });
+  }
+
   function handleExport() {
     const params = new URLSearchParams();
     params.set("month", String(month));
@@ -148,7 +173,9 @@ export default function TransactionsPage() {
     type: typeFilter || undefined,
     amountMin: minFilter ? Number(minFilter) : undefined,
     amountMax: maxFilter ? Number(maxFilter) : undefined,
-    from: fromFilter ? new Date(fromFilter) : undefined,
+    // Parsed as local midnight (a bare "yyyy-MM-dd" would parse as UTC and cut
+    // off the early hours of the first day in a positive-offset timezone)
+    from: fromFilter ? new Date(fromFilter + "T00:00:00") : undefined,
     to: toFilter ? new Date(toFilter + "T23:59:59") : undefined,
   }), [month, year, categoryFilter, labelFilter, qFilter, typeFilter, minFilter, maxFilter, fromFilter, toFilter]);
 
@@ -194,6 +221,13 @@ export default function TransactionsPage() {
   // Fetch budgets once — used by the edit form's "exclude from budgets" control
   useEffect(() => {
     getBudgets().then((bs) => setBudgets(bs.map((b) => ({ id: b.id, name: b.name }))));
+  }, []);
+
+  // First transaction date — the lower bound the All-time toggle jumps to
+  useEffect(() => {
+    getEarliestTransactionDate().then((iso) => {
+      if (iso) setEarliestDate(toDateInput(new Date(iso)));
+    });
   }, []);
 
   // Silent re-fetch after sync completes — clears isPending badges
@@ -357,6 +391,21 @@ export default function TransactionsPage() {
           </div>
           {/* Month selector — hidden when date range is active */}
           {!hasDateRange && <MonthSelector period="month" month={month} year={year} showPeriodToggle={false} />}
+          {/* One-tap escape from the month window: search everything ever recorded */}
+          <button
+            type="button"
+            onClick={toggleAllTime}
+            aria-pressed={isAllTime}
+            data-testid="all-time-toggle"
+            className={cn(
+              "shrink-0 px-3 py-2 rounded-xl border text-xs font-medium transition-colors",
+              isAllTime
+                ? "border-indigo-500/40 bg-indigo-500/20 text-indigo-300"
+                : "border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500"
+            )}
+          >
+            All time
+          </button>
         </div>
 
         {/* Row 2: type + category + label — 2-up grid on mobile, inline row from sm up */}

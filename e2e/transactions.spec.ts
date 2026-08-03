@@ -109,6 +109,25 @@ test.describe("Transactions page", () => {
     await expect(strip).not.toContainText(/\b0 transactions/, { timeout: 5000 });
   });
 
+  // The default view is the current month, which `prisma/seed.ts` can leave
+  // empty (its dates are relative to seed time) — so this asserts the range
+  // mechanics, not a row count delta.
+  test("all-time toggle spans the whole history and toggles back off", async ({ page }) => {
+    const toggle = page.locator('[data-testid="all-time-toggle"]');
+    const strip = page.locator('[data-testid="summary-strip"]');
+
+    await toggle.click();
+    await expect(page).toHaveURL(/from=\d{4}-\d{2}-\d{2}.*to=\d{4}-\d{2}-\d{2}/);
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    // Month selector gives way to the date range, which auto-opens
+    await expect(page.locator("#filter-from")).toBeVisible();
+    await expect(strip).not.toContainText(/\b0 transactions/, { timeout: 5000 });
+
+    await toggle.click();
+    await expect(page).not.toHaveURL(/from=/);
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  });
+
   // ── Undo delete (feature 27) ──────────────────────────────────────────────
   // Functional, non-snapshot. Deletes an existing row, restores it from the
   // toast's Undo action — the restore re-creates the same fields (new id), so
