@@ -3,13 +3,13 @@
 import { Fragment, useState, useRef, useMemo } from "react";
 import { parseExpenseInput } from "@/lib/parser";
 import type { CategoryOption } from "@/types";
-import { addTransaction } from "@/lib/actions";
+import { addTransaction, createInstallmentPlan } from "@/lib/actions";
 import { putTransaction } from "@/lib/idb";
 import { applyLocalMutation } from "@/lib/sync";
 import { findRecentDuplicate, hasSameDayDuplicate, recordAdd } from "@/lib/duplicates";
 import { useSyncContext } from "@/context/SyncProvider";
 import { useToast } from "@/context/ToastContext";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, formatDate, nextDayOfMonth, splitInstallmentAmount, toLocalISODate } from "@/lib/utils";
 
 export interface AddedTx {
   id: string;
@@ -48,6 +48,21 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, frequentCategories, r
   const { showToast } = useToast();
 
   const effectiveType = manualTypeOverride ?? preview?.type ?? "expense";
+
+  // Installment draft ("phone 1200 x12 @15"): the badge shows one payment and
+  // a line under the input spells out the plan before it's committed.
+  const installmentPreview = preview?.installments
+    ? {
+        count: preview.installments,
+        each: splitInstallmentAmount(preview.amount, preview.installments),
+        firstCharge: preview.chargeDay ? nextDayOfMonth(preview.chargeDay) : new Date(),
+      }
+    : null;
+  const previewAmountText = preview
+    ? installmentPreview
+      ? `${installmentPreview.count} × ${formatCurrency(installmentPreview.each)}`
+      : `${effectiveType === "income" ? "+" : "-"}${formatCurrency(preview.amount)}`
+    : "";
 
   // Passive hint: a matching (amount, category) transaction already exists
   // today. Doesn't interrupt — renders an amber dot on the Add button.
@@ -113,10 +128,81 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, frequentCategories, r
     inputRef.current?.focus();
   }
 
+  // "phone 1200 x12 [@15]" — creates an installment plan instead of a single
+  // transaction. Not optimistic: the server decides which installments are
+  // already due and returns them, so the draft stays put until it answers.
+  function submitInstallmentPlan(parsed: NonNullable<ReturnType<typeof parseExpenseInput>>) {
+    const count = parsed.installments as number;
+    if (!isOnline) {
+      setError("Installment plans need a connection — try again when you're back online.");
+      return;
+    }
+    if (splitInstallmentAmount(parsed.amount, count) <= 0) {
+      setError("That amount is too small to split.");
+      return;
+    }
+    const today = toLocalISODate();
+    setIsSubmitting(true);
+    createInstallmentPlan({
+      name: parsed.note ?? parsed.category,
+      category: parsed.category,
+      type: effectiveType,
+      frequency: "monthly",
+      count,
+      total: parsed.amount,
+      firstChargeDate: parsed.chargeDay ? nextDayOfMonth(parsed.chargeDay) : new Date(today),
+      today,
+      note: parsed.note,
+      labels: parsed.labels,
+    })
+      .then(({ recurring, transactions }) => {
+        for (const tx of transactions) {
+          onAdd?.({
+            id: tx.id,
+            category: tx.category,
+            amount: tx.amount,
+            type: tx.type as "income" | "expense",
+            note: tx.note ?? undefined,
+            labels: tx.labels ?? [],
+            date: tx.date,
+            isPending: false,
+          });
+          void putTransaction({
+            id: tx.id,
+            userId,
+            category: tx.category,
+            amount: tx.amount,
+            type: tx.type as "income" | "expense",
+            note: tx.note ?? undefined,
+            labels: tx.labels ?? [],
+            excludedBudgetIds: tx.excludedBudgetIds ?? [],
+            excludeFromStats: tx.excludeFromStats ?? false,
+            date: new Date(tx.date).toISOString(),
+            syncStatus: "synced",
+            createdAt: new Date(tx.createdAt).toISOString(),
+          });
+        }
+        clearInput();
+        showToast(
+          transactions.length > 0
+            ? `Installment plan created — ${transactions.length} of ${count} posted`
+            : `Installment plan created — first charge ${formatDate(recurring.startDate)}`,
+          "success"
+        );
+      })
+      .catch(() => setError("Couldn't create the installment plan. Please try again."))
+      .finally(() => setIsSubmitting(false));
+  }
+
   function handleSubmit(bypassDupCheck = false) {
     const parsed = parseExpenseInput(value);
     if (!parsed) {
       setError('Try: "food 20" or "salary 5000"');
+      return;
+    }
+
+    if (parsed.installments) {
+      submitInstallmentPlan(parsed);
       return;
     }
 
@@ -283,7 +369,7 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, frequentCategories, r
                     effectiveType === "income" ? "badge-income" : "badge-expense"
                   )}
                 >
-                  {effectiveType === "income" ? "+" : "-"}{formatCurrency(preview.amount)}
+                  {previewAmountText}
                 </span>
                 <span className="text-xs text-slate-500 max-w-[80px] truncate">
                   {preview.category}
@@ -301,12 +387,19 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, frequentCategories, r
                   effectiveType === "income" ? "badge-income" : "badge-expense"
                 )}
               >
-                {effectiveType === "income" ? "+" : "-"}{formatCurrency(preview.amount)}
+                {previewAmountText}
               </span>
               <span className="text-xs text-slate-500 truncate">
                 {preview.category}
               </span>
             </div>
+          )}
+
+          {installmentPreview && !error && (
+            <p data-testid="installment-preview" className="text-xs text-slate-400 mt-1.5 px-0.5">
+              Installment plan · {installmentPreview.count} monthly payments · first charge{" "}
+              {formatDate(installmentPreview.firstCharge)}
+            </p>
           )}
         </div>
 
@@ -389,6 +482,7 @@ export function ExpenseInput({ onAdd, onReplace, onRemove, frequentCategories, r
           { example: "grab rm15", hint: "with currency" },
           { example: "salary 5000", hint: "income" },
           { example: "coffee 4.5 latte", hint: "with note" },
+          { example: "phone 1200 x12", hint: "installments" },
         ].map((item) => (
           <button
             key={item.example}

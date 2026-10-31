@@ -36,6 +36,10 @@ export interface RecurringTransaction {
   lastRun: Date | null;
   isActive: boolean;
   note: string | null;
+  // Installment plans: a non-null count marks a fixed-length rule.
+  installmentCount?: number | null;
+  installmentsPosted?: number;
+  installmentTotal?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }

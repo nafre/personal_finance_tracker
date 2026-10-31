@@ -199,6 +199,88 @@ test.describe("Transactions page", () => {
     }
   });
 
+  // ── Installment plans ─────────────────────────────────────────────────────
+  // Creates one plan from quick-add ("x3") and one by splitting an existing
+  // transaction, checks each posted its first installment, then removes the
+  // posted rows here and both plans from the dashboard's recurring list.
+
+  test("installment plans — quick-add syntax and split form", async ({ page }) => {
+    const quickAdd = page.locator('[data-testid="expense-input"]');
+    const input = quickAdd.locator("input").first();
+    const list = page.locator('[data-testid="transaction-list"]');
+
+    // Quick-add: the preview announces the plan; the first charge is today, so
+    // installment 1 of 3 lands in the list straight away.
+    await input.fill("plantest 30 x3");
+    await expect(quickAdd.locator('[data-testid="installment-preview"]')).toContainText("3 monthly payments");
+    await input.press("Enter");
+    await expect(list.getByText(/Plantest \(1\/3\)/)).toHaveCount(1);
+
+    // Split: an ordinary transaction is replaced by the plan's first charge.
+    await input.fill("splittest 90");
+    await input.press("Enter");
+    await expect(list.getByText("Splittest", { exact: true })).toHaveCount(1);
+    await expect(list.getByText("Pending", { exact: true })).toHaveCount(0);
+
+    const edit = page.locator('[aria-label="Edit Splittest transaction"]').first();
+    await edit.scrollIntoViewIfNeeded();
+    await edit.click();
+    await page.locator('[data-testid="split-installments-button"]').click();
+
+    const form = page.locator('[data-testid="installment-split-form"]');
+    const firstCharge = form.getByLabel("First charge date");
+    const today = await firstCharge.inputValue();
+    await form.getByLabel("Number of payments").fill("3");
+
+    // Snapshot with a fixed, fully-elapsed first charge date so neither the
+    // date field nor the summary line ("3 posted now") moves from day to day.
+    await firstCharge.fill("2026-01-15");
+    await expect(form.locator('[data-testid="installment-summary"]')).toContainText("3 posted now");
+    // Drop the focus ring/segment highlight, and let the quick-add plan's
+    // success toast (it floats over the form on desktop) time out first.
+    await firstCharge.blur();
+    await expect(page.getByText(/Installment plan created/)).toHaveCount(0, { timeout: 8000 });
+    await expect(form).toHaveScreenshot("installment-split-form.png", {
+      animations: "disabled",
+      mask: amountMasks(page),
+    });
+
+    await firstCharge.fill(today);
+    await expect(form.locator('[data-testid="installment-summary"]')).toContainText("1 posted now");
+    await form.getByRole("button", { name: "Create plan" }).click();
+    await expect(list.getByText(/Splittest \(1\/3\)/)).toHaveCount(1);
+    await expect(page.locator('[aria-label="Delete Splittest transaction"]')).toHaveCount(1);
+
+    // Clean up the posted installments (no force-clicks — see undo test)
+    for (const name of ["Plantest", "Splittest"]) {
+      const btn = page.locator(`[aria-label="Delete ${name} transaction"]`).first();
+      await btn.scrollIntoViewIfNeeded();
+      await btn.click();
+      await page.getByRole("button", { name: "Delete", exact: true }).click();
+      await expect(page.locator(`[aria-label="Delete ${name} transaction"]`)).toHaveCount(0);
+    }
+
+    // Both plans sit in the recurring list at 1/3 — remove them
+    await page.goto("/dashboard");
+    await waitForReady(page);
+    const recurring = page.locator('[data-testid="recurring-section"]');
+    const planDelete = (name: string) => recurring.locator(`[aria-label="Delete recurring ${name}"]`);
+    if (!(await planDelete("Plantest").isVisible())) {
+      await recurring.locator("button").first().click();
+    }
+    await expect(recurring.getByText("1/3 paid")).toHaveCount(2);
+    for (const name of ["Plantest", "Splittest"]) {
+      await planDelete(name).scrollIntoViewIfNeeded();
+      await planDelete(name).click();
+      // The row disappears optimistically — wait for the server action itself,
+      // or the test can end before the delete is ever sent.
+      const deleted = page.waitForResponse((r) => r.request().method() === "POST");
+      await recurring.getByRole("button", { name: "Delete?" }).click();
+      await deleted;
+      await expect(planDelete(name)).toHaveCount(0);
+    }
+  });
+
   // ── Category filter ───────────────────────────────────────────────────────
 
   test("category filter applied", async ({ page }) => {

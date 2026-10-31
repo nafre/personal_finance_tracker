@@ -5,9 +5,9 @@ import { getServerSession } from "next-auth";
 import { revalidatePath, updateTag, unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getNextDueDate, DEFAULT_CATEGORIES, enumerateMonths, MAX_BACKFILL, type RecurringFrequency } from "@/lib/utils";
+import { DEFAULT_CATEGORIES, enumerateMonths, getRuleNextDue, getRuleOverdueDates, getInstallmentAmount, splitInstallmentAmount } from "@/lib/utils";
 import { IS_SQLITE, encodeLabels, normalizeTx, getLabelFilter, getSearchFilter, matchesSearch, getTrendRows, type TrendGranularity, normalizeBudget, encodeBudgetArray, parseLabels } from "@/lib/db-adapter";
-import { transactionSchema, categorySchema, budgetSchema, recurringSchema, recurringUpdateSchema, passwordSchema, roleSchema } from "@/lib/validation";
+import { transactionSchema, categorySchema, budgetSchema, recurringSchema, recurringUpdateSchema, installmentSchema, passwordSchema, roleSchema } from "@/lib/validation";
 import { rateLimit } from "@/lib/rate-limit";
 import bcrypt from "bcryptjs";
 
@@ -645,13 +645,34 @@ export async function updateRecurringTransaction(
     endDate: Date | null;
     isActive: boolean;
     note: string | null;
+    installmentCount: number;
   }>
 ) {
   const userId = await getAuthenticatedUserId();
   recurringUpdateSchema.parse(data);
   const existing = await db.recurringTransaction.findFirst({ where: { id, userId } });
   if (!existing) throw new Error("Recurring transaction not found");
-  const rec = await db.recurringTransaction.update({ where: { id }, data });
+
+  // installmentCount only applies to an existing plan (an ordinary rule can't
+  // be turned into one here). Changing the count or per-payment amount resets
+  // the plan total, so the final payment equals the others again.
+  const { installmentCount, ...rest } = data;
+  let planPatch = {};
+  if (existing.installmentCount != null) {
+    const count = installmentCount ?? existing.installmentCount;
+    if (count < existing.installmentsPosted) {
+      throw new Error("Payment count is below the payments already posted");
+    }
+    const amount = data.amount ?? existing.amount;
+    if (count !== existing.installmentCount || amount !== existing.amount) {
+      planPatch = {
+        installmentCount: count,
+        installmentTotal: Math.round(amount * count * 100) / 100,
+      };
+    }
+  }
+
+  const rec = await db.recurringTransaction.update({ where: { id }, data: { ...rest, ...planPatch } });
   revalidatePath("/dashboard");
   return rec;
 }
@@ -664,26 +685,46 @@ export async function deleteRecurringTransaction(id: string) {
   revalidatePath("/dashboard");
 }
 
+type RecurringRow = NonNullable<Awaited<ReturnType<typeof db.recurringTransaction.findFirst>>>;
+
+// Fields of the transaction a rule posts on `date`. For an installment plan
+// `index` is the 1-based payment number (drives the amount and the "(3/12)"
+// note suffix); ordinary rules ignore it.
+function ruleTransactionData(rec: RecurringRow, userId: string, date: Date, index: number) {
+  const plan = rec.installmentCount != null;
+  return {
+    userId,
+    category: rec.category,
+    amount: plan ? getInstallmentAmount(rec, index) : rec.amount,
+    type: rec.type,
+    note: plan
+      ? `${rec.note ?? rec.name} (${index}/${rec.installmentCount})`
+      : rec.note ?? `Recurring: ${rec.name}`,
+    date,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    labels: encodeLabels(parseLabels(rec.labels as any)),
+  };
+}
+
 export async function postRecurringTransaction(id: string) {
   const userId = await getAuthenticatedUserId();
   const rec = await db.recurringTransaction.findFirst({ where: { id, userId } });
   if (!rec) throw new Error("Not found");
 
-  const now = new Date();
+  // An installment is dated at its scheduled charge date and lastRun follows
+  // it, so posting late never shifts the schedule. Ordinary rules post "now".
+  const plan = rec.installmentCount != null;
+  if (plan && rec.installmentsPosted >= (rec.installmentCount as number)) {
+    throw new Error("Installment plan already complete");
+  }
+  const date = plan ? getRuleNextDue(rec) : new Date();
   const [tx] = await db.$transaction([
     db.transaction.create({
-      data: {
-        userId,
-        category: rec.category,
-        amount: rec.amount,
-        type: rec.type,
-        note: rec.note ?? `Recurring: ${rec.name}`,
-        date: now,
-      },
+      data: ruleTransactionData(rec, userId, date, rec.installmentsPosted + 1),
     }),
     db.recurringTransaction.update({
       where: { id },
-      data: { lastRun: now },
+      data: { lastRun: date, ...(plan && { installmentsPosted: { increment: 1 } }) },
     }),
   ]);
 
@@ -703,38 +744,25 @@ export async function backfillRecurringTransaction(id: string) {
   const rec = await db.recurringTransaction.findFirst({ where: { id, userId } });
   if (!rec) throw new Error("Not found");
 
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  const end = rec.endDate ? new Date(rec.endDate) : null;
-  if (end) end.setHours(23, 59, 59, 999);
-
-  const dueDates: Date[] = [];
-  let due = getNextDueDate(rec.frequency as RecurringFrequency, rec.startDate, rec.lastRun ?? null);
-  while (dueDates.length < MAX_BACKFILL && due <= today && (!end || due <= end)) {
-    dueDates.push(due);
-    due = getNextDueDate(rec.frequency as RecurringFrequency, due, due);
-  }
+  const plan = rec.installmentCount != null;
+  const dueDates = getRuleOverdueDates(rec);
   if (dueDates.length === 0) throw new Error("Nothing to backfill");
 
   const { txs, updated } = await db.$transaction(async (p) => {
     const txs = [];
-    for (const date of dueDates) {
+    for (const [i, date] of dueDates.entries()) {
       txs.push(
         await p.transaction.create({
-          data: {
-            userId,
-            category: rec.category,
-            amount: rec.amount,
-            type: rec.type,
-            note: rec.note ?? `Recurring: ${rec.name}`,
-            date,
-          },
+          data: ruleTransactionData(rec, userId, date, rec.installmentsPosted + i + 1),
         })
       );
     }
     const updated = await p.recurringTransaction.update({
       where: { id },
-      data: { lastRun: dueDates[dueDates.length - 1] },
+      data: {
+        lastRun: dueDates[dueDates.length - 1],
+        ...(plan && { installmentsPosted: { increment: dueDates.length } }),
+      },
     });
     return { txs, updated };
   });
@@ -743,6 +771,92 @@ export async function backfillRecurringTransaction(id: string) {
   revalidatePath("/transactions");
   updateTag("transactions");
   return { count: txs.length, recurring: updated, transactions: txs.map(normalizeTx) };
+}
+
+// Creates an installment plan: a fixed-length recurring rule whose charges
+// fall on the first charge date's day each period. Every installment already
+// due as of the client's `today` is posted in the same DB transaction
+// (normally just the first), so a plan starting today shows up in the ledger
+// straight away. With `sourceTransactionId` the plan replaces that existing
+// transaction (the "Split into installments" action).
+export async function createInstallmentPlan(data: {
+  name: string;
+  category: string;
+  type: "income" | "expense";
+  frequency: "daily" | "weekly" | "monthly" | "yearly";
+  count: number;
+  total?: number;
+  amount?: number;
+  firstChargeDate: Date;
+  today: string;
+  note?: string;
+  labels?: string[];
+  sourceTransactionId?: string;
+}) {
+  const userId = await getAuthenticatedUserId();
+  const parsed = installmentSchema.parse(data);
+
+  const amount =
+    parsed.total !== undefined ? splitInstallmentAmount(parsed.total, parsed.count) : (parsed.amount as number);
+  if (amount <= 0) throw new Error("Total is too small to split");
+  const total = parsed.total ?? Math.round(amount * parsed.count * 100) / 100;
+
+  // Charge dates are date-only (UTC midnight), so "due" is judged against the
+  // end of the client's calendar day — the server's own day lags or leads it
+  // by the UTC offset. Only a day within reach of the server clock is trusted.
+  const until = new Date(`${parsed.today}T23:59:59.999Z`);
+  if (Number.isNaN(until.getTime()) || Math.abs(until.getTime() - Date.now()) > 48 * 3600 * 1000) {
+    throw new Error("Invalid date");
+  }
+
+  const { recurring, txs } = await db.$transaction(async (p) => {
+    if (parsed.sourceTransactionId) {
+      const source = await p.transaction.findFirst({
+        where: { id: parsed.sourceTransactionId, userId },
+      });
+      if (!source) throw new Error("Transaction not found");
+      await p.transaction.delete({ where: { id: source.id } });
+    }
+
+    const rec = await p.recurringTransaction.create({
+      data: {
+        userId,
+        name: parsed.name,
+        category: parsed.category,
+        amount,
+        type: parsed.type,
+        frequency: parsed.frequency,
+        startDate: parsed.firstChargeDate,
+        note: parsed.note ?? null,
+        installmentCount: parsed.count,
+        installmentTotal: total,
+        labels: encodeLabels(parsed.labels),
+      },
+    });
+
+    const dueDates = getRuleOverdueDates(rec, until);
+    const txs = [];
+    for (const [i, date] of dueDates.entries()) {
+      txs.push(await p.transaction.create({ data: ruleTransactionData(rec, userId, date, i + 1) }));
+    }
+    const recurring =
+      dueDates.length > 0
+        ? await p.recurringTransaction.update({
+            where: { id: rec.id },
+            data: { lastRun: dueDates[dueDates.length - 1], installmentsPosted: dueDates.length },
+          })
+        : rec;
+    return { recurring, txs };
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  updateTag("transactions");
+  return {
+    recurring,
+    transactions: txs.map(normalizeTx),
+    removedTransactionId: parsed.sourceTransactionId ?? null,
+  };
 }
 
 // ─── Budgets ──────────────────────────────────────────────────────────────────
@@ -818,11 +932,7 @@ export async function skipRecurringTransaction(id: string) {
   const rec = await db.recurringTransaction.findFirst({ where: { id, userId } });
   if (!rec) throw new Error("Not found");
 
-  const nextDue = getNextDueDate(
-    rec.frequency as RecurringFrequency,
-    rec.startDate,
-    rec.lastRun ?? null
-  );
+  const nextDue = getRuleNextDue(rec);
 
   const updated = await db.recurringTransaction.update({
     where: { id },

@@ -17,6 +17,14 @@ import {
   formatDate,
   formatDateShort,
   rankCategoriesByUsage,
+  stepAnchored,
+  getRuleNextDue,
+  getRuleStatus,
+  getInstallmentAmount,
+  splitInstallmentAmount,
+  getRuleOverdueDates,
+  nextDayOfMonth,
+  type RuleSchedule,
 } from "./utils";
 
 describe("formatCurrency", () => {
@@ -177,6 +185,82 @@ describe("countMissedPeriods", () => {
     const startDate = new Date(2026, 5, 1);
     const endDate = new Date(2026, 5, 5); // well before FIXED_NOW
     expect(countMissedPeriods("daily", startDate, null, endDate)).toBe(5);
+  });
+});
+
+describe("installment plan helpers", () => {
+  const FIXED_NOW = new Date(2026, 5, 15, 12, 0, 0); // June 15, 2026
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const plan = (over: Partial<RuleSchedule> = {}): RuleSchedule => ({
+    frequency: "monthly",
+    startDate: new Date(2026, 0, 31),
+    lastRun: null,
+    amount: 33.33,
+    installmentCount: 3,
+    installmentsPosted: 0,
+    installmentTotal: 100,
+    ...over,
+  });
+
+  it("keeps the charge day pinned to the first charge, clamping short months", () => {
+    const feb = stepAnchored("monthly", new Date(2026, 0, 31), 31);
+    expect([feb.getMonth(), feb.getDate()]).toEqual([1, 28]);
+    const mar = stepAnchored("monthly", feb, 31);
+    expect([mar.getMonth(), mar.getDate()]).toEqual([2, 31]);
+  });
+
+  it("uses the first charge date until something is posted, then steps from lastRun", () => {
+    expect(getRuleNextDue(plan()).getTime()).toBe(new Date(2026, 0, 31).getTime());
+    const next = getRuleNextDue(plan({ lastRun: new Date(2026, 1, 28) }));
+    expect([next.getMonth(), next.getDate()]).toEqual([2, 31]);
+  });
+
+  it("leaves ordinary rules on the existing lastRun chain", () => {
+    const rule = plan({ installmentCount: null, lastRun: new Date(2026, 4, 18) });
+    expect(getRuleNextDue(rule).getTime()).toBe(
+      getNextDueDate("monthly", new Date(2026, 0, 31), new Date(2026, 4, 18)).getTime()
+    );
+  });
+
+  it("ends a plan by payment count, ignoring endDate", () => {
+    expect(getRuleStatus(plan({ installmentsPosted: 3 }))).toBe("ended");
+    expect(getRuleStatus(plan({ installmentsPosted: 2, endDate: new Date(2025, 0, 1) }))).toBe("overdue");
+    expect(getRuleStatus(plan({ startDate: new Date(2026, 5, 15) }))).toBe("due");
+    expect(getRuleStatus(plan({ startDate: new Date(2026, 5, 20) }))).toBe("upcoming");
+  });
+
+  it("gives the rounding remainder to the final payment", () => {
+    expect(splitInstallmentAmount(100, 3)).toBe(33.33);
+    expect(splitInstallmentAmount(1200, 12)).toBe(100);
+    expect(getInstallmentAmount(plan(), 1)).toBe(33.33);
+    expect(getInstallmentAmount(plan(), 3)).toBe(33.34);
+  });
+
+  it("caps overdue dates at the payments left", () => {
+    // Jan 31, Feb 28, Mar 31, Apr 30, May 31 have all passed; only 3 payments exist.
+    expect(getRuleOverdueDates(plan())).toHaveLength(3);
+    expect(getRuleOverdueDates(plan({ installmentsPosted: 2, lastRun: new Date(2026, 1, 28) }))).toHaveLength(1);
+  });
+
+  it("stops overdue dates at an explicit `until`", () => {
+    const dates = getRuleOverdueDates(plan({ installmentCount: 12 }), new Date(2026, 2, 1));
+    expect(dates.map((d) => d.getMonth())).toEqual([0, 1]);
+  });
+
+  it("resolves a day-of-month to its next occurrence, today included", () => {
+    expect(nextDayOfMonth(15).toISOString()).toBe("2026-06-15T00:00:00.000Z");
+    expect(nextDayOfMonth(20).toISOString()).toBe("2026-06-20T00:00:00.000Z");
+    expect(nextDayOfMonth(10).toISOString()).toBe("2026-07-10T00:00:00.000Z");
+    expect(nextDayOfMonth(31).toISOString()).toBe("2026-06-30T00:00:00.000Z");
+    expect(nextDayOfMonth(5, new Date(2026, 11, 20)).toISOString()).toBe("2027-01-05T00:00:00.000Z");
   });
 });
 

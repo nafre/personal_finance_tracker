@@ -1,10 +1,11 @@
 "use client";
 
 import { memo, useState, useEffect, useRef, useCallback } from "react";
-import { updateTransaction, deleteTransaction, addTransaction, getCategories } from "@/lib/actions";
+import { updateTransaction, deleteTransaction, addTransaction, getCategories, type createInstallmentPlan } from "@/lib/actions";
 import { applyLocalMutation } from "@/lib/sync";
 import { patchTransaction, deleteTransactionFromIDB, putTransaction } from "@/lib/idb";
 import { CategoryCombobox } from "@/components/CategoryCombobox";
+import { InstallmentSplitForm } from "@/components/InstallmentSplitForm";
 import { useSyncContext } from "@/context/SyncProvider";
 import { useToast } from "@/context/ToastContext";
 import { usePreferences } from "@/context/PreferencesContext";
@@ -217,6 +218,7 @@ const TransactionRow = memo(function TransactionRow({
   readOnly?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const [splitting, setSplitting] = useState(false);
   const [editAmount, setEditAmount] = useState(tx.amount.toString());
   const [editCategory, setEditCategory] = useState(tx.category);
   const [editNote, setEditNote] = useState(tx.note ?? "");
@@ -426,8 +428,72 @@ const TransactionRow = memo(function TransactionRow({
     }, 160);
   }
 
+  // The plan now exists server-side and this transaction is gone: drop the row
+  // and bring in the installments the server posted straight away. Only those
+  // dated in this row's month are patched in optimistically — the parent's
+  // totals are scoped to the viewed period; the rest arrive with the refresh.
+  function handleSplitDone(result: Awaited<ReturnType<typeof createInstallmentPlan>>) {
+    void deleteTransactionFromIDB(tx.id).catch(() => {});
+    onDelete(tx.id);
+    const source = new Date(tx.date);
+    for (const posted of result.transactions) {
+      void putTransaction({
+        id: posted.id,
+        userId,
+        category: posted.category,
+        amount: posted.amount,
+        type: posted.type as "income" | "expense",
+        note: posted.note ?? undefined,
+        labels: posted.labels ?? [],
+        excludedBudgetIds: posted.excludedBudgetIds ?? [],
+        excludeFromStats: posted.excludeFromStats ?? false,
+        date: new Date(posted.date).toISOString(),
+        syncStatus: "synced",
+        createdAt: new Date(posted.createdAt).toISOString(),
+      }).catch(() => {});
+      const date = new Date(posted.date);
+      if (date.getFullYear() === source.getFullYear() && date.getMonth() === source.getMonth()) {
+        onUndone({
+          id: posted.id,
+          category: posted.category,
+          amount: posted.amount,
+          type: posted.type,
+          note: posted.note,
+          labels: posted.labels ?? [],
+          excludedBudgetIds: posted.excludedBudgetIds ?? [],
+          excludeFromStats: posted.excludeFromStats ?? false,
+          date: posted.date,
+          isPending: false,
+        });
+      }
+    }
+    const count = result.recurring.installmentCount;
+    showToast(
+      result.transactions.length > 0
+        ? `Installment plan created — ${result.transactions.length} of ${count} posted`
+        : `Installment plan created — ${count} payments scheduled`,
+      "success"
+    );
+  }
+
   const isIncome = tx.type === "income";
   const labels = tx.labels ?? [];
+  // Plans are created server-side only (they don't go through the offline
+  // queue), and need a real server id to replace.
+  const canSplit =
+    isOnline && !tx.isPending && !tx.id.startsWith("pending_") && !tx.id.startsWith("temp_");
+
+  if (editing && splitting) {
+    return (
+      <div className="bg-slate-800 rounded-xl p-4 animate-fade-in">
+        <InstallmentSplitForm
+          tx={tx}
+          onDone={handleSplitDone}
+          onCancel={() => setSplitting(false)}
+        />
+      </div>
+    );
+  }
 
   if (editing) {
     return (
@@ -524,7 +590,16 @@ const TransactionRow = memo(function TransactionRow({
         {rowError && (
           <p className="text-xs text-rose-400">{rowError}</p>
         )}
-        <div className="flex gap-2 justify-end">
+        <div className="flex flex-wrap gap-2 justify-end items-center">
+          {canSplit && (
+            <button
+              onClick={() => setSplitting(true)}
+              data-testid="split-installments-button"
+              className="mr-auto text-xs text-slate-400 hover:text-indigo-400 transition-colors px-1 py-2 [@media(hover:none)]:min-h-11"
+            >
+              Split into installments
+            </button>
+          )}
           <button
             onClick={() => setEditing(false)}
             className="btn-ghost text-sm px-3 py-2"

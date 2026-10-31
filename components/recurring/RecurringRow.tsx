@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { cn, formatCurrency, getNextDueDate, getRecurringStatus, countRemainingPayments, countMissedPeriods, isPostedThisPeriod, type RecurringFrequency } from "@/lib/utils";
+import { cn, formatCurrency, getRuleNextDue, getRuleStatus, getRuleOverdueDates, getInstallmentAmount, countRemainingPayments, isPostedThisPeriod, toLocalISODate, type RecurringFrequency } from "@/lib/utils";
 import { postRecurringTransaction, deleteRecurringTransaction, skipRecurringTransaction, backfillRecurringTransaction } from "@/lib/actions";
 import { RecurringForm } from "./RecurringForm";
 import { Check, Copy, Pencil, Trash2 } from "lucide-react";
@@ -19,6 +19,9 @@ interface RecurringTransaction {
   lastRun: Date | null;
   isActive: boolean;
   note: string | null;
+  installmentCount?: number | null;
+  installmentsPosted?: number;
+  installmentTotal?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -76,13 +79,14 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const nextDue = getNextDueDate(
-    rec.frequency as RecurringFrequency,
-    new Date(rec.startDate),
-    rec.lastRun ? new Date(rec.lastRun) : null
-  );
-  const endDate = rec.endDate ? new Date(rec.endDate) : null;
-  const status = getRecurringStatus(nextDue, endDate);
+  // Installment plan: fixed number of payments, each dated at its scheduled
+  // charge date (see getRuleNextDue) — progress replaces "payments left".
+  const isPlan = rec.installmentCount != null;
+  const paid = rec.installmentsPosted ?? 0;
+  const nextDue = getRuleNextDue(rec);
+  const endDate = !isPlan && rec.endDate ? new Date(rec.endDate) : null;
+  const status = getRuleStatus(rec);
+  const displayAmount = isPlan ? getInstallmentAmount(rec, paid + 1) : rec.amount;
   const remaining = endDate && status !== "ended"
     ? countRemainingPayments(rec.frequency as RecurringFrequency, nextDue, endDate)
     : null;
@@ -90,12 +94,7 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
     rec.frequency as RecurringFrequency,
     rec.lastRun ? new Date(rec.lastRun) : null
   );
-  const missedCount = countMissedPeriods(
-    rec.frequency as RecurringFrequency,
-    new Date(rec.startDate),
-    rec.lastRun ? new Date(rec.lastRun) : null,
-    endDate
-  );
+  const missedCount = getRuleOverdueDates(rec).length;
 
   function handlePost() {
     setPostError(null);
@@ -104,10 +103,21 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
     const originalRec = rec;
 
     // Optimistic: update the row's status immediately
-    onPosted(rec.id, { ...rec, lastRun: new Date() });
+    onPosted(
+      rec.id,
+      isPlan ? { ...rec, lastRun: nextDue, installmentsPosted: paid + 1 } : { ...rec, lastRun: new Date() }
+    );
 
     postRecurringTransaction(rec.id)
-      .then((tx) => onTransactionPosted?.(tx))
+      .then((tx) => {
+        // An overdue installment is dated at its scheduled charge date, which
+        // can fall in an earlier month than the one on screen — patching that
+        // into this month's totals would be wrong, so leave it to the refresh.
+        const now = new Date();
+        const date = new Date(tx.date);
+        if (isPlan && (date.getFullYear() !== now.getFullYear() || date.getMonth() !== now.getMonth())) return;
+        onTransactionPosted?.(tx);
+      })
       .catch(() => {
         onUpdated(originalRec);
         setPostError("Post failed — please try again.");
@@ -167,6 +177,8 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
           startDate: new Date(rec.startDate).toISOString().split("T")[0],
           endDate: rec.endDate ? new Date(rec.endDate).toISOString().split("T")[0] : undefined,
           note: rec.note ?? undefined,
+          installmentCount: rec.installmentCount ?? undefined,
+          installmentsPosted: paid,
         }}
         onSave={(updated) => {
           onUpdated(updated as RecurringTransaction);
@@ -185,7 +197,11 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
   };
 
   const { label: statusLabel, cls: statusCls } = statusConfig[status];
-  const canPost = !postedThisPeriod && (status === "due" || status === "overdue" || status === "upcoming");
+  // An installment can't be posted ahead of its charge date — it would create
+  // a future-dated transaction.
+  const canPost = isPlan
+    ? status === "due" || status === "overdue"
+    : !postedThisPeriod && (status === "due" || status === "overdue" || status === "upcoming");
   const canSkip = status === "due" || status === "overdue";
 
   return (
@@ -223,9 +239,18 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
             "text-sm font-semibold tabular-nums",
             rec.type === "income" ? "text-emerald-400" : "text-rose-400"
           )}>
-            {rec.type === "income" ? "+" : "-"}{formatCurrency(rec.amount)}
+            {rec.type === "income" ? "+" : "-"}{formatCurrency(displayAmount)}
           </span>
           <span className="text-xs text-slate-500">{rec.category}</span>
+          {isPlan && (
+            <span
+              data-testid="installment-progress"
+              className="text-xs text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 px-1.5 py-0.5 rounded-full whitespace-nowrap"
+              title={`${paid} of ${rec.installmentCount} installments paid`}
+            >
+              {paid}/{rec.installmentCount} paid
+            </span>
+          )}
           {remaining !== null && (
             <span className="text-xs text-slate-500 tabular-nums">
               {remaining} payment{remaining !== 1 ? "s" : ""} left
@@ -404,7 +429,8 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
           amount: rec.amount,
           type: rec.type as "income" | "expense",
           frequency: rec.frequency as RecurringFrequency,
-          startDate: new Date().toISOString().split("T")[0],
+          startDate: isPlan ? toLocalISODate() : new Date().toISOString().split("T")[0],
+          installmentCount: rec.installmentCount ?? undefined,
           endDate:
             rec.endDate && new Date(rec.endDate) > new Date()
               ? new Date(rec.endDate).toISOString().split("T")[0]

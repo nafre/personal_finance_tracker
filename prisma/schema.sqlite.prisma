@@ -75,6 +75,11 @@ model RecurringTransaction {
   lastRun   DateTime?
   isActive  Boolean   @default(true)
   note      String?
+  // Installment plans — see schema.prisma. `labels` is a JSON string here.
+  installmentCount   Int?
+  installmentsPosted Int      @default(0)
+  installmentTotal   Float?
+  labels             String   @default("[]")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 

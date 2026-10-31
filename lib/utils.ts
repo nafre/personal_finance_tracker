@@ -141,6 +141,123 @@ export function countMissedPeriods(
   return count;
 }
 
+// ─── Rule-level helpers (ordinary recurring rules + installment plans) ───────
+// An installment plan is a recurring rule with a non-null `installmentCount`.
+// Its charge dates are date-only values stored at UTC midnight, pinned to the
+// first charge's day-of-month, and it ends by payment count, not by endDate.
+
+export interface RuleSchedule {
+  frequency: string;
+  startDate: Date | string;
+  lastRun: Date | string | null;
+  endDate?: Date | string | null;
+  amount: number;
+  installmentCount?: number | null;
+  installmentsPosted?: number;
+  installmentTotal?: number | null;
+}
+
+export function isInstallmentPlan(rec: Pick<RuleSchedule, "installmentCount">): boolean {
+  return rec.installmentCount != null;
+}
+
+// One period after `from`, with the day-of-month pinned to `anchorDay` and
+// clamped to the month length — a plan charged on the 31st goes 31 → 28 → 31,
+// where chaining setMonth(+1) would roll over and drift for good.
+export function stepAnchored(frequency: RecurringFrequency, from: Date, anchorDay: number): Date {
+  const d = new Date(from);
+  if (frequency === "daily") {
+    d.setDate(d.getDate() + 1);
+    return d;
+  }
+  if (frequency === "weekly") {
+    d.setDate(d.getDate() + 7);
+    return d;
+  }
+  d.setDate(1);
+  d.setMonth(d.getMonth() + (frequency === "monthly" ? 1 : 12));
+  const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(anchorDay, daysInMonth));
+  return d;
+}
+
+export function getRuleNextDue(rec: RuleSchedule): Date {
+  const frequency = rec.frequency as RecurringFrequency;
+  const start = new Date(rec.startDate);
+  const last = rec.lastRun ? new Date(rec.lastRun) : null;
+  if (!isInstallmentPlan(rec)) return getNextDueDate(frequency, start, last);
+  if (!last) return start;
+  return stepAnchored(frequency, last, start.getDate());
+}
+
+export function getRuleStatus(rec: RuleSchedule): "upcoming" | "due" | "overdue" | "ended" {
+  if (isInstallmentPlan(rec)) {
+    if ((rec.installmentsPosted ?? 0) >= (rec.installmentCount as number)) return "ended";
+    return getRecurringStatus(getRuleNextDue(rec), null);
+  }
+  return getRecurringStatus(getRuleNextDue(rec), rec.endDate ? new Date(rec.endDate) : null);
+}
+
+// Amount of the `index`-th payment (1-based). The final installment absorbs
+// the rounding remainder so the plan sums exactly to installmentTotal.
+export function getInstallmentAmount(rec: RuleSchedule, index: number): number {
+  const count = rec.installmentCount;
+  if (count == null || rec.installmentTotal == null || index < count) return rec.amount;
+  return Math.round((rec.installmentTotal - rec.amount * (count - 1)) * 100) / 100;
+}
+
+// Per-payment amount for an equal split of `total`, rounded down to the cent
+// (the final payment picks up what's left).
+export function splitInstallmentAmount(total: number, count: number): number {
+  return Math.floor((total * 100) / count + 1e-9) / 100;
+}
+
+// Due dates that have already arrived (oldest first), up to `until` (default:
+// end of today). Capped at MAX_BACKFILL and, for a plan, at the payments left.
+export function getRuleOverdueDates(rec: RuleSchedule, until?: Date): Date[] {
+  const frequency = rec.frequency as RecurringFrequency;
+  const limit = until ? new Date(until) : new Date();
+  if (!until) limit.setHours(23, 59, 59, 999);
+
+  const plan = isInstallmentPlan(rec);
+  const end = !plan && rec.endDate ? new Date(rec.endDate) : null;
+  if (end) end.setHours(23, 59, 59, 999);
+  const max = plan
+    ? Math.min(MAX_BACKFILL, (rec.installmentCount as number) - (rec.installmentsPosted ?? 0))
+    : MAX_BACKFILL;
+  const anchorDay = new Date(rec.startDate).getDate();
+
+  const dates: Date[] = [];
+  let due = getRuleNextDue(rec);
+  while (dates.length < max && due <= limit && (!end || due <= end)) {
+    dates.push(due);
+    due = plan ? stepAnchored(frequency, due, anchorDay) : getNextDueDate(frequency, due, due);
+  }
+  return dates;
+}
+
+// yyyy-MM-dd of the *local* calendar day (toISOString would give the UTC day).
+export function toLocalISODate(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Resolves a bare day-of-month (quick-add's "@15") to the next date carrying
+// it — today counts — clamped for short months. Returned at UTC midnight of
+// that calendar day, the same shape a date input's value parses to.
+export function nextDayOfMonth(day: number, from: Date = new Date()): Date {
+  const clamp = (y: number, m: number) => Math.min(day, new Date(y, m + 1, 0).getDate());
+  let y = from.getFullYear();
+  let m = from.getMonth();
+  if (clamp(y, m) < from.getDate()) {
+    m += 1;
+    if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+  }
+  return new Date(Date.UTC(y, m, clamp(y, m)));
+}
+
 export function formatDate(date: Date | string): string {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",

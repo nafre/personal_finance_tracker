@@ -1,6 +1,53 @@
 import { describe, it, expect } from "vitest";
 import { parseExpenseInput } from "./parser";
 
+describe("parseExpenseInput — installments", () => {
+  it("reads x<N> as an installment count and keeps the total as the amount", () => {
+    expect(parseExpenseInput("phone 1200 x12")).toEqual({
+      category: "Phone",
+      amount: 1200,
+      type: "expense",
+      note: undefined,
+      labels: [],
+      installments: 12,
+    });
+  });
+
+  it("reads @<day> as the first charge day, leaving note and labels intact", () => {
+    const result = parseExpenseInput("phone 1200 x12 @15 iphone #gadget");
+    expect(result?.installments).toBe(12);
+    expect(result?.chargeDay).toBe(15);
+    expect(result?.note).toBe("iphone");
+    expect(result?.labels).toEqual(["gadget"]);
+  });
+
+  it("accepts the tokens in either order and an uppercase X", () => {
+    const result = parseExpenseInput("phone 1200 @15 X6");
+    expect(result?.installments).toBe(6);
+    expect(result?.chargeDay).toBe(15);
+  });
+
+  it("keeps @<day> in the note when there is no installment count", () => {
+    const result = parseExpenseInput("coffee 5 @15");
+    expect(result?.installments).toBeUndefined();
+    expect(result?.chargeDay).toBeUndefined();
+    expect(result?.note).toBe("@15");
+  });
+
+  it.each(["x1", "x0", "x121", "x12a", "@0x"])("leaves %s in the note", (tok) => {
+    const result = parseExpenseInput(`phone 1200 ${tok}`);
+    expect(result?.installments).toBeUndefined();
+    expect(result?.note).toBe(tok);
+  });
+
+  it("ignores an out-of-range charge day", () => {
+    const result = parseExpenseInput("phone 1200 x12 @32");
+    expect(result?.installments).toBe(12);
+    expect(result?.chargeDay).toBeUndefined();
+    expect(result?.note).toBe("@32");
+  });
+});
+
 describe("parseExpenseInput", () => {
   it("parses a plain category + amount", () => {
     expect(parseExpenseInput("food 20")).toEqual({

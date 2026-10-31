@@ -75,6 +75,14 @@ model RecurringTransaction {
   lastRun   DateTime?
   isActive  Boolean   @default(true)
   note      String?
+  // Installment plans: installmentCount != null marks a fixed-length rule.
+  // `amount` is the per-payment figure; the final payment absorbs the rounding
+  // remainder so the plan sums to installmentTotal. `startDate` is the first
+  // charge date and `endDate` is unused.
+  installmentCount   Int?
+  installmentsPosted Int      @default(0)
+  installmentTotal   Float?
+  labels             String[] @default([])
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 

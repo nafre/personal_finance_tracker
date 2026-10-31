@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { RecurringRow } from "./RecurringRow";
 import { RecurringForm } from "./RecurringForm";
 import { useToast } from "@/context/ToastContext";
-import { getNextDueDate, getRecurringStatus, type RecurringFrequency } from "@/lib/utils";
+import { getRuleStatus } from "@/lib/utils";
 
 interface RecurringTransaction {
   id: string;
@@ -19,6 +19,9 @@ interface RecurringTransaction {
   lastRun: Date | null;
   isActive: boolean;
   note: string | null;
+  installmentCount?: number | null;
+  installmentsPosted?: number;
+  installmentTotal?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -77,14 +80,7 @@ export function RecurringList({ initialRecurring, onTransactionPosted }: Recurri
     setItems((prev) => [...prev, rec]);
   }
 
-  const activeItems = items.filter((rec) => {
-    const nextDue = getNextDueDate(
-      rec.frequency as RecurringFrequency,
-      new Date(rec.startDate),
-      rec.lastRun ? new Date(rec.lastRun) : null
-    );
-    return getRecurringStatus(nextDue, rec.endDate ? new Date(rec.endDate) : null) !== "ended";
-  });
+  const activeItems = items.filter((rec) => getRuleStatus(rec) !== "ended");
 
   if (activeItems.length === 0 && !showForm) {
     return (

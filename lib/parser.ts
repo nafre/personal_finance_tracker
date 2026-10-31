@@ -6,6 +6,10 @@ export interface ParsedExpense {
   type: "income" | "expense";
   note?: string;
   labels: string[];
+  /** Number of payments when the input asks for an installment plan ("x12"). */
+  installments?: number;
+  /** Day of month of the first charge ("@15") — only set alongside `installments`. */
+  chargeDay?: number;
 }
 
 // Keywords that indicate the transaction is income
@@ -78,6 +82,11 @@ function capitalize(str: string): string {
  *   "salary 5000 #work"          → { category: "Salary",    amount: 5000, type: "income",  labels: ["work"] }
  *   "coffee 4.5 starbucks #date" → { category: "Coffee",    amount: 4.5,  type: "expense", note: "starbucks", labels: ["date"] }
  *   "lunch 84.60/3+12.50 #work"  → { category: "Lunch",     amount: 40.7, type: "expense", labels: ["work"] }
+ *   "phone 1200 x12 @15"         → { category: "Phone",     amount: 1200, type: "expense", labels: [], installments: 12, chargeDay: 15 }
+ *
+ * "x<N>" (2–120) after the amount splits it into N installments; "@<day>"
+ * (1–31) sets the day of the first charge and only counts next to an "x<N>" —
+ * on its own it stays in the note, as does an out-of-range count.
  *
  * The amount may be an arithmetic expression (+ - * / and parens) with no
  * internal spaces — tokens are whitespace-split, so "12 + 8" parses the
@@ -112,9 +121,32 @@ export function parseExpenseInput(input: string): ParsedExpense | null {
   // Split #label tokens from note tokens, deduping repeated tags
   const labels: string[] = [];
   const seenLabels = new Set<string>();
+  let installments: number | undefined;
+  const hasInstallmentToken = afterAmountTokens.some((tok) => {
+    const m = /^x(\d{1,3})$/i.exec(tok);
+    return m !== null && Number(m[1]) >= 2 && Number(m[1]) <= 120;
+  });
+  let chargeDay: number | undefined;
   const noteTokens: string[] = [];
   for (const tok of afterAmountTokens) {
-    if (tok.startsWith("#") && tok.length > 1) {
+    const countMatch = /^x(\d{1,3})$/i.exec(tok);
+    const dayMatch = /^@(\d{1,2})$/.exec(tok);
+    if (
+      countMatch &&
+      installments === undefined &&
+      Number(countMatch[1]) >= 2 &&
+      Number(countMatch[1]) <= 120
+    ) {
+      installments = Number(countMatch[1]);
+    } else if (
+      dayMatch &&
+      hasInstallmentToken &&
+      chargeDay === undefined &&
+      Number(dayMatch[1]) >= 1 &&
+      Number(dayMatch[1]) <= 31
+    ) {
+      chargeDay = Number(dayMatch[1]);
+    } else if (tok.startsWith("#") && tok.length > 1) {
       const label = tok.slice(1).toLowerCase();
       if (!seenLabels.has(label)) {
         seenLabels.add(label);
@@ -146,5 +178,13 @@ export function parseExpenseInput(input: string): ParsedExpense | null {
     ? "income"
     : "expense";
 
-  return { category, amount, type, note, labels };
+  return {
+    category,
+    amount,
+    type,
+    note,
+    labels,
+    ...(installments !== undefined && { installments }),
+    ...(chargeDay !== undefined && { chargeDay }),
+  };
 }

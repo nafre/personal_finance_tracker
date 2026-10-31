@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useSyncContext } from "@/context/SyncProvider";
 import { seedIDBFromServer, getTransactionsInRange, deleteTransactionFromIDB } from "@/lib/idb";
-import { getNextDueDate, getRecurringStatus, toMonthlyAmount, rankCategoriesByUsage, type RecurringFrequency } from "@/lib/utils";
+import { getRuleNextDue, getRuleStatus, getInstallmentAmount, toMonthlyAmount, rankCategoriesByUsage, type RecurringFrequency } from "@/lib/utils";
 import type { Transaction, CategoryData, DailyData, RecurringTransaction, Budget, Period } from "@/types";
 
 // Per-transaction budget spend so an individual transaction can be excluded
@@ -129,18 +129,16 @@ export function useDashboardState({
     weekAhead.setDate(weekAhead.getDate() + 7);
     weekAhead.setHours(23, 59, 59, 999);
     for (const r of initialRecurring) {
-      const nextDue = getNextDueDate(
-        r.frequency as RecurringFrequency,
-        new Date(r.startDate),
-        r.lastRun ? new Date(r.lastRun) : null
-      );
-      const status = getRecurringStatus(nextDue, r.endDate ? new Date(r.endDate) : null);
+      const nextDue = getRuleNextDue(r);
+      const status = getRuleStatus(r);
       if (status === "due" || status === "overdue") dueCount++;
       if (status === "ended") continue;
       if (nextDue <= weekAhead) {
         dueWeekCount++;
-        if (r.type === "expense") dueWeekExpense += r.amount;
-        else dueWeekIncome += r.amount;
+        // A plan's next charge can be its final one, which carries the remainder.
+        const dueAmount = getInstallmentAmount(r, (r.installmentsPosted ?? 0) + 1);
+        if (r.type === "expense") dueWeekExpense += dueAmount;
+        else dueWeekIncome += dueAmount;
       }
       const monthly = toMonthlyAmount(r.frequency as RecurringFrequency, r.amount);
       fixedAvailableCash += r.type === "income" ? monthly : -monthly;

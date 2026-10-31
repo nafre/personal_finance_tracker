@@ -302,8 +302,11 @@ export async function recurringCommitments() {
     startDate: string;
     endDate: string | null;
     lastRun: string | null;
+    installmentCount: number | null;
+    installmentsPosted: number;
   }>(
     `SELECT name, category, amount::float8 AS amount, type, frequency, "isActive",
+            "installmentCount", "installmentsPosted",
             to_char("startDate", 'YYYY-MM-DD"T"HH24:MI:SS') || 'Z' AS "startDate",
             CASE WHEN "endDate" IS NULL THEN NULL
                  ELSE to_char("endDate", 'YYYY-MM-DD"T"HH24:MI:SS') || 'Z' END AS "endDate",
@@ -327,8 +330,13 @@ export async function recurringCommitments() {
   }> = [];
 
   for (const r of rows) {
-    const due = nextDueDate(r.frequency, new Date(r.startDate), r.lastRun ? new Date(r.lastRun) : null);
-    if (hasEnded(due, r.endDate ? new Date(r.endDate) : null)) continue;
+    // Installment plans end by payment count (endDate is unused for them).
+    if (r.installmentCount != null) {
+      if (r.installmentsPosted >= r.installmentCount) continue;
+    } else {
+      const due = nextDueDate(r.frequency, new Date(r.startDate), r.lastRun ? new Date(r.lastRun) : null);
+      if (hasEnded(due, r.endDate ? new Date(r.endDate) : null)) continue;
+    }
     const monthly = toMonthlyAmount(r.frequency, r.amount);
     if (r.type === "expense") fixedMonthlyExpense += monthly;
     else if (r.type === "income") recurringMonthlyIncome += monthly;

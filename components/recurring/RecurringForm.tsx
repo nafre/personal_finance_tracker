@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { cn } from "@/lib/utils";
+import { cn, toLocalISODate } from "@/lib/utils";
 import { evaluateAmountInput, normalizeAmountOnBlur } from "@/lib/math-eval";
-import { createRecurringTransaction, updateRecurringTransaction, getCategories } from "@/lib/actions";
+import { createRecurringTransaction, updateRecurringTransaction, createInstallmentPlan, getCategories } from "@/lib/actions";
 import { CategoryCombobox } from "@/components/CategoryCombobox";
 import type { CategoryOption } from "@/types";
 
@@ -20,6 +20,9 @@ interface RecurringFormData {
   startDate: string;
   endDate?: string;
   note?: string;
+  /** Set for an installment plan — swaps the end date for a payment count. */
+  installmentCount?: number;
+  installmentsPosted?: number;
 }
 
 interface RecurringFormProps {
@@ -36,6 +39,9 @@ interface RecurringFormProps {
     lastRun: Date | null;
     isActive: boolean;
     note: string | null;
+    installmentCount?: number | null;
+    installmentsPosted?: number;
+    installmentTotal?: number | null;
     userId: string;
     createdAt: Date;
     updatedAt: Date;
@@ -54,6 +60,8 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
   const [startDate, setStartDate] = useState(initial?.startDate ?? today);
   const [endDate, setEndDate] = useState(initial?.endDate ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
+  const isPlan = initial?.installmentCount != null;
+  const [payments, setPayments] = useState(initial?.installmentCount?.toString() ?? "");
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -70,6 +78,13 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
     if (!name.trim()) return setError("Name is required.");
     if (!category.trim()) return setError("Category is required.");
     if (parsedAmount === null || parsedAmount <= 0) return setError("Enter a valid amount.");
+    const paymentCount = /^\d+$/.test(payments.trim()) ? Number(payments) : NaN;
+    if (isPlan) {
+      const min = Math.max(2, initial?.installmentsPosted ?? 0);
+      if (!(paymentCount >= min && paymentCount <= 120)) {
+        return setError(`Payments must be between ${min} and 120.`);
+      }
+    }
     setError("");
 
     startTransition(async () => {
@@ -86,7 +101,27 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
         };
 
         let rec;
-        if (initial?.id) {
+        if (isPlan && initial?.id) {
+          rec = await updateRecurringTransaction(initial.id, {
+            ...data,
+            endDate: null,
+            installmentCount: paymentCount,
+          });
+        } else if (isPlan) {
+          // Duplicating a plan starts a fresh one (nothing paid yet).
+          const created = await createInstallmentPlan({
+            name: data.name,
+            category: data.category,
+            amount: data.amount,
+            type: data.type,
+            frequency: data.frequency,
+            note: data.note,
+            count: paymentCount,
+            firstChargeDate: data.startDate,
+            today: toLocalISODate(),
+          });
+          rec = created.recurring;
+        } else if (initial?.id) {
           rec = await updateRecurringTransaction(initial.id, {
             ...data,
             endDate: endDate ? new Date(endDate) : null,
@@ -104,7 +139,9 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
   return (
     <form onSubmit={handleSubmit} className="space-y-3 p-4 bg-slate-800/60 rounded-xl border border-slate-700">
       <h3 className="text-sm font-semibold text-slate-200">
-        {initial?.id ? "Edit recurring" : "New recurring transaction"}
+        {isPlan
+          ? initial?.id ? "Edit installment plan" : "New installment plan"
+          : initial?.id ? "Edit recurring" : "New recurring transaction"}
       </h3>
 
       <div className="grid grid-cols-2 gap-3">
@@ -129,7 +166,7 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
         </div>
 
         <div>
-          <label className="text-xs text-slate-400 mb-1 block">Amount (RM)</label>
+          <label className="text-xs text-slate-400 mb-1 block">{isPlan ? "Each payment (RM)" : "Amount (RM)"}</label>
           <input
             className="input-base w-full text-base sm:text-sm"
             type="text"
@@ -180,7 +217,7 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
         </div>
 
         <div>
-          <label className="text-xs text-slate-400 mb-1 block">Start date</label>
+          <label className="text-xs text-slate-400 mb-1 block">{isPlan ? "First charge date" : "Start date"}</label>
           <input
             className="input-base w-full text-base sm:text-sm"
             type="date"
@@ -189,15 +226,29 @@ export function RecurringForm({ initial, onSave, onCancel }: RecurringFormProps)
           />
         </div>
 
-        <div>
-          <label className="text-xs text-slate-400 mb-1 block">End date (optional)</label>
-          <input
-            className="input-base w-full text-base sm:text-sm"
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-          />
-        </div>
+        {isPlan ? (
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">Payments</label>
+            <input
+              className="input-base w-full text-base sm:text-sm"
+              type="text"
+              inputMode="numeric"
+              aria-label="Number of payments"
+              value={payments}
+              onChange={(e) => setPayments(e.target.value)}
+            />
+          </div>
+        ) : (
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">End date (optional)</label>
+            <input
+              className="input-base w-full text-base sm:text-sm"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+        )}
 
         <div className="col-span-2">
           <label className="text-xs text-slate-400 mb-1 block">Note (optional)</label>
