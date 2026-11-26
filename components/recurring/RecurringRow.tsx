@@ -104,7 +104,8 @@ export function RecurringRow({ rec, onPosted, onSkipped, onDeleted, onRestored, 
     const originalRec = rec;
 
     // Optimistic: update the row's status immediately
-    onPosted(rec.id, { ...rec, lastRun: new Date() });
+    // Mirrors the server: lastRun advances to the due date this post covers.
+    onPosted(rec.id, { ...rec, lastRun: nextDue });
 
     postRecurringTransaction(rec.id)
       .then((tx) => onTransactionPosted?.(tx))

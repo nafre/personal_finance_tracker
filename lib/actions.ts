@@ -670,6 +670,15 @@ export async function postRecurringTransaction(id: string) {
   if (!rec) throw new Error("Not found");
 
   const now = new Date();
+  // lastRun records the *scheduled* due date this post covers, not the moment
+  // of posting. Writing `now` shifted the schedule by however late the post
+  // was (due 25th, posted 26th → next due the 26th), which could push the
+  // final period past endDate and end the rule one payment early.
+  const coveredDue = getNextDueDate(
+    rec.frequency as RecurringFrequency,
+    rec.startDate,
+    rec.lastRun ?? null
+  );
   const [tx] = await db.$transaction([
     db.transaction.create({
       data: {
@@ -683,7 +692,7 @@ export async function postRecurringTransaction(id: string) {
     }),
     db.recurringTransaction.update({
       where: { id },
-      data: { lastRun: now },
+      data: { lastRun: coveredDue },
     }),
   ]);
 

@@ -146,6 +146,35 @@ describe("countRemainingPayments", () => {
   });
 });
 
+describe("posting a late payment (lastRun = covered due date)", () => {
+  // Regression: a monthly rule due on the 25th ending Dec 25, posted one day
+  // late on Nov 26. postRecurringTransaction used to write lastRun = now, so
+  // the next due became Dec 26 > endDate and the rule ended a payment early.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 10, 26, 12, 0, 0)); // Nov 26, 2026
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const start = new Date(2026, 0, 25);
+  const end = new Date(2026, 11, 25);
+  const lastRunBefore = new Date(2026, 9, 25); // Oct installment posted
+
+  it("keeps the final December payment when lastRun is the scheduled due date", () => {
+    const covered = getNextDueDate("monthly", start, lastRunBefore);
+    expect(covered).toEqual(new Date(2026, 10, 25));
+    const next = getNextDueDate("monthly", start, covered);
+    expect(next).toEqual(new Date(2026, 11, 25));
+    expect(getRecurringStatus(next, end)).toBe("upcoming");
+    expect(countRemainingPayments("monthly", next, end)).toBe(1);
+  });
+
+  it("documents the old behaviour: lastRun = posting time ends the rule early", () => {
+    const next = getNextDueDate("monthly", start, new Date());
+    expect(getRecurringStatus(next, end)).toBe("ended");
+  });
+});
+
 describe("countMissedPeriods", () => {
   const FIXED_NOW = new Date(2026, 5, 15, 12, 0, 0); // June 15, 2026
 
