@@ -294,3 +294,11 @@
     user-select: auto;
   }
 }
+
+/* Fingerprint app lock (installed PWA only) — the pre-paint script in
+   app/layout.tsx and components/AppLock.tsx set data-locked on <html>. Hide
+   the app shell so nothing flashes behind the lock screen; the overlay itself
+   is a top-layer <dialog> outside the shell. */
+html[data-locked] [data-app-shell] {
+  visibility: hidden;
+}

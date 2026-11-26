@@ -3,6 +3,7 @@ import { MainWrapper } from "@/components/MainWrapper";
 import { SidebarProvider } from "@/context/SidebarContext";
 import { TopLoadingBar } from "@/components/TopLoadingBar";
 import { DemoBanner } from "@/components/DemoBanner";
+import { AppLock } from "@/components/AppLock";
 
 export default function DashboardLayout({
   children,
@@ -26,6 +27,7 @@ export default function DashboardLayout({
         </div>
         <BottomNav />
       </div>
+      <AppLock />
     </SidebarProvider>
   );
 }
