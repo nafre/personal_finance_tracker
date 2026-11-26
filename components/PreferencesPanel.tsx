@@ -1,17 +1,26 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { usePreferences } from "@/context/PreferencesContext";
+import { useSyncContext } from "@/context/SyncProvider";
+import { enrollFingerprint, isInstalledApp, isPlatformAuthAvailable, markActive, verifyFingerprint } from "@/lib/app-lock";
 
 interface ToggleRowProps {
   label: string;
   description: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  testId?: string;
 }
 
-function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
+function ToggleRow({ label, description, checked, onChange, disabled, testId }: ToggleRowProps) {
   return (
-    <label className="flex items-center justify-between gap-4 py-3 min-h-11 cursor-pointer">
+    <label
+      data-testid={testId}
+      className={`flex items-center justify-between gap-4 py-3 min-h-11 ${disabled ? "opacity-60 cursor-wait" : "cursor-pointer"}`}
+    >
       <span className="min-w-0">
         <span className="block text-sm font-medium text-slate-200">{label}</span>
         <span className="block text-xs text-slate-500 mt-0.5">{description}</span>
@@ -21,6 +30,7 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
           type="checkbox"
           role="switch"
           checked={checked}
+          disabled={disabled}
           onChange={(e) => onChange(e.target.checked)}
           className="peer sr-only"
         />
@@ -30,6 +40,82 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
         />
       </span>
     </label>
+  );
+}
+
+// Fingerprint app lock — shown only in the installed PWA. Enabling enrolls a
+// platform credential and immediately verifies it; disabling requires the
+// fingerprint too. Client-side shield only — see lib/app-lock.ts.
+function FingerprintLockRow() {
+  const { appLock, setPreference } = usePreferences();
+  const { userId } = useSyncContext();
+  const { data: session } = useSession();
+  const [support, setSupport] = useState<"hidden" | "unsupported" | "supported">("hidden");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isInstalledApp()) return;
+    isPlatformAuthAvailable().then((ok) => setSupport(ok ? "supported" : "unsupported"));
+  }, []);
+
+  if (support === "hidden") return null;
+
+  if (support === "unsupported") {
+    return (
+      <div data-testid="fingerprint-lock-unsupported" className="py-3">
+        <span className="block text-sm font-medium text-slate-200">Fingerprint lock</span>
+        <span className="block text-xs text-slate-500 mt-0.5">Not supported on this device.</span>
+      </div>
+    );
+  }
+
+  const enabled = appLock !== null && appLock.userId === userId;
+
+  async function handleChange(checked: boolean) {
+    if (busy || !userId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (checked) {
+        const name = session?.user?.email ?? "Expenses user";
+        const credentialId = await enrollFingerprint(userId, name);
+        if (!(await verifyFingerprint(credentialId))) {
+          setError("Couldn't verify your fingerprint — lock not enabled.");
+          return;
+        }
+        markActive();
+        setPreference({ appLock: { userId, credentialId } });
+      } else {
+        if (appLock && !(await verifyFingerprint(appLock.credentialId))) {
+          setError("Fingerprint required to turn the lock off.");
+          return;
+        }
+        setPreference({ appLock: null });
+      }
+    } catch {
+      setError("Fingerprint setup was cancelled or failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <ToggleRow
+        testId="fingerprint-lock-toggle"
+        label="Fingerprint lock"
+        description="Ask for your fingerprint when opening the app, and after 5 minutes away."
+        checked={enabled}
+        disabled={busy}
+        onChange={handleChange}
+      />
+      {error && (
+        <p role="alert" className="text-xs text-rose-400 pb-3 -mt-1">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -54,6 +140,7 @@ export function PreferencesPanel() {
           checked={undoDeleteEnabled}
           onChange={(checked) => setPreference({ undoDeleteEnabled: checked })}
         />
+        <FingerprintLockRow />
       </div>
     </div>
   );
